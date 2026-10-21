@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -11,6 +12,10 @@ val env = rootProject.file("../Novel_Persona/app/.env").takeIf { it.exists() }?.
     ?.mapNotNull { line -> line.split("=", limit = 2).takeIf { !line.startsWith("#") && it.size == 2 } }
     ?.associate { (k, v) -> k.trim() to v.trim() }
     .orEmpty()
+// Bản phát hành trỏ endpoint public: supabase.url=https://... trong local.properties
+val supabaseUrl = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+}.getProperty("supabase.url") ?: env["SUPABASE_URL"].orEmpty()
 
 android {
     namespace = "com.thanhnb.novelnative"
@@ -22,7 +27,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-        buildConfigField("String", "SUPABASE_URL", "\"${env["SUPABASE_URL"].orEmpty()}\"")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${env["SUPABASE_ANON_KEY"].orEmpty()}\"")
     }
 
