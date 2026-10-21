@@ -62,6 +62,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // Phím âm lượng lật trang khi màn đọc bật tuỳ chọn này
+    override fun dispatchKeyEvent(event: android.view.KeyEvent) =
+        ReaderKeys.handler?.invoke(event) == true || super.dispatchKeyEvent(event)
 }
 
 private class TabItem(val label: String, val on: ImageVector, val off: ImageVector)

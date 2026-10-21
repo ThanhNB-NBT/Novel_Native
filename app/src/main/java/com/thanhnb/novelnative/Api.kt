@@ -387,6 +387,11 @@ object Api {
 
     suspend fun deleteBookmark(id: Int) = rpc("delete_bookmark", "p_id" to id)
 
+    /** Bản dịch đúng của thuật ngữ (truyện này + chung) để gạch chân khi đọc; trần 200 như Flutter. */
+    suspend fun glossary(novelId: Int): List<String> =
+        get("glossary_terms?select=correct_vi&or=(novel_id.eq.$novelId,novel_id.is.null)&order=novel_id.nullslast&limit=1000").objs()
+            .mapNotNull { it.str("correct_vi")?.trim()?.takeIf { v -> v.length >= 2 } }.take(200)
+
     // ---------- Thông báo (pull-based, trạng thái đã xem/đã xoá lưu máy) ----------
 
     suspend fun notifications(): List<Notif> {

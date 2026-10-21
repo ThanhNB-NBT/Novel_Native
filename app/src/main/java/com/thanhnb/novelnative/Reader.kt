@@ -1,87 +1,183 @@
 package com.thanhnb.novelnative
 
 import android.app.Activity
-import androidx.core.view.WindowCompat
+import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
-/** Bộ màu đọc: (tên, nền, chữ). */
-private val themes = listOf(
-    Triple("Trắng", Color(0xFFFFFFFF), Color(0xFF1F1F1F)),
-    Triple("Giấy", Color(0xFFF4ECD8), Color(0xFF3B2F2F)),
-    Triple("Lá", Color(0xFFDCEBDD), Color(0xFF1E2B1E)),
-    Triple("Tối", Color(0xFF1E1E1E), Color(0xFFC8C8C8)),
-    Triple("Đen", Color(0xFF000000), Color(0xFF9E9E9E)),
+/** Màu nền/chữ khi đọc — chép readerColors của Flutter, GIỮ thứ tự vì rd_light/rd_dark lưu theo index. */
+private class RColor(val name: String, val bg: Color, val fg: Color)
+
+private val readerColors = listOf(
+    RColor("Sáng", Color(0xFFFAF6EF), Color(0xFF2B2620)),
+    RColor("Trắng", Color(0xFFFFFFFF), Color(0xFF1F1F1F)),
+    RColor("Sepia", Color(0xFFF1E4CB), Color(0xFF4A3B28)),
+    RColor("Xanh dịu", Color(0xFFE0EBE1), Color(0xFF23312A)),
+    RColor("Xám", Color(0xFFE9E9EC), Color(0xFF2A2A2E)),
+    RColor("Tối", Color(0xFF181A1B), Color(0xFFCAC7BF)),
+    RColor("Đen", Color(0xFF0B0B0C), Color(0xFFB4B4B6)),
+    RColor("Kem", Color(0xFFF3ECDD), Color(0xFF3E3524)),
+    RColor("Hồng phấn", Color(0xFFF7EAEA), Color(0xFF4A3335)),
+    RColor("Vàng nhạt", Color(0xFFF8F1D8), Color(0xFF443E27)),
+    RColor("Bạc hà", Color(0xFFE4EFEA), Color(0xFF213330)),
+    RColor("Dạ Lam", Color(0xFF0F151E), Color(0xFFBEC6D1)),
+    RColor("Nâu trầm", Color(0xFF1B1611), Color(0xFFCDBDA7)),
+    RColor("Giấy cũ", Color(0xFFEDE3CF), Color(0xFF33271C)),
+    RColor("Mực đêm", Color(0xFF14110E), Color(0xFFD9CCB4)),
 )
 
+private class RFont(val key: String, val name: String, val family: FontFamily, val serif: Boolean)
+
+private fun ff(regular: Int, bold: Int) = FontFamily(Font(regular), Font(bold, FontWeight.Bold))
+
+// ponytail: chỉ các font đóng gói sẵn (Flutter còn ~12 font Sans tải từ Google Fonts); thêm bằng ui-text-google-fonts nếu cần
+private val readerFonts = listOf(
+    RFont("lora", "Lora", ff(R.font.lora_regular, R.font.lora_bold), true),
+    RFont("merriweather", "Merriweather", ff(R.font.merriweather_regular, R.font.merriweather_bold), true),
+    RFont("literata", "Literata", ff(R.font.literata_regular, R.font.literata_bold), true),
+    RFont("playfair", "Playfair Display", ff(R.font.playfairdisplay_regular, R.font.playfairdisplay_bold), true),
+    RFont("jakarta", "Plus Jakarta Sans", Jakarta, false),
+    RFont("bevietnam", "Be Vietnam Pro", ff(R.font.bevietnampro_regular, R.font.bevietnampro_bold), false),
+    RFont("roboto", "Roboto", FontFamily.SansSerif, false),
+)
+
+/** Khoá prefs giống bản Flutter (rd_*). */
 private class Style {
     val sp = Prefs.sp
-    var size by mutableFloatStateOf(sp.getFloat("rd_size", 19f))
+    var size by mutableFloatStateOf(sp.getFloat("rd_size", 18f))
+    var font by mutableStateOf(sp.getString("rd_font", null)?.takeIf { k -> readerFonts.any { it.key == k } } ?: "literata")
+    var light by mutableIntStateOf(sp.getInt("rd_light", 13)) // Giấy cũ
+    var dark by mutableIntStateOf(sp.getInt("rd_dark", 14)) // Mực đêm
+    var mode by mutableIntStateOf(sp.getInt("rd_mode", 0)) // 0 theo app · 1 sáng · 2 tối
     var lh by mutableFloatStateOf(sp.getFloat("rd_lh", 1.7f))
     var margin by mutableFloatStateOf(sp.getFloat("rd_margin", 20f))
-    var theme by mutableIntStateOf(sp.getInt("rd_theme", 1))
     var justify by mutableStateOf(sp.getBoolean("rd_justify", false))
-    fun save() = sp.edit().putFloat("rd_size", size).putFloat("rd_lh", lh).putFloat("rd_margin", margin)
-        .putInt("rd_theme", theme).putBoolean("rd_justify", justify).apply()
+    var page by mutableStateOf(sp.getBoolean("rd_page", false))
+    var gloss by mutableStateOf(sp.getBoolean("rd_mark_gloss", false))
+    var volume by mutableStateOf(sp.getBoolean("rd_volume_keys", false))
+    var speed by mutableFloatStateOf(sp.getFloat("rd_auto_speed", 40f))
+    val rfont get() = readerFonts.first { it.key == font }
+    fun save() = sp.edit().putFloat("rd_size", size).putString("rd_font", font).putInt("rd_light", light).putInt("rd_dark", dark)
+        .putInt("rd_mode", mode).putFloat("rd_lh", lh).putFloat("rd_margin", margin).putBoolean("rd_justify", justify)
+        .putBoolean("rd_page", page).putBoolean("rd_mark_gloss", gloss).putBoolean("rd_volume_keys", volume)
+        .putFloat("rd_auto_speed", speed).apply()
 }
+
+/** Phím âm lượng: MainActivity chuyển KeyEvent vào đây; null = để hệ thống chỉnh tiếng như thường. */
+object ReaderKeys { var handler: ((KeyEvent) -> Boolean)? = null }
+
+/** Tự cuộn hết chương → mở chương sau và cuộn tiếp. */
+private var autoCarry = false
+
+/** Lật trang từ ngoài pager (phím âm lượng). */
+private class PageTurn { var f: (suspend (Int) -> Unit)? = null }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(s: Screen.Read) {
     val st = remember { Style() }
-    val (_, bg, fg) = themes[st.theme]
+    val appDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val dark = when (st.mode) { 1 -> false; 2 -> true; else -> appDark }
+    val col = readerColors.getOrElse(if (dark) st.dark else st.light) { readerColors[13] }
+    val bg = col.bg
+    val fg = col.fg
     val scope = rememberCoroutineScope()
     var bars by remember { mutableStateOf(true) }
+    var auto by remember { mutableStateOf(autoCarry.also { autoCarry = false }) }
     var sheet by remember { mutableIntStateOf(0) } // 0 không · 1 mục lục · 2 cài đặt
     var report by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(msg) { delay(2500); msg = null }
-    val go = { i: Int -> Nav.replace(s.copy(index = i)) }
+    val go = { i: Int -> if (i >= 1) Nav.replace(s.copy(index = i)) }
 
     // Giữ màn hình sáng khi đang đọc
     val view = LocalView.current
     DisposableEffect(Unit) { view.keepScreenOn = true; onDispose { view.keepScreenOn = false } }
     // Icon thanh trạng thái theo nền đọc (nền tối → icon sáng); rời màn thì trả về theo theme app
-    val appLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
     DisposableEffect(bg) {
         val ctl = WindowCompat.getInsetsController((view.context as Activity).window, view)
         ctl.isAppearanceLightStatusBars = bg.luminance() > 0.5f
         ctl.isAppearanceLightNavigationBars = bg.luminance() > 0.5f
-        onDispose { ctl.isAppearanceLightStatusBars = appLight; ctl.isAppearanceLightNavigationBars = appLight }
+        onDispose { ctl.isAppearanceLightStatusBars = !appDark; ctl.isAppearanceLightNavigationBars = !appDark }
     }
 
     LaunchedEffect(s.novelId, s.index) {
@@ -100,28 +196,85 @@ fun ReaderScreen(s: Screen.Read) {
     LaunchedEffect(loaded, ch?.status) {
         if (loaded && ch?.status != "done" && (ch != null || Session.user != null)) while (true) { delay(5000); l.reload() }
     }
+    val terms = if (st.gloss) load("gloss", s.novelId) { Api.glossary(s.novelId) }.res?.getOrNull().orEmpty() else emptyList()
 
+    var pct by remember { mutableFloatStateOf(Prefs.percent(s.novelId, s.index)) }
+    val setPct = { p: Float -> pct = p.coerceIn(0f, 1f); Prefs.setPercent(s.novelId, s.index, p) }
     val list = rememberLazyListState()
     val paras = ch?.paragraphs.orEmpty()
     // Khôi phục vị trí đọc dở trong chương (lưu theo % số đoạn, khoá giống Flutter)
-    LaunchedEffect(paras.size) {
-        if (paras.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(paras.size, st.page) {
+        if (paras.isEmpty() || st.page) return@LaunchedEffect
         val p = Prefs.percent(s.novelId, s.index)
         if (p > 0f) list.scrollToItem(1 + (p * paras.size).toInt().coerceAtMost(paras.size - 1))
         snapshotFlow { list.firstVisibleItemIndex to list.canScrollForward }.collectLatest { (i, more) ->
-            Prefs.setPercent(s.novelId, s.index, if (!more) 1f else ((i - 1).coerceAtLeast(0).toFloat() / paras.size))
+            setPct(if (!more) 1f else ((i - 1).coerceAtLeast(0).toFloat() / paras.size))
         }
     }
 
-    Box(
-        Modifier.fillMaxSize().background(bg).pointerInput(Unit) {
-            // Chạm nhẹ → ẩn/hiện thanh điều khiển; quan sát ở pass Initial để không giành cử chỉ của cuộn/bôi chọn
-            awaitEachGesture {
-                val down = awaitFirstDown(pass = PointerEventPass.Initial)
-                val up = waitForUpOrCancellation(PointerEventPass.Initial) ?: return@awaitEachGesture
-                if (up.uptimeMillis - down.uptimeMillis < 250 && (up.position - down.position).getDistance() < 24f) bars = !bars
+    // Sang trang (1) / lùi (-1): lật trang thì đổi trang, cuộn dọc thì cuộn ~1 màn, sát mép thì đổi chương
+    val pageTurn = remember { PageTurn() }
+    val turn = { dir: Int ->
+        scope.launch {
+            when {
+                st.page -> pageTurn.f?.invoke(dir)
+                dir > 0 && !list.canScrollForward -> go(s.index + 1)
+                dir < 0 && !list.canScrollBackward -> go(s.index - 1)
+                else -> list.animateScrollBy(dir * list.layoutInfo.viewportSize.height * 0.9f)
             }
-        },
+        }
+    }
+    DisposableEffect(st.volume) {
+        ReaderKeys.handler = if (!st.volume) null else { e ->
+            val dir = when (e.keyCode) { KeyEvent.KEYCODE_VOLUME_DOWN -> 1; KeyEvent.KEYCODE_VOLUME_UP -> -1; else -> 0 }
+            if (dir != 0 && e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) turn(dir)
+            dir != 0 // nuốt cả DOWN lẫn UP để âm lượng không đổi
+        }
+        onDispose { ReaderKeys.handler = null }
+    }
+
+    // Tự cuộn: tốc độ px/giây như Flutter (đơn vị dp); chạm/kéo tay là dừng, hết chương thì sang chương sau
+    val density = LocalDensity.current.density
+    LaunchedEffect(auto, paras.size, st.page) {
+        if (!auto || st.page || paras.isEmpty()) return@LaunchedEffect
+        bars = false
+        delay(400) // chờ khôi phục vị trí đọc xong, không thì cuộn từ đầu rồi bị nhảy
+        var last = 0L
+        while (true) {
+            val t = withFrameNanos { it }
+            if (last != 0L) {
+                if (!list.canScrollForward) { autoCarry = true; go(s.index + 1); break }
+                try {
+                    list.scrollBy(st.speed * density * (t - last) / 1e9f)
+                } catch (e: CancellationException) {
+                    if (!isActive) throw e
+                    auto = false; break // người dùng kéo tay giành cuộn
+                }
+            }
+            last = t
+        }
+    }
+
+    val font = st.rfont.family
+    val body = TextStyle(
+        fontFamily = font, fontSize = st.size.sp, lineHeight = (st.size * st.lh).sp, color = fg,
+        textAlign = if (st.justify) TextAlign.Justify else TextAlign.Start,
+    )
+    val title = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = (st.size + 4).sp, lineHeight = ((st.size + 4) * 1.3f).sp, color = fg)
+
+    Box(
+        Modifier.fillMaxSize().background(bg).then(
+            if (st.page) Modifier else Modifier.pointerInput(Unit) {
+                // Chạm nhẹ → ẩn/hiện thanh (hoặc dừng tự cuộn); quan sát ở pass Initial để không giành cử chỉ cuộn/bôi chọn
+                awaitEachGesture {
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                    val up = waitForUpOrCancellation(PointerEventPass.Initial) ?: return@awaitEachGesture
+                    if (up.uptimeMillis - down.uptimeMillis < 250 && (up.position - down.position).getDistance() < 24f) {
+                        if (auto) auto = false else bars = !bars
+                    }
+                }
+            },
+        ),
     ) {
         CompositionLocalProvider(LocalContentColor provides fg) {
             Loaded(l) { c ->
@@ -129,7 +282,6 @@ fun ReaderScreen(s: Screen.Read) {
                     Session.user == null -> NeedLogin("Đăng nhập để đọc truyện.")
                     c == null -> Waiting("toc", fg) {}
                     c.status != "done" -> Waiting(c.status, fg) {
-                        if (Session.user == null) return@Waiting Nav.push(Screen.Login)
                         scope.launch {
                             runCatching { Api.requestTranslation(s.novelId, s.index + 10) }.onFailure { msg = friendly(it) }
                             l.reload()
@@ -139,89 +291,245 @@ fun ReaderScreen(s: Screen.Read) {
                         Text("Chương này chưa có nội dung dịch — bản cũ có thể bị lỗi.", textAlign = TextAlign.Center)
                         Spacer(Modifier.height(12.dp))
                         Button({
-                            if (Session.user == null) return@Button Nav.push(Screen.Login)
                             scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
                         }) { Text("Dịch lại chương") }
                     }
-                    else -> LazyColumn(Modifier.fillMaxSize(), list, contentPadding = WindowInsets.safeDrawing.asPaddingValues()) {
-                        item {
-                            Text(
-                                c.title, Modifier.padding(st.margin.dp, 48.dp, st.margin.dp, 16.dp),
-                                fontSize = (st.size * 1.3f).sp, lineHeight = (st.size * 1.7f).sp,
-                            )
-                        }
-                        items(c.paragraphs) { p ->
-                            SelectionContainer {
-                                Text(
-                                    p, Modifier.padding(st.margin.dp, (st.size * 0.45f).dp),
-                                    fontSize = st.size.sp, lineHeight = (st.size * st.lh).sp,
-                                    textAlign = if (st.justify) TextAlign.Justify else TextAlign.Start,
-                                )
-                            }
-                        }
-                        item {
-                            Row(Modifier.fillMaxWidth().padding(16.dp, 24.dp, 16.dp, 64.dp), Arrangement.SpaceBetween) {
-                                OutlinedButton({ go(s.index - 1) }, enabled = s.index > 1) { Text("‹ Chương trước") }
-                                Button({ go(s.index + 1) }) { Text("Chương sau ›") }
-                            }
-                        }
-                    }
+                    st.page -> PagedChapter(c, st, body, title, terms, fg, pageTurn, { pct }, setPct, go) { bars = !bars }
+                    else -> ScrollChapter(c, st, body, title, terms, fg, list, go)
                 }
             }
         }
 
-        // Thanh trên + dưới nổi đè lên nội dung
-        AnimatedVisibility(bars, Modifier.align(Alignment.TopCenter)) {
-            Surface(color = bg, contentColor = fg, shadowElevation = 2.dp) {
-                Row(Modifier.fillMaxWidth().statusBarsPadding(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Quay lại") }
-                    Column(Modifier.weight(1f)) {
-                        Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                        Text("Chương ${s.index}", style = MaterialTheme.typography.bodySmall)
-                    }
-                    IconButton({
-                        if (Session.user == null) return@IconButton Nav.push(Screen.Login)
-                        val i = (list.firstVisibleItemIndex - 1).coerceIn(0, (paras.size - 1).coerceAtLeast(0))
-                        scope.launch {
-                            runCatching { Api.addBookmark(s.novelId, s.index, Prefs.percent(s.novelId, s.index), paras.getOrNull(i)?.take(120)) }
-                                .onSuccess { msg = "Đã thêm dấu trang" }.onFailure { msg = friendly(it) }
-                        }
-                    }) { Icon(Icons.Default.Star, "Thêm dấu trang") }
-                    var menu by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Thêm") }
-                        DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem({ Text("Báo lỗi chương") }, {
-                                menu = false
-                                if (Session.user == null) Nav.push(Screen.Login) else report = true
-                            })
-                            DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(s.novelId)) })
+        // Thanh trên tối giản như Flutter: thấp, chữ/icon mờ — nhường chú ý cho trang chữ
+        AnimatedVisibility(bars && !auto, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
+            Column(Modifier.background(bg).statusBarsPadding()) {
+                Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CompositionLocalProvider(LocalContentColor provides fg.copy(alpha = 0.55f)) {
+                        IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", Modifier.size(20.dp)) }
+                        Text("Chương ${s.index}", Modifier.weight(1f), fontFamily = Jakarta, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text("${(pct * 100).roundToInt()}%", Modifier.padding(end = 4.dp), style = monoStyle(11, fg.copy(alpha = 0.45f)))
+                        IconButton({
+                            val i = if (st.page) (pct * paras.size).toInt() else list.firstVisibleItemIndex - 1
+                            scope.launch {
+                                runCatching { Api.addBookmark(s.novelId, s.index, pct, paras.getOrNull(i.coerceIn(0, (paras.size - 1).coerceAtLeast(0)))?.take(120)) }
+                                    .onSuccess { msg = "Đã thêm dấu trang" }.onFailure { msg = friendly(it) }
+                            }
+                        }) { Icon(Icons.Rounded.BookmarkBorder, "Thêm dấu trang", Modifier.size(20.dp)) }
+                        IconButton({ sheet = 1 }) { Icon(Icons.AutoMirrored.Rounded.FormatListBulleted, "Mục lục", Modifier.size(20.dp)) }
+                        IconButton({ sheet = 2 }) { Icon(Icons.Rounded.TextFields, "Cài đặt đọc", Modifier.size(20.dp)) }
+                        var menu by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Thêm", Modifier.size(20.dp)) }
+                            DropdownMenu(menu, { menu = false }) {
+                                DropdownMenuItem({ Text("Báo lỗi chương") }, { menu = false; report = true })
+                                DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(s.novelId)) })
+                            }
                         }
                     }
                 }
+                Box(Modifier.fillMaxWidth(pct.coerceIn(0f, 1f)).height(1.5.dp).background(fg.copy(alpha = 0.2f)))
             }
         }
-        AnimatedVisibility(bars, Modifier.align(Alignment.BottomCenter)) {
-            Surface(color = bg, contentColor = fg, shadowElevation = 2.dp) {
-                Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(4.dp), Arrangement.SpaceAround, Alignment.CenterVertically) {
-                    TextButton({ go(s.index - 1) }, enabled = s.index > 1) { Text("‹ Trước", color = fg) }
-                    IconButton({ sheet = 1 }) { Icon(Icons.AutoMirrored.Filled.List, "Mục lục") }
-                    TextButton({ sheet = 2 }) { Text("Aa", color = fg, fontSize = 18.sp) }
-                    TextButton({ go(s.index + 1) }) { Text("Sau ›", color = fg) }
-                }
-            }
-        }
-        msg?.let { Snackbar(Modifier.align(Alignment.BottomCenter).padding(16.dp, 96.dp)) { Text(it) } }
+        if (auto) Text(
+            "Đang tự cuộn · chạm để dừng",
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 12.dp)
+                .background(fg.copy(alpha = 0.08f), RoundedCornerShape(50)).padding(14.dp, 6.dp),
+            color = fg.copy(alpha = 0.6f), fontSize = 12.sp, fontFamily = Jakarta,
+        )
+        msg?.let { Snackbar(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp)) { Text(it) } }
     }
 
-    if (sheet != 0) ModalBottomSheet({ sheet = 0 }) {
-        if (sheet == 1) TocSheet(s.novelId, s.index) { sheet = 0; go(it) } else StyleSheet(st)
+    if (sheet != 0) ModalBottomSheet({ sheet = 0 }, containerColor = MaterialTheme.colorScheme.card) {
+        if (sheet == 1) TocSheet(s.novelId, s.index) { sheet = 0; go(it) }
+        else StyleSheet(st, dark) { sheet = 0; auto = true }
     }
     if (report) ReportDialog({ report = false }) { reason ->
         report = false
         scope.launch {
             runCatching { Api.report(s.novelId, s.index, reason) }.onSuccess { msg = "Đã gửi báo lỗi" }.onFailure { msg = friendly(it) }
         }
+    }
+}
+
+/** Cuộn dọc. Cuộn hết rồi kéo tiếp quá mép → đổi chương (đo khoảng vượt mép lúc nhấc tay). */
+@Composable
+private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, list: LazyListState, go: (Int) -> Unit) {
+    val limit = with(LocalDensity.current) { 72.dp.toPx() }
+    var over by remember { mutableFloatStateOf(0f) } // >0 kéo quá đáy · <0 kéo quá đỉnh
+    val conn = remember(c.index) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput) over = if (consumed.y != 0f) 0f else over - available.y
+                return Offset.Zero // để hiệu ứng kéo giãn mặc định vẫn chạy
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val o = over
+                over = 0f
+                if (o > limit) go(c.index + 1) else if (o < -limit && c.index > 1) go(c.index - 1)
+                return Velocity.Zero
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().nestedScroll(conn), list, contentPadding = WindowInsets.safeDrawing.asPaddingValues()) {
+            item { Text(c.title, Modifier.padding(st.margin.dp, 52.dp, st.margin.dp, 20.dp), style = title) }
+            items(c.paragraphs) { p ->
+                SelectionContainer {
+                    Text(marked(p, terms), Modifier.padding(st.margin.dp, (st.size * 0.45f).dp), style = body)
+                }
+            }
+            item {
+                Column(Modifier.fillMaxWidth().padding(st.margin.dp, 28.dp, st.margin.dp, 80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Hết chương ${c.index} · kéo tiếp để sang chương sau", color = fg.copy(alpha = 0.45f), fontSize = 12.sp, fontFamily = Jakarta)
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            { go(c.index - 1) }, Modifier.weight(1f).height(44.dp), enabled = c.index > 1,
+                            border = BorderStroke(1.dp, fg.copy(alpha = 0.25f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = fg),
+                        ) { Text("‹ Chương trước") }
+                        Button({ go(c.index + 1) }, Modifier.weight(1f).height(44.dp)) { Text("Chương sau ›") }
+                    }
+                }
+            }
+        }
+        if (abs(over) > 8f && (over > 0 || c.index > 1)) {
+            val next = over > 0
+            val ready = abs(over) > limit
+            Text(
+                (if (ready) "Thả tay để sang " else "Kéo tiếp để sang ") + (if (next) "chương sau" else "chương trước"),
+                Modifier.align(if (next) Alignment.BottomCenter else Alignment.TopCenter).safeDrawingPadding().padding(20.dp)
+                    .background(if (ready) MaterialTheme.colorScheme.primary else fg.copy(alpha = 0.1f), RoundedCornerShape(50)).padding(16.dp, 8.dp),
+                color = if (ready) MaterialTheme.colorScheme.onPrimary else fg, fontSize = 13.sp, fontFamily = Jakarta, fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+/**
+ * Lật trang: cắt chương thành trang vừa khung bằng MỘT lần đo cả chương (tách theo dòng).
+ * Trang đệm hai đầu: vuốt qua trang cuối → chương sau, vuốt ngược trước trang đầu → chương trước.
+ * Chạm 25% trái lùi trang, 25% phải sang trang, giữa ẩn/hiện thanh.
+ */
+@Composable
+private fun PagedChapter(
+    c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color,
+    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, tap: () -> Unit,
+) = BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+    val m = rememberTextMeasurer()
+    val d = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val w = constraints.maxWidth - with(d) { st.margin.dp.roundToPx() } * 2
+    val h = constraints.maxHeight - with(d) { 20.dp.toPx() } - 4f
+    val gap = with(d) { 18.dp.toPx() }
+    val pages = remember(c.paragraphs, body, title, w, h) {
+        val th = m.measure(c.title, title, constraints = Constraints(maxWidth = w)).size.height
+        paginate(m, c.paragraphs.joinToString("\n\n"), body, w, h, (h - th - gap).coerceAtLeast(60f))
+    }
+    val lead = if (c.index > 1) 1 else 0
+    val total = pages.size + lead + 2 // + trang "hết chương" + trang đệm sau
+    fun pageOf(p: Float) = lead + if (pages.size > 1) (p * (pages.size - 1)).roundToInt() else 0
+    val pager = rememberPagerState(pageOf(startPct())) { total }
+    LaunchedEffect(pages) {
+        pager.scrollToPage(pageOf(startPct())) // đổi cỡ chữ/font → giữ đúng chỗ đang đọc
+        snapshotFlow { pager.currentPage to pager.isScrollInProgress }.filter { !it.second }.map { it.first }.distinctUntilChanged().collect { i ->
+            when {
+                lead == 1 && i == 0 -> go(c.index - 1)
+                i == total - 1 -> go(c.index + 1)
+                i < total - 2 -> onPct(if (pages.size > 1) (i - lead).toFloat() / (pages.size - 1) else 1f)
+            }
+        }
+    }
+    SideEffect { turn.f = { dir -> pager.animateScrollToPage((pager.currentPage + dir).coerceIn(0, total - 1)) } }
+    HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
+        when {
+            lead == 1 && i == 0 -> PageEdge(false, fg)
+            i == total - 1 -> PageEdge(true, fg)
+            i == total - 2 -> Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
+                Text("Hết chương ${c.index}", color = fg.copy(alpha = 0.5f), fontSize = 13.sp, fontFamily = Jakarta)
+                Spacer(Modifier.height(10.dp))
+                Text("vuốt tiếp để sang chương sau →", color = fg.copy(alpha = 0.4f), fontSize = 12.sp, fontFamily = Jakarta)
+            }
+            else -> Box(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    detectTapGestures { o ->
+                        val x = o.x / size.width
+                        when {
+                            x < 0.25f -> scope.launch { turn.f?.invoke(-1) }
+                            x > 0.75f -> scope.launch { turn.f?.invoke(1) }
+                            else -> tap()
+                        }
+                    }
+                },
+            ) {
+                // gáy sách mờ ở mép trái cho cảm giác trang giấy
+                Box(Modifier.fillMaxHeight().width(14.dp).background(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.04f), Color.Transparent))))
+                Column(Modifier.padding(st.margin.dp, 10.dp)) {
+                    if (i == lead) {
+                        Text(c.title, style = title)
+                        Spacer(Modifier.height(18.dp))
+                    }
+                    Text(marked(pages[i - lead], terms), style = body)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PageEdge(next: Boolean, fg: Color) = Column(Modifier.fillMaxSize(), Arrangement.Center, Alignment.CenterHorizontally) {
+    Icon(if (next) Icons.AutoMirrored.Rounded.ArrowForward else Icons.AutoMirrored.Rounded.ArrowBack, null, tint = fg.copy(alpha = 0.5f))
+    Spacer(Modifier.height(8.dp))
+    Text(if (next) "Chương sau" else "Chương trước", color = fg)
+}
+
+/** Cắt [text] thành trang: dòng nào tràn quá chiều cao trang thì mở trang mới từ đầu dòng đó. */
+private fun paginate(m: TextMeasurer, text: String, style: TextStyle, w: Int, h: Float, firstH: Float): List<String> {
+    val lay = m.measure(text, style, constraints = Constraints(maxWidth = w))
+    val out = mutableListOf<String>()
+    var start = 0
+    var top = 0f
+    var limit = firstH
+    for (i in 0 until lay.lineCount) {
+        if (lay.getLineBottom(i) - top > limit) {
+            val s = lay.getLineStart(i)
+            if (s > start) out += text.substring(start, s).trim()
+            start = s
+            top = lay.getLineTop(i)
+            limit = h
+        }
+    }
+    out += text.substring(start).trim()
+    return out.filter { it.isNotEmpty() }.ifEmpty { listOf("") }
+}
+
+/**
+ * Vị trí thuật ngữ trong [text] — luật giống glossaryRanges của Flutter: khớp theo ranh giới từ,
+ * phân biệt hoa/thường, term dài thắng trước, không chồng lấn, trần [max] chỗ mỗi đoạn.
+ */
+internal fun glossRanges(text: String, terms: List<String>, max: Int = 60): List<Pair<Int, Int>> {
+    val out = mutableListOf<Pair<Int, Int>>()
+    for (t in terms.map { it.trim() }.filter { it.length >= 2 }.distinct().sortedByDescending { it.length }) {
+        var from = 0
+        while (out.size < max) {
+            val i = text.indexOf(t, from)
+            if (i < 0) break
+            val end = i + t.length
+            from = i + 1
+            if (i > 0 && text[i - 1].isLetterOrDigit()) continue
+            if (end < text.length && text[end].isLetterOrDigit()) continue
+            if (out.any { i < it.second && end > it.first }) continue
+            out += i to end
+        }
+    }
+    return out.sortedBy { it.first }
+}
+
+private fun marked(text: String, terms: List<String>): AnnotatedString {
+    if (terms.isEmpty()) return AnnotatedString(text)
+    return buildAnnotatedString {
+        append(text)
+        glossRanges(text, terms).forEach { (a, b) -> addStyle(SpanStyle(textDecoration = TextDecoration.Underline), a, b) }
     }
 }
 
@@ -237,7 +545,7 @@ private fun Waiting(status: String, fg: Color, request: () -> Unit) =
         }
         if (!canRequest) CircularProgressIndicator(color = fg)
         Spacer(Modifier.height(16.dp))
-        Text(label, textAlign = TextAlign.Center)
+        Text(label, textAlign = TextAlign.Center, fontFamily = Jakarta)
         if (canRequest) {
             Spacer(Modifier.height(12.dp))
             Button(request) { Text(if (status == "failed") "Dịch lại" else "Yêu cầu dịch") }
@@ -246,19 +554,140 @@ private fun Waiting(status: String, fg: Color, request: () -> Unit) =
 
 @Composable
 private fun TocSheet(novelId: Int, current: Int, pick: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
     val toc = load("toc", novelId) { Api.toc(novelId) }
-    Box(Modifier.fillMaxHeight(0.75f)) {
+    Column(Modifier.fillMaxHeight(0.75f)) {
+        Text("Mục lục", Modifier.padding(20.dp, 0.dp, 20.dp, 8.dp), style = MaterialTheme.typography.titleLarge)
         Loaded(toc) { chapters ->
-            val list = rememberLazyListState(chapters.indexOfFirst { it.index == current }.coerceAtLeast(0))
+            val list = rememberLazyListState((chapters.indexOfFirst { it.index == current } - 3).coerceAtLeast(0))
             LazyColumn(state = list) {
                 itemsIndexed(chapters, key = { _, c -> c.index }) { _, c ->
+                    val on = c.index == current
+                    Row(
+                        Modifier.fillMaxWidth().clickable { pick(c.index) }.background(if (on) cs.primaryContainer else Color.Transparent).padding(20.dp, 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${c.index}", Modifier.width(48.dp), style = monoStyle(12, if (on) cs.primary else cs.onSurfaceVariant))
+                        Text(
+                            c.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = Jakarta,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            color = when { on -> cs.primary; c.done -> cs.onSurface; else -> cs.onSurfaceVariant.copy(alpha = 0.6f) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Cài đặt đọc như Flutter: khung xem trước thật ở đầu, chỉnh gì thấy ngay. */
+@Composable
+private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
+    DisposableEffect(Unit) { onDispose { st.save() } }
+    val cs = MaterialTheme.colorScheme
+    val col = readerColors.getOrElse(if (dark) st.dark else st.light) { readerColors[13] }
+    Column(Modifier.fillMaxHeight(0.72f).verticalScroll(rememberScrollState()).padding(20.dp, 0.dp, 20.dp, 24.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Cài đặt đọc", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            Seg(listOf("Cuộn", "Lật trang"), if (st.page) 1 else 0, Modifier.width(172.dp)) { st.page = it == 1 }
+        }
+        Spacer(Modifier.height(12.dp))
+        // khung xem trước: nền/chữ/font/cỡ/giãn/lề đều là giá trị THẬT đang chọn
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(col.bg).border(1.dp, cs.outlineVariant, RoundedCornerShape(14.dp))
+                .padding((st.margin / 1.6f).dp, 12.dp, (st.margin / 1.6f).dp, 10.dp),
+        ) {
+            Text(
+                "Lục Trầm khẽ nhắm mắt, linh khí quanh thân tụ lại như sương sớm. “Đạo hữu, mời.”", maxLines = 3, overflow = TextOverflow.Ellipsis,
+                style = TextStyle(
+                    fontFamily = st.rfont.family, fontSize = st.size.sp, lineHeight = (st.size * st.lh).sp, color = col.fg,
+                    textAlign = if (st.justify) TextAlign.Justify else TextAlign.Start,
+                ),
+            )
+            Spacer(Modifier.height(8.dp))
+            Row {
+                Text(col.name, Modifier.weight(1f), fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp, color = col.fg.copy(alpha = 0.45f))
+                Text("${st.rfont.name} · ${st.size.roundToInt()}", fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = col.fg.copy(alpha = 0.45f))
+            }
+        }
+
+        SheetLabel("Màu nền", if (dark) "đang chỉnh nền tối" else "đang chỉnh nền sáng")
+        Seg(listOf("Tự động", "Sáng", "Tối"), st.mode, Modifier.width(210.dp)) { st.mode = it }
+        Spacer(Modifier.height(10.dp))
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            readerColors.forEachIndexed { i, rc ->
+                val on = i == (if (dark) st.dark else st.light)
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape).background(rc.bg)
+                        .border(if (on) 2.4.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, CircleShape)
+                        .clickable { if (dark) st.dark = i else st.light = i },
+                    Alignment.Center,
+                ) { Text("A", color = rc.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+
+        val serif = st.rfont.serif
+        SheetLabel("Phông chữ", if (serif) "font có chân (Serif)" else "font không chân (Sans)")
+        Seg(listOf("Có chân (Serif)", "Không chân (Sans)"), if (serif) 0 else 1) {
+            if ((it == 0) != serif) st.font = readerFonts.first { f -> f.serif == (it == 0) }.key
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), Arrangement.spacedBy(8.dp)) {
+            readerFonts.filter { it.serif == serif }.forEach { f ->
+                val on = st.font == f.key
+                Text(
+                    f.name,
+                    Modifier.height(38.dp).clip(RoundedCornerShape(19.dp))
+                        .background(if (on) cs.primary.copy(alpha = 0.10f) else cs.background)
+                        .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(19.dp))
+                        .clickable { st.font = f.key }.wrapContentHeight().padding(horizontal = 14.dp),
+                    fontFamily = f.family, fontSize = 13.5.sp, color = if (on) cs.primary else cs.onSurface,
+                )
+            }
+        }
+
+        SheetLabel("Trình bày")
+        SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f, 12) { st.size = it }
+        SliderRow("Giãn dòng", "%.1f×".format(st.lh), st.lh, 1.3f..2.2f, 8) { st.lh = (it * 10).roundToInt() / 10f }
+        SliderRow("Viền 2 bên", "${st.margin.roundToInt()}", st.margin, 8f..48f, 9) { st.margin = it }
+        Spacer(Modifier.height(6.dp))
+        Toggle("Căn đều 2 bên", "Chữ thẳng cả mép phải, như sách in", st.justify) { st.justify = it }
+        Toggle("Gạch chân thuật ngữ", "Đánh dấu tên riêng đã sửa theo bảng thuật ngữ", st.gloss) { st.gloss = it }
+        Toggle("Phím âm lượng lật trang", "Giảm = trang sau, tăng = trang trước", st.volume) { st.volume = it }
+        if (!st.page) {
+            SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, 20) { st.speed = it }
+            OutlinedButton(startAuto, Modifier.fillMaxWidth().padding(top = 4.dp), border = BorderStroke(1.dp, cs.outlineVariant)) {
+                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Bắt đầu tự cuộn (chạm màn hình để dừng)")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetLabel(text: String, hint: String? = null) =
+    Row(Modifier.padding(start = 2.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp, color = MaterialTheme.colorScheme.primary)
+        hint?.let { Text(it, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, maxLines = 1) }
+    }
+
+/** Segmented: viên màu nhấn trượt giữa các ô (đồng bộ với Flutter). */
+@Composable
+private fun Seg(labels: List<String>, value: Int, modifier: Modifier = Modifier, pick: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(12.dp)
+    BoxWithConstraints(modifier.fillMaxWidth().height(42.dp).clip(shape).background(cs.background).border(1.dp, cs.outlineVariant, shape).padding(4.dp)) {
+        val w = maxWidth / labels.size
+        val x by animateDpAsState(w * value, tween(260), label = "seg")
+        Box(Modifier.offset(x = x).width(w).fillMaxHeight().background(cs.primary, RoundedCornerShape(9.dp)))
+        Row(Modifier.fillMaxSize()) {
+            labels.forEachIndexed { i, l ->
+                Box(Modifier.weight(1f).fillMaxHeight().clickable(remember { MutableInteractionSource() }, null) { pick(i) }, Alignment.Center) {
                     Text(
-                        c.title,
-                        Modifier.fillMaxWidth().clickable { pick(c.index) }
-                            .background(if (c.index == current) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                            .padding(20.dp, 12.dp),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (c.done) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                        l, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        color = if (i == value) cs.onPrimary else cs.onSurfaceVariant,
                     )
                 }
             }
@@ -267,33 +696,23 @@ private fun TocSheet(novelId: Int, current: Int, pick: (Int) -> Unit) {
 }
 
 @Composable
-private fun StyleSheet(st: Style) {
-    DisposableEffect(Unit) { onDispose { st.save() } }
-    Column(Modifier.padding(24.dp, 0.dp, 24.dp, 32.dp)) {
-        Text("Cỡ chữ ${st.size.toInt()}")
-        Slider(st.size, { st.size = it }, valueRange = 14f..32f)
-        Text("Giãn dòng ${"%.1f".format(st.lh)}")
-        Slider(st.lh, { st.lh = it }, valueRange = 1.2f..2.4f)
-        Text("Lề hai bên ${st.margin.toInt()}")
-        Slider(st.margin, { st.margin = it }, valueRange = 8f..48f)
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), Arrangement.SpaceBetween) {
-            themes.forEachIndexed { i, (name, b, f) ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier.size(44.dp).clip(CircleShape).background(b).clickable { st.theme = i }
-                            .then(if (st.theme == i) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier),
-                        Alignment.Center,
-                    ) { Text("A", color = f) }
-                    Text(name, style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Căn đều hai bên", Modifier.weight(1f))
-            Switch(st.justify, { st.justify = it })
-        }
+private fun SliderRow(label: String, value: String, v: Float, range: ClosedFloatingPointRange<Float>, steps: Int, set: (Float) -> Unit) =
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.width(86.dp), style = MaterialTheme.typography.labelMedium)
+        Slider(v, set, Modifier.weight(1f), valueRange = range, steps = steps)
+        Text(value, Modifier.width(44.dp), textAlign = TextAlign.End, style = monoStyle(13, MaterialTheme.colorScheme.onSurface))
     }
-}
+
+@Composable
+private fun Toggle(label: String, hint: String, v: Boolean, set: (Boolean) -> Unit) =
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { set(!v) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(hint, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(v, set)
+    }
 
 @Composable
 private fun ReportDialog(dismiss: () -> Unit, send: (String) -> Unit) {
