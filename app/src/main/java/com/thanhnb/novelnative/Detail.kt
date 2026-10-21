@@ -1,15 +1,45 @@
 package com.thanhnb.novelnative
 
+import android.app.Activity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.HourglassEmpty
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -22,117 +52,220 @@ fun DetailScreen(id: Int) {
     val inLib = load("inlib", id, uid) { Api.inLibrary(id) }
     val marks = load("marks", id, uid) { Api.bookmarks(id) }
     val scope = rememberCoroutineScope()
+    var tab by remember { mutableIntStateOf(0) }
     var desc by remember { mutableStateOf(false) }
     var asc by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(msg) { kotlinx.coroutines.delay(2500); msg = null }
+    val cs = MaterialTheme.colorScheme
 
-    Scaffold(topBar = { Bar(nl.res?.getOrNull()?.title.orEmpty()) }, snackbarHost = {
-        msg?.let { m -> Snackbar(Modifier.padding(16.dp), action = { TextButton({ msg = null }) { Text("OK") } }) { Text(m) } }
-    }) { pad ->
-        Box(Modifier.padding(pad)) {
-            Loaded(nl) { n ->
-                val chapters = toc.res?.getOrNull().orEmpty()
-                val first = chapters.firstOrNull()?.index ?: 1
-                fun read(i: Int) = Nav.push(Screen.Read(n.id, n.title, i))
-                LazyColumn {
+    // đầu trang tối (bìa mờ) → icon thanh trạng thái màu sáng; rời trang thì trả lại theo theme
+    val view = LocalView.current
+    val appLight = cs.background.luminance() > 0.5f
+    DisposableEffect(Unit) {
+        val ctl = WindowCompat.getInsetsController((view.context as Activity).window, view)
+        ctl.isAppearanceLightStatusBars = false
+        onDispose { ctl.isAppearanceLightStatusBars = appLight }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Loaded(nl) { n ->
+            val chapters = toc.res?.getOrNull().orEmpty()
+            val first = chapters.firstOrNull()?.index ?: 1
+            val cur = progress.res?.getOrNull()
+            fun read(i: Int) = if (uid == null) Nav.push(Screen.Login) else Nav.push(Screen.Read(n.id, n.title, i))
+            Column(Modifier.fillMaxSize()) {
+                Header(n)
+                TabRow(tab, containerColor = Color.Transparent, contentColor = cs.primary, divider = { HorizontalDivider(color = cs.outlineVariant) }) {
+                    listOf("Giới thiệu", "Danh sách chương").forEachIndexed { i, t ->
+                        Tab(tab == i, { tab = i }, text = { Text(t, style = MaterialTheme.typography.titleMedium, color = if (tab == i) cs.primary else cs.onSurfaceVariant) })
+                    }
+                }
+                val bottom = PaddingValues(bottom = 96.dp)
+                if (tab == 0) LazyColumn(Modifier.weight(1f), contentPadding = bottom) {
                     item {
-                        Row(Modifier.padding(16.dp)) {
-                            Cover(n.cover, 110.dp, 156.dp)
-                            Column(Modifier.padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(n.title, style = MaterialTheme.typography.titleLarge)
-                                if (n.author.isNotEmpty()) Text(n.author, style = MaterialTheme.typography.bodyMedium)
+                        if (n.genres.isNotEmpty()) FlowRow(Modifier.padding(20.dp, 16.dp, 20.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            n.genres.forEach {
                                 Text(
-                                    listOf(Api.statusLabel(n.status), n.source).filter(String::isNotEmpty).joinToString(" · "),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    it, Modifier.background(cs.primary.copy(.12f), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 5.dp),
+                                    color = cs.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold,
                                 )
-                                Text("${n.chaptersSource} chương · đã dịch ${n.chaptersTranslated}", style = MaterialTheme.typography.bodySmall)
                             }
-                        }
-                        if (n.genres.isNotEmpty()) FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            n.genres.forEach { AssistChip({}, { Text(it) }) }
-                        }
-                        Row(Modifier.padding(16.dp, 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val cur = progress.res?.getOrNull()
-                            Button({ if (uid == null) Nav.push(Screen.Login) else read(cur ?: first) }, Modifier.weight(1f)) {
-                                Text(if (cur != null) "Đọc tiếp · chương $cur" else "Bắt đầu đọc")
-                            }
-                            val followed = inLib.res?.getOrNull() == true
-                            OutlinedButton(
-                                {
-                                    if (uid == null) return@OutlinedButton Nav.push(Screen.Login)
-                                    busy = true
-                                    scope.launch {
-                                        runCatching { Api.setInLibrary(n.id, !followed) }
-                                            .onSuccess { msg = if (followed) "Đã bỏ theo dõi" else "Đã thêm vào Tủ truyện" }
-                                            .onFailure { msg = friendly(it) }
-                                        inLib.reload(); busy = false
-                                    }
-                                },
-                                enabled = !busy,
-                            ) { Text(if (followed) "Đang theo dõi" else "Theo dõi") }
                         }
                         n.description?.let {
                             Text(
-                                it, Modifier.clickable { desc = !desc }.padding(16.dp, 8.dp),
-                                maxLines = if (desc) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodyMedium,
+                                it, Modifier.clickable { desc = !desc }.padding(20.dp, 14.dp),
+                                maxLines = if (desc) Int.MAX_VALUE else 6, overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp), color = cs.onSurface,
                             )
+                        }
+                        PaperCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Fact("Tác giả", n.author)
+                                Fact("Nguồn", n.source)
+                                Fact("Mã truyện", "#${n.id}")
+                            }
                         }
                     }
                     val bm = marks.res?.getOrNull().orEmpty()
                     if (bm.isNotEmpty()) {
-                        item { Text("Dấu trang", Modifier.padding(16.dp, 12.dp, 16.dp, 4.dp), style = MaterialTheme.typography.titleMedium) }
+                        item { SectionHeader("Dấu trang") }
                         items(bm, key = { "b${it.id}" }) { b ->
-                            ListItem(
-                                headlineContent = { Text("Chương ${b.chapter} · ${(b.percent * 100).toInt()}%") },
-                                supportingContent = b.excerpt?.let { { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) } },
-                                trailingContent = {
-                                    TextButton({ scope.launch { runCatching { Api.deleteBookmark(b.id) }.onFailure { msg = friendly(it) }; marks.reload() } }) {
-                                        Text("Xoá")
-                                    }
-                                },
-                                modifier = Modifier.clickable {
+                            Row(
+                                Modifier.fillMaxWidth().clickable {
                                     Prefs.setPercent(n.id, b.chapter, b.percent.toFloat()) // reader tự cuộn tới %
                                     read(b.chapter)
-                                },
-                            )
+                                }.padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Rounded.Bookmark, null, Modifier.size(18.dp), cs.primary)
+                                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                    Text("Chương ${b.chapter} · ${(b.percent * 100).toInt()}%", style = MaterialTheme.typography.titleMedium)
+                                    b.excerpt?.let { Text(it, style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                                }
+                                IconButton({ scope.launch { runCatching { Api.deleteBookmark(b.id) }.onFailure { msg = friendly(it) }; marks.reload() } }) {
+                                    Icon(Icons.Rounded.Close, "Xoá dấu trang", tint = cs.onSurfaceVariant)
+                                }
+                            }
                         }
                     }
+                } else LazyColumn(Modifier.weight(1f), contentPadding = bottom) {
                     item {
-                        Row(Modifier.padding(16.dp, 12.dp, 8.dp, 0.dp)) {
-                            Text("Mục lục · ${chapters.size} chương", Modifier.weight(1f).align(androidx.compose.ui.Alignment.CenterVertically),
-                                style = MaterialTheme.typography.titleMedium)
-                            TextButton({ asc = !asc }) { Text(if (asc) "Cũ → mới" else "Mới → cũ") }
+                        Row(Modifier.padding(20.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("${chapters.size} chương", Modifier.weight(1f), style = monoStyle(13))
+                            TextButton({ asc = !asc }) {
+                                Icon(Icons.AutoMirrored.Rounded.Sort, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (asc) "Cũ → mới" else "Mới → cũ")
+                            }
                         }
                         when {
                             // migration 122: chapters chỉ đọc được khi đăng nhập
-                            uid == null -> TextButton({ Nav.push(Screen.Login) }, Modifier.padding(horizontal = 8.dp)) {
-                                Text("Đăng nhập để xem mục lục và đọc truyện")
-                            }
-                            toc.res == null -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp))
+                            uid == null -> NeedLoginInline()
+                            toc.res == null -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(20.dp))
                             toc.res.isFailure -> Empty(friendly(toc.res.exceptionOrNull()))
                             chapters.size < n.chaptersSource -> Text(
                                 "Mục lục đầy đủ sẽ được tải khi bạn mở đọc.",
-                                Modifier.padding(horizontal = 16.dp),
+                                Modifier.padding(horizontal = 20.dp),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                     items(if (asc) chapters else chapters.asReversed(), key = { it.index }) { c ->
-                        Row(Modifier.fillMaxWidth().clickable { read(c.index) }.padding(16.dp, 12.dp)) {
+                        val reading = c.index == cur
+                        Row(Modifier.fillMaxWidth().clickable { read(c.index) }.padding(20.dp, 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("${c.index}", Modifier.width(44.dp), style = monoStyle(12, if (reading) cs.primary else cs.onSurfaceVariant))
                             Text(
                                 c.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                fontWeight = if (c.index == progress.res?.getOrNull()) FontWeight.Bold else null,
-                                color = if (c.done) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (reading) FontWeight.Bold else null,
+                                color = when { reading -> cs.primary; c.done -> cs.onSurface; else -> cs.onSurfaceVariant },
                             )
-                            if (!c.done) Text("chưa dịch", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            if (!c.done) Icon(Icons.Rounded.HourglassEmpty, "chưa dịch", Modifier.size(16.dp), cs.onSurfaceVariant.copy(.6f))
                         }
+                        HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.6f))
+                    }
+                }
+            }
+            // hai nút nổi ở đáy như bản Flutter
+            Row(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp, 0.dp, 16.dp, 14.dp)) {
+                Surface(
+                    { read(cur ?: first) }, Modifier.weight(1f).height(46.dp), shape = RoundedCornerShape(23.dp),
+                    color = cs.primary, shadowElevation = 6.dp,
+                ) {
+                    Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(18.dp), cs.onPrimary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (cur != null) "Đọc tiếp chương $cur" else "Đọc truyện", color = cs.onPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = Jakarta)
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                val followed = inLib.res?.getOrNull() == true
+                Surface(
+                    {
+                        if (uid == null) return@Surface Nav.push(Screen.Login)
+                        busy = true
+                        scope.launch {
+                            runCatching { Api.setInLibrary(n.id, !followed) }
+                                .onSuccess { msg = if (followed) "Đã bỏ theo dõi" else "Đã thêm vào Tủ truyện" }
+                                .onFailure { msg = friendly(it) }
+                            inLib.reload(); busy = false
+                        }
+                    },
+                    Modifier.height(46.dp), enabled = !busy, shape = RoundedCornerShape(23.dp),
+                    color = if (followed) cs.primaryContainer else cs.card, shadowElevation = 6.dp,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (followed) cs.primary else cs.outlineVariant),
+                ) {
+                    Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (followed) Icons.Rounded.Check else Icons.Rounded.Add, null, Modifier.size(20.dp), if (followed) cs.primary else cs.onSurfaceVariant)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (followed) "Đang theo dõi" else "Theo dõi", color = if (followed) cs.primary else cs.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, fontFamily = Jakarta)
                     }
                 }
             }
         }
+        msg?.let { m ->
+            Snackbar(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp, 0.dp, 16.dp, 72.dp)) { Text(m) }
+        }
     }
+}
+
+/** Đầu trang: bìa phóng to + mờ, phủ tối pha màu nhấn, tan vào nền giấy; bìa nét + tên chữ trắng. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Header(n: Novel) {
+    val cs = MaterialTheme.colorScheme
+    Box(Modifier.clipToBounds()) {
+        AsyncImage(Api.thumb(n.cover, 400), null, Modifier.matchParentSize().blur(10.dp), contentScale = ContentScale.Crop)
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(0f to Color.Black.copy(.45f), .55f to lerp(Color.Black, cs.primary, .35f).copy(.55f), 1f to cs.background),
+            ),
+        )
+        Column(Modifier.statusBarsPadding()) {
+            IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", tint = Color.White) }
+            Row(Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp), verticalAlignment = Alignment.Bottom) {
+                Cover(n.cover, 124.dp, 174.dp, label = n.title)
+                Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                    Text(n.title, style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(6.dp))
+                    Text(n.author, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(.85f))
+                }
+            }
+            FlowRow(Modifier.padding(20.dp, 16.dp, 20.dp, 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HeroChip(Icons.AutoMirrored.Rounded.MenuBook, "${n.chaptersSource} chương")
+                HeroChip(Icons.Rounded.Translate, "${n.chaptersTranslated} đã dịch")
+                HeroChip(if (n.status == "completed") Icons.Rounded.CheckCircle else Icons.Rounded.EditNote, Api.statusLabel(n.status))
+                if (n.source.isNotEmpty()) HeroChip(Icons.Rounded.Public, n.source)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroChip(icon: ImageVector, label: String) = Row(
+    Modifier.background(Color.White.copy(.14f), RoundedCornerShape(10.dp)).border(1.dp, Color.White.copy(.18f), RoundedCornerShape(10.dp))
+        .padding(horizontal = 10.dp, vertical = 6.dp),
+    verticalAlignment = Alignment.CenterVertically,
+) {
+    Icon(icon, null, Modifier.size(14.dp), Color.White.copy(.85f))
+    Spacer(Modifier.width(6.dp))
+    Text(label, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+}
+
+@Composable
+private fun Fact(k: String, v: String) {
+    if (v.isEmpty()) return
+    Row {
+        Text(k, Modifier.width(96.dp), style = MaterialTheme.typography.labelMedium)
+        Text(v, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+private fun NeedLoginInline() = Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Text("Đăng nhập để xem mục lục và đọc truyện", style = MaterialTheme.typography.bodyMedium)
+    Spacer(Modifier.height(12.dp))
+    Button({ Nav.push(Screen.Login) }) { Text("Đăng nhập") }
 }

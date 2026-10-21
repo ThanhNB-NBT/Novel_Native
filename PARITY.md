@@ -21,4 +21,4 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 9. Hướng dẫn, Có gì mới, kiểm tra cập nhật — account/guide.dart, whats_new.dart, update.dart
 10. Lịch âm — account/lunar_calendar.dart, lunar.dart
 11. Quản trị (admin) — screens/admin/*, data/admin.dart (lớn nhất ngoài Tu Tiên)
-12. Giao diện: theme.dart (màu thương hiệu), skeleton, ink_transition, ambient
+12. Giao diện: ~~theme.dart, header + triện, dock nổi, trang chủ 5 kiểu mục, chi tiết bìa mờ, màu nhấn/nền~~ (xong 0.2.0); còn skeleton, ink_transition, ambient (màu theo bìa)

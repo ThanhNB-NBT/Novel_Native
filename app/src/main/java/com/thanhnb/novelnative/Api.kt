@@ -69,14 +69,20 @@ object Prefs {
     lateinit var sp: SharedPreferences
     var themeMode by mutableIntStateOf(0) // 0 hệ thống · 1 sáng · 2 tối
     var notifSeenAt by mutableStateOf("")
+    var accent by mutableIntStateOf(0) // chỉ số trong accents (Theme.kt)
+    var paper by mutableIntStateOf(0)
 
     fun init(c: Context) {
         sp = c.getSharedPreferences("app", Context.MODE_PRIVATE)
         themeMode = sp.getInt("theme_mode", 0)
+        accent = sp.getInt("accent", 0)
+        paper = sp.getInt("paper", 0)
         notifSeenAt = sp.getString("notify_seen_at", null) ?: Instant.now().toString().also { setSeen(it) }
     }
 
     fun setTheme(m: Int) { themeMode = m; sp.edit().putInt("theme_mode", m).apply() }
+    fun pickAccent(i: Int) { accent = i; sp.edit().putInt("accent", i).apply() }
+    fun pickPaper(i: Int) { paper = i; sp.edit().putInt("paper", i).apply() }
     fun setSeen(at: String) { notifSeenAt = at; sp.edit().putString("notify_seen_at", at).apply() }
 
     // Cùng khoá với app Flutter (rp_<novel>_<chương>) cho dễ đối chiếu.

@@ -1,21 +1,39 @@
 package com.thanhnb.novelnative
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Login
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -24,28 +42,40 @@ import java.time.Instant
 fun LibraryTab() {
     val uid = Session.user?.id
     Column {
-        TopAppBar(title = { Text("Tủ truyện") })
-        if (uid == null) return NeedLogin("Đăng nhập để lưu truyện theo dõi và tiến độ đọc.")
+        PageHeader("Theo dõi · Đang đọc", "Tủ truyện", "藏")
+        if (uid == null) return NeedLogin("Đăng nhập để theo dõi truyện và lưu chỗ đang đọc", Icons.AutoMirrored.Rounded.Login)
         val l = load("library", uid) { Api.library() }
         val scope = rememberCoroutineScope()
         var confirm by remember { mutableStateOf<Novel?>(null) }
         Loaded(l) { novels ->
             PullToRefreshBox(false, l.reload) {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = DockSpace)) {
                     if (novels.isEmpty()) item { Empty("Tủ truyện trống — bấm Theo dõi ở trang truyện, hoặc đọc một chương là truyện tự vào đây.") }
                     items(novels, key = { it.id }) { n ->
-                        NovelRow(
-                            n,
-                            sub = n.curChapter?.let { "Đang đọc chương $it / ${n.chaptersSource}" } ?: "Đang theo dõi · ${n.chaptersSource} chương",
-                            onClick = { n.curChapter?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) },
-                        ) {
-                            var menu by remember { mutableStateOf(false) }
-                            Box {
-                                IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Tuỳ chọn") }
-                                DropdownMenu(menu, { menu = false }) {
-                                    DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
-                                    DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
+                        Column {
+                            NovelRow(
+                                n,
+                                sub = n.curChapter?.let { "Đang đọc chương $it / ${n.chaptersSource}" } ?: "Đang theo dõi · ${n.chaptersSource} chương",
+                                onClick = { n.curChapter?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) },
+                            ) {
+                                var menu by remember { mutableStateOf(false) }
+                                Box {
+                                    IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    DropdownMenu(menu, { menu = false }) {
+                                        DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
+                                        DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
+                                    }
                                 }
+                            }
+                            n.curChapter?.let { cur ->
+                                // ruy-băng tiến độ mảnh dưới mỗi truyện đang đọc
+                                LinearProgressIndicator(
+                                    { (cur.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(0f, 1f) },
+                                    Modifier.padding(start = 106.dp, end = 20.dp, bottom = 6.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(.5f),
+                                    gapSize = 0.dp, drawStopIndicator = {},
+                                )
                             }
                         }
                     }
@@ -83,36 +113,40 @@ fun NotifTab() {
     val uid = Session.user?.id
     Column {
         if (uid == null) {
-            TopAppBar(title = { Text("Thông báo") })
-            return NeedLogin("Đăng nhập để nhận báo chương mới của truyện bạn theo dõi.")
+            PageHeader("Chương mới dịch xong", "Thông báo", "訊")
+            return NeedLogin("Đăng nhập để nhận báo chương mới của truyện bạn theo dõi.", Icons.Rounded.NotificationsNone)
         }
         val l = load("notif", uid) { Api.notifications() }
         // Mở tab = đã xem; giữ mốc cũ trong phiên để vẫn tô đậm những dòng vừa mới
         val seenBefore = remember { Prefs.notifSeenAt }
         LaunchedEffect(Unit) { Prefs.setSeen(Instant.now().toString()) }
         val list = l.res?.getOrNull().orEmpty()
-        TopAppBar(
-            title = { Text("Thông báo") },
-            actions = { if (list.isNotEmpty()) TextButton({ list.forEach(Api::dismiss); l.reload() }) { Text("Xoá hết") } },
-        )
+        PageHeader("Chương mới dịch xong", "Thông báo", "訊") {
+            if (list.isNotEmpty()) IconButton({ list.forEach(Api::dismiss); l.reload() }) { Icon(Icons.Rounded.DeleteSweep, "Xoá tất cả") }
+        }
         Loaded(l) { notifs ->
             PullToRefreshBox(false, l.reload) {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = DockSpace), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (notifs.isEmpty()) item { Empty("Chưa có chương mới trong 7 ngày qua.") }
                     items(notifs, key = { it.novelId }) { n ->
-                        ListItem(
-                            leadingContent = { Cover(n.cover, 40.dp, 56.dp) },
-                            headlineContent = { Text(n.title, maxLines = 1) },
-                            supportingContent = {
-                                Text(
-                                    if (n.chapters.size == 1) "Chương ${n.chapters[0]} đã dịch xong"
-                                    else "${n.chapters.size} chương mới (${n.chapters.first()}–${n.chapters.last()})",
-                                )
-                            },
-                            trailingContent = { IconButton({ Api.dismiss(n); l.reload() }) { Icon(Icons.Default.Close, "Xoá") } },
-                            colors = if (n.latestAt > seenBefore) ListItemDefaults.colors(MaterialTheme.colorScheme.secondaryContainer) else ListItemDefaults.colors(),
-                            modifier = Modifier.clickable { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) },
-                        )
+                        val fresh = n.latestAt > seenBefore
+                        PaperCard(onClick = { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) }) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Cover(n.cover, 44.dp, 60.dp, label = n.title, flat = true)
+                                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                    Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        if (n.chapters.size == 1) "Chương ${n.chapters[0]} đã dịch xong"
+                                        else "${n.chapters.size} chương mới (${n.chapters.first()}–${n.chapters.last()})",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (fresh) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (fresh) FontWeight.SemiBold else null,
+                                    )
+                                }
+                                if (fresh) Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+                                IconButton({ Api.dismiss(n); l.reload() }) { Icon(Icons.Rounded.Close, "Xoá", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                        }
                     }
                 }
             }
@@ -120,39 +154,100 @@ fun NotifTab() {
     }
 }
 
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountTab() {
     val u = Session.user
-    Column {
-        TopAppBar(title = { Text("Tôi") })
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val cs = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        PageHeader("", "Tôi", "我")
+        Column(Modifier.padding(horizontal = 16.dp)) {
             if (u == null) {
-                Text("Chưa đăng nhập")
-                Button({ Nav.push(Screen.Login) }) { Text("Đăng nhập") }
+                Text(
+                    "Đăng nhập để lưu truyện đang đọc và tiến độ.", Modifier.fillMaxWidth().padding(top = 24.dp),
+                    textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant,
+                )
+                Button({ Nav.push(Screen.Login) }, Modifier.align(Alignment.CenterHorizontally).padding(top = 20.dp), contentPadding = PaddingValues(horizontal = 40.dp, vertical = 14.dp)) {
+                    Text("Đăng nhập", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(24.dp))
             } else {
-                Text(u.email, style = MaterialTheme.typography.titleMedium)
-                OutlinedButton(Session::signOut) { Text("Đăng xuất") }
+                PaperCard {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(52.dp).background(cs.primaryContainer, CircleShape), Alignment.Center) {
+                            Text(u.email.take(1).uppercase(), style = MaterialTheme.typography.headlineSmall, color = cs.primary)
+                        }
+                        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                            Text(u.email.substringBefore('@'), style = MaterialTheme.typography.titleMedium)
+                            Text(u.email, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        OutlinedButton(Session::signOut, border = androidx.compose.foundation.BorderStroke(1.dp, cs.outlineVariant)) { Text("Đăng xuất") }
+                    }
+                }
             }
-            HorizontalDivider()
-            Text("Giao diện", style = MaterialTheme.typography.titleSmall)
-            SingleChoiceSegmentedButtonRow {
+
+            Eyebrow("Giao diện", Modifier.padding(start = 4.dp, top = 28.dp, bottom = 10.dp))
+            // segmented: viên nhấn đặc trên thẻ giấy
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(cs.card).border(1.dp, cs.outlineVariant, RoundedCornerShape(20.dp)).padding(6.dp)) {
                 listOf("Hệ thống", "Sáng", "Tối").forEachIndexed { i, label ->
-                    SegmentedButton(Prefs.themeMode == i, { Prefs.setTheme(i) }, SegmentedButtonDefaults.itemShape(i, 3)) { Text(label) }
+                    val on = Prefs.themeMode == i
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(if (on) cs.primary else Color.Transparent)
+                            .clickable { Prefs.setTheme(i) }.padding(vertical = 12.dp),
+                        Alignment.Center,
+                    ) { Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 16.sp) }
                 }
             }
-            var ahead by remember { mutableStateOf(Prefs.autoAhead) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Tự dịch trước 15 chương")
-                    Text("Mở chương nào thì xếp dịch sẵn 15 chương kế tiếp", style = MaterialTheme.typography.bodySmall)
+
+            Text("Màu nhấn", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                accents.forEachIndexed { i, a ->
+                    Swatch(a.name, listOf(a.accent, a.seal, a.soft), cs.card, Prefs.accent == i, Modifier.weight(1f)) { Prefs.pickAccent(i) }
                 }
-                Switch(ahead, { ahead = it; Prefs.autoAhead = it })
             }
-            HorizontalDivider()
-            Text("Phiên bản ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+            Text("Nền", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                papers.forEachIndexed { i, p ->
+                    Swatch(p.name, listOf(p.surfaceAlt, p.inkSoft, p.ink), p.bg, Prefs.paper == i, Modifier.weight(1f)) { Prefs.pickPaper(i) }
+                }
+            }
+
+            Eyebrow("Ứng dụng", Modifier.padding(start = 4.dp, top = 28.dp, bottom = 10.dp))
+            PaperCard {
+                var ahead by remember { mutableStateOf(Prefs.autoAhead) }
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp).background(cs.primaryContainer, RoundedCornerShape(12.dp)), Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = cs.primary)
+                    }
+                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                        Text("Tự dịch trước 15 chương", style = MaterialTheme.typography.titleMedium)
+                        Text("Mở chương nào thì xếp dịch sẵn 15 chương kế tiếp", style = MaterialTheme.typography.labelMedium)
+                    }
+                    Switch(ahead, { ahead = it; Prefs.autoAhead = it })
+                }
+            }
+            Text(
+                "Gác Truyện native · ${BuildConfig.VERSION_NAME}", Modifier.fillMaxWidth().padding(top = 20.dp, bottom = DockSpace),
+                textAlign = TextAlign.Center, style = monoStyle(),
+            )
         }
+    }
+}
+
+/** Ô chọn màu: 3 chấm chồng nhau + tên; đang chọn thì viền son dày. */
+@Composable
+private fun Swatch(name: String, dots: List<Color>, bg: Color, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier.clip(shape).background(bg).border(if (on) 2.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, shape)
+            .clickable(onClick = onClick).padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box {
+            dots.forEachIndexed { i, c -> Box(Modifier.padding(start = (i * 12).dp).size(18.dp).background(c, CircleShape)) }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(name, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) cs.onSurface else cs.onSurfaceVariant, maxLines = 1)
     }
 }
 
@@ -163,33 +258,54 @@ fun LoginScreen() {
     var busy by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    Scaffold(topBar = { Bar("Đăng nhập") }) { pad ->
-        Column(Modifier.padding(pad).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Dùng tài khoản được cấp để đọc và yêu cầu dịch.")
-            OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("Email") }, singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
-            OutlinedTextField(pw, { pw = it }, Modifier.fillMaxWidth(), label = { Text("Mật khẩu") }, singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-            err?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(
-                {
-                    err = when {
-                        !email.contains('@') -> "Nhập email hợp lệ"
-                        pw.length < 6 -> "Mật khẩu tối thiểu 6 ký tự"
-                        else -> null
-                    }
-                    if (err != null) return@Button
-                    busy = true
-                    scope.launch {
-                        runCatching { Session.signIn(email.trim(), pw) }
-                            .onSuccess { Nav.tab = 0; Nav.pop() }
-                            .onFailure { err = friendly(it) }
-                        busy = false
-                    }
-                },
-                Modifier.fillMaxWidth(), enabled = !busy,
-            ) { Text(if (busy) "Đang đăng nhập…" else "Đăng nhập") }
+    val cs = MaterialTheme.colorScheme
+    val a = accents.getOrElse(Prefs.accent) { accents[0] }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding()) {
+        // đầu trang dải son đậm như bản Flutter
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))
+                .background(Brush.linearGradient(listOf(a.accent, a.deep, Color(0xFF4A1A10))))
+                .statusBarsPadding().padding(start = 8.dp, end = 20.dp, bottom = 56.dp),
+        ) {
+            IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", tint = Color.White) }
+            Column(Modifier.padding(start = 12.dp, top = 12.dp)) {
+                Box(Modifier.size(64.dp).background(Color.White.copy(.18f), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(.3f), RoundedCornerShape(18.dp)), Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(30.dp), Color.White)
+                }
+                Spacer(Modifier.height(20.dp))
+                Text("TÀNG THƯ CÁC · TRUY CẬP", color = Color.White.copy(.85f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp, fontFamily = Jakarta)
+                Text("Kho truyện dịch của bạn", style = MaterialTheme.typography.displaySmall, color = Color.White)
+            }
+        }
+        PaperCard(Modifier.padding(horizontal = 20.dp).offset(y = (-32).dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Đăng nhập", style = MaterialTheme.typography.headlineSmall)
+                Text("Dùng tài khoản được cấp để đọc và yêu cầu dịch.", style = MaterialTheme.typography.bodyMedium)
+                OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text("Email") }, singleLine = true,
+                    shape = RoundedCornerShape(14.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                OutlinedTextField(pw, { pw = it }, Modifier.fillMaxWidth(), label = { Text("Mật khẩu") }, singleLine = true,
+                    shape = RoundedCornerShape(14.dp), visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                err?.let { Text(it, color = cs.error, style = MaterialTheme.typography.labelMedium) }
+                Button(
+                    {
+                        err = when {
+                            !email.contains('@') -> "Nhập email hợp lệ"
+                            pw.length < 6 -> "Mật khẩu tối thiểu 6 ký tự"
+                            else -> null
+                        }
+                        if (err != null) return@Button
+                        busy = true
+                        scope.launch {
+                            runCatching { Session.signIn(email.trim(), pw) }
+                                .onSuccess { Nav.tab = 0; Nav.pop() }
+                                .onFailure { err = friendly(it) }
+                            busy = false
+                        }
+                    },
+                    Modifier.fillMaxWidth().padding(top = 4.dp), enabled = !busy, contentPadding = PaddingValues(vertical = 14.dp),
+                ) { Text(if (busy) "Đang đăng nhập…" else "Đăng nhập", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            }
         }
     }
 }
