@@ -262,6 +262,8 @@ fun ReaderScreen(s: Screen.Read) {
     )
     val title = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = (st.size + 4).sp, lineHeight = ((st.size + 4) * 1.3f).sp, color = fg)
 
+    // Thanh đang hiện thì nó đã chừa thanh trạng thái → nội dung chỉ chừa hai bên + đáy
+    val insets = if (bars && !auto) WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom) else WindowInsets.safeDrawing
     Box(
         Modifier.fillMaxSize().background(bg).then(
             if (st.page) Modifier else Modifier.pointerInput(Unit) {
@@ -276,32 +278,9 @@ fun ReaderScreen(s: Screen.Read) {
             },
         ),
     ) {
-        CompositionLocalProvider(LocalContentColor provides fg) {
-            Loaded(l) { c ->
-                when {
-                    Session.user == null -> NeedLogin("Đăng nhập để đọc truyện.")
-                    c == null -> Waiting("toc", fg) {}
-                    c.status != "done" -> Waiting(c.status, fg) {
-                        scope.launch {
-                            runCatching { Api.requestTranslation(s.novelId, s.index + 10) }.onFailure { msg = friendly(it) }
-                            l.reload()
-                        }
-                    }
-                    c.paragraphs.isEmpty() -> Column(Modifier.fillMaxSize().padding(32.dp), Arrangement.Center, Alignment.CenterHorizontally) {
-                        Text("Chương này chưa có nội dung dịch — bản cũ có thể bị lỗi.", textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(12.dp))
-                        Button({
-                            scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
-                        }) { Text("Dịch lại chương") }
-                    }
-                    st.page -> PagedChapter(c, st, body, title, terms, fg, pageTurn, { pct }, setPct, go) { bars = !bars }
-                    else -> ScrollChapter(c, st, body, title, terms, fg, list, go)
-                }
-            }
-        }
-
-        // Thanh trên tối giản như Flutter: thấp, chữ/icon mờ — nhường chú ý cho trang chữ
-        AnimatedVisibility(bars && !auto, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
+        // Header ghim như Flutter (appBar của Scaffold): chữ nằm DƯỚI thanh, ẩn thanh thì chữ giãn lên
+        Column(Modifier.fillMaxSize()) {
+        AnimatedVisibility(bars && !auto) {
             Column(Modifier.background(bg).statusBarsPadding()) {
                 Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
                     CompositionLocalProvider(LocalContentColor provides fg.copy(alpha = 0.55f)) {
@@ -327,8 +306,37 @@ fun ReaderScreen(s: Screen.Read) {
                         }
                     }
                 }
-                Box(Modifier.fillMaxWidth(pct.coerceIn(0f, 1f)).height(1.5.dp).background(fg.copy(alpha = 0.2f)))
+                // thanh tiến độ màu nhấn của app trên rãnh mờ
+                Box(Modifier.fillMaxWidth().height(2.5.dp).background(fg.copy(alpha = 0.08f))) {
+                    Box(Modifier.fillMaxWidth(pct.coerceIn(0f, 1f)).fillMaxHeight().background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50)))
+                }
             }
+        }
+        Box(Modifier.weight(1f)) {
+        CompositionLocalProvider(LocalContentColor provides fg) {
+            Loaded(l) { c ->
+                when {
+                    Session.user == null -> NeedLogin("Đăng nhập để đọc truyện.")
+                    c == null -> Waiting("toc", fg) {}
+                    c.status != "done" -> Waiting(c.status, fg) {
+                        scope.launch {
+                            runCatching { Api.requestTranslation(s.novelId, s.index + 10) }.onFailure { msg = friendly(it) }
+                            l.reload()
+                        }
+                    }
+                    c.paragraphs.isEmpty() -> Column(Modifier.fillMaxSize().padding(32.dp), Arrangement.Center, Alignment.CenterHorizontally) {
+                        Text("Chương này chưa có nội dung dịch — bản cũ có thể bị lỗi.", textAlign = TextAlign.Center)
+                        Spacer(Modifier.height(12.dp))
+                        Button({
+                            scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
+                        }) { Text("Dịch lại chương") }
+                    }
+                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go) { bars = !bars }
+                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, go)
+                }
+            }
+        }
+        }
         }
         if (auto) Text(
             "Đang tự cuộn · chạm để dừng",
@@ -353,7 +361,7 @@ fun ReaderScreen(s: Screen.Read) {
 
 /** Cuộn dọc. Cuộn hết rồi kéo tiếp quá mép → đổi chương (đo khoảng vượt mép lúc nhấc tay). */
 @Composable
-private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, list: LazyListState, go: (Int) -> Unit) {
+private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, go: (Int) -> Unit) {
     val limit = with(LocalDensity.current) { 72.dp.toPx() }
     var over by remember { mutableFloatStateOf(0f) } // >0 kéo quá đáy · <0 kéo quá đỉnh
     val conn = remember(c.index) {
@@ -372,8 +380,8 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
         }
     }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize().nestedScroll(conn), list, contentPadding = WindowInsets.safeDrawing.asPaddingValues()) {
-            item { Text(c.title, Modifier.padding(st.margin.dp, 52.dp, st.margin.dp, 20.dp), style = title) }
+        LazyColumn(Modifier.fillMaxSize().nestedScroll(conn), list, contentPadding = insets.asPaddingValues()) {
+            item { Text(c.title, Modifier.padding(st.margin.dp, 24.dp, st.margin.dp, 20.dp), style = title) }
             items(c.paragraphs) { p ->
                 SelectionContainer {
                     Text(marked(p, terms), Modifier.padding(st.margin.dp, (st.size * 0.45f).dp), style = body)
@@ -413,9 +421,9 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
  */
 @Composable
 private fun PagedChapter(
-    c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color,
+    c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets,
     turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, tap: () -> Unit,
-) = BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+) = BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(insets)) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
     val scope = rememberCoroutineScope()

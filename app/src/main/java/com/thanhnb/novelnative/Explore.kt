@@ -107,7 +107,7 @@ private fun HeroCarousel(items: List<Novel>) {
             val delta = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
             Box(Modifier.fillMaxSize().clickable { open(n) }) {
                 AsyncImage(Api.thumb(n.cover, 300), null, Modifier.fillMaxSize().blur(16.dp), contentScale = ContentScale.Crop)
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.28f to bg.copy(.12f), 0.72f to bg.copy(.86f), 1f to bg)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to bg.copy(.78f), 0.3f to bg.copy(.25f), 0.72f to bg.copy(.86f), 1f to bg)))
                 Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 78.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Cover(
                         n.cover, 132.dp, 185.dp, label = n.title, flat = true,

@@ -207,7 +207,7 @@ fun AccountTab() {
             Text("Nền", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 papers.forEachIndexed { i, p ->
-                    Swatch(p.name, listOf(p.surfaceAlt, p.inkSoft, p.ink), p.bg, Prefs.paper == i, Modifier.weight(1f)) { Prefs.pickPaper(i) }
+                    Swatch(p.name, listOf(p.surfaceAlt, p.inkSoft, p.ink), p.bg, Prefs.paper == i, Modifier.weight(1f), ink = p.ink) { Prefs.pickPaper(i) }
                 }
             }
 
@@ -235,7 +235,7 @@ fun AccountTab() {
 
 /** Ô chọn màu: 3 chấm chồng nhau + tên; đang chọn thì viền son dày. */
 @Composable
-private fun Swatch(name: String, dots: List<Color>, bg: Color, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun Swatch(name: String, dots: List<Color>, bg: Color, on: Boolean, modifier: Modifier, ink: Color? = null, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(18.dp)
     Column(
@@ -247,7 +247,7 @@ private fun Swatch(name: String, dots: List<Color>, bg: Color, on: Boolean, modi
             dots.forEachIndexed { i, c -> Box(Modifier.padding(start = (i * 12).dp).size(18.dp).background(c, CircleShape)) }
         }
         Spacer(Modifier.height(8.dp))
-        Text(name, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = if (on) cs.onSurface else cs.onSurfaceVariant, maxLines = 1)
+        Text(name, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = ink?.copy(alpha = if (on) 1f else .7f) ?: if (on) cs.onSurface else cs.onSurfaceVariant, maxLines = 1)
     }
 }
 
