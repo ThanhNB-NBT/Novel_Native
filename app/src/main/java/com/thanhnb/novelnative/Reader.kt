@@ -1,5 +1,7 @@
 package com.thanhnb.novelnative
 
+import android.app.Activity
+import androidx.core.view.WindowCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
@@ -72,6 +75,14 @@ fun ReaderScreen(s: Screen.Read) {
     // Giữ màn hình sáng khi đang đọc
     val view = LocalView.current
     DisposableEffect(Unit) { view.keepScreenOn = true; onDispose { view.keepScreenOn = false } }
+    // Icon thanh trạng thái theo nền đọc (nền tối → icon sáng); rời màn thì trả về theo theme app
+    val appLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    DisposableEffect(bg) {
+        val ctl = WindowCompat.getInsetsController((view.context as Activity).window, view)
+        ctl.isAppearanceLightStatusBars = bg.luminance() > 0.5f
+        ctl.isAppearanceLightNavigationBars = bg.luminance() > 0.5f
+        onDispose { ctl.isAppearanceLightStatusBars = appLight; ctl.isAppearanceLightNavigationBars = appLight }
+    }
 
     LaunchedEffect(s.novelId, s.index) {
         runCatching { Api.requestToc(s.novelId) }
@@ -161,7 +172,7 @@ fun ReaderScreen(s: Screen.Read) {
 
         // Thanh trên + dưới nổi đè lên nội dung
         AnimatedVisibility(bars, Modifier.align(Alignment.TopCenter)) {
-            Surface(color = bg.copy(alpha = 0.96f), contentColor = fg, shadowElevation = 2.dp) {
+            Surface(color = bg, contentColor = fg, shadowElevation = 2.dp) {
                 Row(Modifier.fillMaxWidth().statusBarsPadding(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Quay lại") }
                     Column(Modifier.weight(1f)) {
@@ -191,7 +202,7 @@ fun ReaderScreen(s: Screen.Read) {
             }
         }
         AnimatedVisibility(bars, Modifier.align(Alignment.BottomCenter)) {
-            Surface(color = bg.copy(alpha = 0.96f), contentColor = fg, shadowElevation = 2.dp) {
+            Surface(color = bg, contentColor = fg, shadowElevation = 2.dp) {
                 Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(4.dp), Arrangement.SpaceAround, Alignment.CenterVertically) {
                     TextButton({ go(s.index - 1) }, enabled = s.index > 1) { Text("‹ Trước", color = fg) }
                     IconButton({ sheet = 1 }) { Icon(Icons.AutoMirrored.Filled.List, "Mục lục") }
