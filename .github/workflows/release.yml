@@ -1,9 +1,9 @@
 # Phát hành: git tag v0.3.0; git push origin v0.3.0
 # → build APK release ký keystore cố định, tạo GitHub Release kèm APK; app tự báo bản mới (Update.kt).
-# Secrets (Settings → Secrets → Actions), cùng giá trị với Novel_Persona:
-#   ANDROID_KEYSTORE_BASE64   keystore (alias "upload") mã hoá base64
-#   ANDROID_KEYSTORE_PASSWORD mật khẩu keystore = mật khẩu key
-#   SUPABASE_URL, SUPABASE_ANON_KEY  endpoint public
+# Secrets (Settings → Secrets → Actions), giá trị như Novel_Persona, tên riêng:
+#   GTN_SIGN_STORE_B64_K7X2   keystore (alias "upload") mã hoá base64
+#   GTN_SIGN_PASS_Q9M4        mật khẩu keystore = mật khẩu key
+#   GTN_API_ENDPOINT_R3V8, GTN_API_PUBKEY_W5N1  SUPABASE_URL, SUPABASE_ANON_KEY public
 name: Release APK
 on:
   push:
@@ -23,13 +23,13 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v6
       - name: Giải keystore từ secret
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+        run: echo "${{ secrets.GTN_SIGN_STORE_B64_K7X2 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
       - name: Build APK release (ký keystore)
         env:
           ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.GTN_SIGN_PASS_Q9M4 }}
+          SUPABASE_URL: ${{ secrets.GTN_API_ENDPOINT_R3V8 }}
+          SUPABASE_ANON_KEY: ${{ secrets.GTN_API_PUBKEY_W5N1 }}
         run: |
           test -n "$SUPABASE_URL" && test -n "$SUPABASE_ANON_KEY" || { echo "Thiếu secret SUPABASE_URL/SUPABASE_ANON_KEY"; exit 1; }
           # Key sai vẫn build ra APK, chỉ tới lúc gọi API mới 401 — hỏi thử server trước
