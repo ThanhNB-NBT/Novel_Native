@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -55,7 +56,7 @@ private fun open(n: Novel) = Nav.push(Screen.Detail(n.id))
 @Composable
 fun ExploreTab() {
     val l = load("home") { coroutineScope { Section.entries.map { async { Api.section(it, 0, 15) } }.awaitAll() } }
-    Loaded(l) { lists ->
+    Loaded(l, topInset = true) { lists ->
         val (latest, featured, recommended, completed) = lists
         PullToRefreshBox(false, l.reload) {
             // Mỗi mục một kiểu bày riêng như Flutter: băng chuyền → bìa nhỏ → thẻ dọc → bảng xếp hạng → poster
@@ -106,7 +107,11 @@ private fun HeroCarousel(items: List<Novel>) {
             val n = items[page]
             val delta = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
             Box(Modifier.fillMaxSize().clickable { open(n) }) {
-                AsyncImage(Api.thumb(n.cover, 300), null, Modifier.fillMaxSize().blur(16.dp), contentScale = ContentScale.Crop)
+                // giảm bão hoà để bìa rực (hồng, cam) không nhuộm cả trang
+                AsyncImage(
+                    Api.thumb(n.cover, 300), null, Modifier.fillMaxSize().blur(16.dp), contentScale = ContentScale.Crop,
+                    colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(.4f) }),
+                )
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to bg.copy(.78f), 0.3f to bg.copy(.25f), 0.72f to bg.copy(.86f), 1f to bg)))
                 Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 78.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Cover(

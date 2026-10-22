@@ -71,7 +71,7 @@ fun GlossaryScreen(novelId: Int) {
             }
             if (Session.user == null) { NeedLogin("Đăng nhập để quản lý thuật ngữ."); return@Column }
             PatchBanner(patch.res?.getOrNull())
-            Loaded(l) { all ->
+            Loaded(l, loading = { TextSkeleton() }) { all ->
                 val pending = all.filter { !it.approved }
                 val approved = all.filter { it.approved }
                 if (all.isEmpty()) Empty("Chưa có thuật ngữ nào.\nBấm + để thêm.")

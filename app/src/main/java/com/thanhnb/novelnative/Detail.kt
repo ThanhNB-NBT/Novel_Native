@@ -71,7 +71,7 @@ fun DetailScreen(id: Int) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        Loaded(nl) { n ->
+        Loaded(nl, loading = { CenterSpinner() }) { n ->
             val chapters = toc.res?.getOrNull().orEmpty()
             val first = chapters.firstOrNull()?.index ?: 1
             val cur = progress.res?.getOrNull()

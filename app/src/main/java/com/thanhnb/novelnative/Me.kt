@@ -52,30 +52,45 @@ fun LibraryTab() {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = DockSpace)) {
                     if (novels.isEmpty()) item { Empty("Tủ truyện trống — bấm Theo dõi ở trang truyện, hoặc đọc một chương là truyện tự vào đây.") }
                     items(novels, key = { it.id }) { n ->
-                        Column {
-                            NovelRow(
-                                n,
-                                sub = n.curChapter?.let { "Đang đọc chương $it / ${n.chaptersSource}" } ?: "Đang theo dõi · ${n.chaptersSource} chương",
-                                onClick = { n.curChapter?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) },
-                            ) {
-                                var menu by remember { mutableStateOf(false) }
-                                Box {
-                                    IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                    DropdownMenu(menu, { menu = false }) {
-                                        DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
-                                        DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
-                                    }
-                                }
-                            }
-                            n.curChapter?.let { cur ->
-                                // ruy-băng tiến độ mảnh dưới mỗi truyện đang đọc
-                                LinearProgressIndicator(
-                                    { (cur.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(0f, 1f) },
-                                    Modifier.padding(start = 106.dp, end = 20.dp, bottom = 6.dp).fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(.5f),
-                                    gapSize = 0.dp, drawStopIndicator = {},
+                        val cur = n.curChapter
+                        val total = n.chaptersSource.coerceAtLeast(1)
+                        // dòng phẳng, không khung: bìa + thông tin, tiến độ nằm ngay dưới
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { cur?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) }
+                                .padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
+                        ) {
+                            Cover(n.cover, 76.dp, 103.dp, label = n.title)
+                            Column(Modifier.weight(1f).heightIn(min = 103.dp).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    listOf(n.author, n.genres.firstOrNull().orEmpty()).filter(String::isNotEmpty).joinToString(" · "),
+                                    style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 )
+                                Spacer(Modifier.weight(1f))
+                                if (cur != null) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Chương $cur/${n.chaptersSource}", style = monoStyle(12, MaterialTheme.colorScheme.primary))
+                                        Spacer(Modifier.weight(1f))
+                                        Text("${(cur * 100 / total).coerceIn(0, 100)}%", style = monoStyle(12))
+                                    }
+                                    // tối thiểu 3% để truyện mới đọc vẫn thấy một vệt tiến độ, không phải một chấm
+                                    LinearProgressIndicator(
+                                        { (cur.toFloat() / total).coerceIn(.03f, 1f) },
+                                        Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(.6f),
+                                        gapSize = 0.dp, drawStopIndicator = {},
+                                    )
+                                } else Text("Đang theo dõi · ${n.chaptersSource} chương", style = monoStyle(12, MaterialTheme.colorScheme.primary))
+                            }
+                            var menu by remember { mutableStateOf(false) }
+                            Box {
+                                IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                DropdownMenu(menu, { menu = false }) {
+                                    DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
+                                    DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
+                                }
                             }
                         }
                     }

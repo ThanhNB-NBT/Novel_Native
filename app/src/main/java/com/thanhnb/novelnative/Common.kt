@@ -1,5 +1,11 @@
 package com.thanhnb.novelnative
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,8 +22,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -76,10 +84,10 @@ fun <T> load(vararg keys: Any?, block: suspend () -> T): Loader<T> {
 }
 
 @Composable
-fun <T> Loaded(l: Loader<T>, content: @Composable (T) -> Unit) {
+fun <T> Loaded(l: Loader<T>, topInset: Boolean = false, loading: @Composable () -> Unit = { ListSkeleton(topInset) }, content: @Composable (T) -> Unit) {
     val res = l.res
     when {
-        res == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(strokeWidth = 3.dp) }
+        res == null -> loading()
         res.isFailure -> Column(
             Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
@@ -163,19 +171,29 @@ fun IconStat(icon: ImageVector, value: String) = Row(verticalAlignment = Alignme
     Text(value, style = monoStyle())
 }
 
-/** Bìa: bo 8, viền mảnh + bóng nhẹ; thiếu ảnh thì nền son nhạt + chữ cái đầu. */
+/** Bìa: bo 8, viền mảnh + bóng nhẹ; thiếu ảnh thì sinh bìa chữ: màu theo tên truyện + chữ cái đầu trong khung như bìa sách. */
 @Composable
 fun Cover(url: String?, w: Dp, h: Dp, modifier: Modifier = Modifier, label: String? = null, flat: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(8.dp)
+    val dark = cs.background.luminance() < .5f
     Box(
         modifier.size(w, h).then(if (flat) Modifier else Modifier.shadow(4.dp, shape, ambientColor = Color.Black.copy(.3f), spotColor = Color.Black.copy(.3f)))
-            .clip(shape).background(cs.primaryContainer.copy(alpha = .55f)).border(1.dp, cs.outlineVariant.copy(alpha = .7f), shape),
+            .clip(shape).border(1.dp, cs.outlineVariant.copy(alpha = .7f), shape),
         Alignment.Center,
     ) {
         val initial = label?.trim()?.firstOrNull()
-        if (initial == null) Icon(Icons.Rounded.AutoStories, null, Modifier.size(w * 0.32f), cs.primary.copy(alpha = .8f))
-        else Text(initial.uppercase(), color = cs.primary, fontSize = (w.value * 0.42f).sp, fontWeight = FontWeight.ExtraBold)
+        val hue = ((label ?: "").hashCode().toLong().let { if (it < 0) -it else it } % 360).toFloat()
+        val sat = if (dark) .30f else .26f
+        Box(
+            Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.hsv(hue, sat, if (dark) .40f else .90f), Color.hsv((hue + 30f) % 360f, sat + .08f, if (dark) .28f else .78f)))),
+            Alignment.Center,
+        ) {
+            val ink = if (dark) Color.hsv(hue, .18f, .92f) else Color.hsv(hue, .6f, .32f)
+            if (w >= 60.dp) Box(Modifier.fillMaxSize().padding(w * 0.07f).border(1.dp, ink.copy(.28f), RoundedCornerShape(4.dp)))
+            if (initial == null) Icon(Icons.Rounded.AutoStories, null, Modifier.size(w * 0.32f), ink.copy(alpha = .8f))
+            else Text(initial.uppercase(), color = ink, fontFamily = Serif, fontWeight = FontWeight.Bold, fontSize = (w.value * 0.46f).sp)
+        }
         if (!url.isNullOrEmpty()) AsyncImage(Api.thumb(url, if (w > 80.dp) 320 else 160), label, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
     }
 }
@@ -194,12 +212,11 @@ fun NovelRow(n: Novel, sub: String? = null, onClick: () -> Unit = { Nav.push(Scr
         val t = MaterialTheme.typography
         val cs = MaterialTheme.colorScheme
         Cover(n.cover, 76.dp, 103.dp, label = n.title)
-        Column(Modifier.weight(1f).heightIn(min = 103.dp).padding(start = 14.dp), verticalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text(n.title, style = t.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (n.author.isNotEmpty()) Text(n.author, Modifier.padding(top = 3.dp), style = t.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (n.genres.isNotEmpty()) Text(n.genres.take(3).joinToString(" · "), style = t.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).heightIn(min = 103.dp).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(n.title, style = t.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (n.author.isNotEmpty()) Text(n.author, style = t.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (n.genres.isNotEmpty()) Text(n.genres.take(3).joinToString(" · "), style = t.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.weight(1f))
             if (sub != null) Text(sub, style = t.labelMedium, color = cs.primary, fontWeight = FontWeight.SemiBold, maxLines = 1)
             else Row(verticalAlignment = Alignment.CenterVertically) {
                 IconStat(Icons.AutoMirrored.Rounded.MenuBook, "${n.chaptersSource}")
@@ -244,6 +261,47 @@ fun NeedLogin(why: String, icon: ImageVector = Icons.AutoMirrored.Rounded.MenuBo
 fun Empty(text: String) = Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) {
     Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
 }
+
+/** Vệt sáng chạy ngang cho khung xương lúc tải; tối giản, không thêm thư viện. */
+@Composable
+fun Modifier.shimmer(radius: Dp = 8.dp): Modifier {
+    val x by rememberInfiniteTransition(label = "shimmer").animateFloat(
+        -1f, 1f, infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart), label = "x",
+    )
+    val line = MaterialTheme.colorScheme.outlineVariant
+    return clip(RoundedCornerShape(radius)).drawBehind {
+        drawRect(Brush.horizontalGradient(listOf(line.copy(.5f), line.copy(.14f), line.copy(.5f)), startX = x * size.width, endX = x * size.width + size.width))
+    }
+}
+
+/** Khung xương danh sách truyện: bìa + 3 dòng chữ, thay vòng quay trống lúc tải lần đầu. */
+@Composable
+fun ListSkeleton(topInset: Boolean = false) = Column(
+    Modifier.fillMaxSize().then(if (topInset) Modifier.statusBarsPadding().padding(top = 64.dp) else Modifier).padding(horizontal = 16.dp, vertical = 6.dp),
+) {
+    repeat(7) {
+        Row(Modifier.padding(vertical = 10.dp)) {
+            Box(Modifier.size(76.dp, 103.dp).shimmer())
+            Column(Modifier.weight(1f).padding(start = 14.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.fillMaxWidth(.8f).height(16.dp).shimmer(5.dp))
+                Box(Modifier.fillMaxWidth(.45f).height(12.dp).shimmer(5.dp))
+                Box(Modifier.fillMaxWidth(.6f).height(12.dp).shimmer(5.dp))
+            }
+        }
+    }
+}
+
+/** Khung xương cho màn toàn chữ (chương, mục lục, thuật ngữ): các dòng dài ngắn xen kẽ như đoạn văn. */
+@Composable
+fun TextSkeleton() = Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    listOf(.55f, 1f, 1f, .92f, 1f, .4f, 0f, 1f, .96f, 1f, 1f, .7f).forEach { w ->
+        if (w == 0f) Spacer(Modifier.height(10.dp)) else Box(Modifier.fillMaxWidth(w).height(14.dp).shimmer(5.dp))
+    }
+}
+
+/** Vòng quay giữa màn hình, cho màn không có dạng danh sách hay đoạn văn (trang chi tiết). */
+@Composable
+fun CenterSpinner() = Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(strokeWidth = 3.dp) }
 
 /** Khoảng chừa dưới cùng cho dock nổi ở các tab. */
 val DockSpace = 110.dp

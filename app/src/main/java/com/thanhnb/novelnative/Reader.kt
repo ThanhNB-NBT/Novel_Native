@@ -349,7 +349,7 @@ fun ReaderScreen(s: Screen.Read) {
         }
         Box(Modifier.weight(1f)) {
         CompositionLocalProvider(LocalContentColor provides fg) {
-            Loaded(l) { c ->
+            Loaded(l, loading = { TextSkeleton() }) { c ->
                 when {
                     Session.user == null -> NeedLogin("Đăng nhập để đọc truyện.")
                     c == null -> Waiting("toc", fg) {}
@@ -655,7 +655,7 @@ private fun TocSheet(novelId: Int, current: Int, pick: (Int) -> Unit) {
     val toc = load("toc", novelId) { Api.toc(novelId) }
     Column(Modifier.fillMaxHeight(0.75f)) {
         Text("Mục lục", Modifier.padding(20.dp, 0.dp, 20.dp, 8.dp), style = MaterialTheme.typography.titleLarge)
-        Loaded(toc) { chapters ->
+        Loaded(toc, loading = { TextSkeleton() }) { chapters ->
             val list = rememberLazyListState((chapters.indexOfFirst { it.index == current } - 3).coerceAtLeast(0))
             LazyColumn(state = list) {
                 itemsIndexed(chapters, key = { _, c -> c.index }) { _, c ->
