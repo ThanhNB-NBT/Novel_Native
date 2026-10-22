@@ -23,7 +23,10 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v6
       - name: Giải keystore từ secret
-        run: echo "${{ secrets.GTN_SIGN_STORE_B64_K7X2 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+        # Dán secret trên PowerShell hay kèm CR/LF/dấu cách → bỏ đi; in đầu sha256 để so với file gốc trên máy
+        run: |
+          echo "${{ secrets.GTN_SIGN_STORE_B64_K7X2 }}" | tr -d '\r\n ' | base64 -d > "$RUNNER_TEMP/upload.jks"
+          sha256sum "$RUNNER_TEMP/upload.jks" | cut -c1-16
       - name: Build APK release (ký keystore)
         env:
           ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
@@ -31,6 +34,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.GTN_API_ENDPOINT_R3V8 }}
           SUPABASE_ANON_KEY: ${{ secrets.GTN_API_PUBKEY_W5N1 }}
         run: |
+          export ANDROID_KEYSTORE_PASSWORD="$(printf %s "$ANDROID_KEYSTORE_PASSWORD" | tr -d '\r\n')"
+          keytool -list -keystore "$ANDROID_KEYSTORE_FILE" -storepass:env ANDROID_KEYSTORE_PASSWORD > /dev/null || { echo "Mật khẩu keystore (secret GTN_SIGN_PASS_Q9M4) không mở được keystore"; exit 1; }
           test -n "$SUPABASE_URL" && test -n "$SUPABASE_ANON_KEY" || { echo "Thiếu secret SUPABASE_URL/SUPABASE_ANON_KEY"; exit 1; }
           # Key sai vẫn build ra APK, chỉ tới lúc gọi API mới 401 — hỏi thử server trước
           curl -fsS -o /dev/null "$SUPABASE_URL/auth/v1/settings" -H "apikey: $SUPABASE_ANON_KEY" || { echo "Server từ chối SUPABASE_ANON_KEY"; exit 1; }
