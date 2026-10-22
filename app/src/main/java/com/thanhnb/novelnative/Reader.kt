@@ -38,6 +38,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material3.*
@@ -45,6 +46,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -273,8 +275,8 @@ fun ReaderScreen(s: Screen.Read) {
     )
     val title = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = (st.size + 4).sp, lineHeight = ((st.size + 4) * 1.3f).sp, color = fg)
 
-    // Thanh đang hiện thì nó đã chừa thanh trạng thái → nội dung chỉ chừa hai bên + đáy
-    val insets = if (bars && !auto) WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom) else WindowInsets.safeDrawing
+    // Phần thanh trạng thái luôn thuộc về header (hoặc dải nền khi ẩn thanh) → nội dung không bao giờ cuộn lên dưới pin/đồng hồ
+    val insets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
     Box(
         Modifier.fillMaxSize().background(bg).then(
             if (st.page) Modifier else Modifier.pointerInput(Unit) {
@@ -291,6 +293,7 @@ fun ReaderScreen(s: Screen.Read) {
     ) {
         // Header ghim như Flutter (appBar của Scaffold): chữ nằm DƯỚI thanh, ẩn thanh thì chữ giãn lên
         Column(Modifier.fillMaxSize()) {
+        if (!bars || auto) Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars).fillMaxWidth().background(bg))
         AnimatedVisibility(bars && !auto) {
             Column(Modifier.background(bg).statusBarsPadding()) {
                 Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -660,11 +663,17 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(6.dp))
-        SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f, 12) { st.size = it }
-        SliderRow("Giãn dòng", "%.1f×".format(st.lh), st.lh, 1.3f..2.2f, 8) { st.lh = (it * 10).roundToInt() / 10f }
-        SliderRow("Viền 2 bên", "${st.margin.roundToInt()}", st.margin, 8f..48f, 9) { st.margin = it }
-        if (!st.page) SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, 20, startAuto) { st.speed = it }
+        Spacer(Modifier.height(10.dp))
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cs.background).border(1.dp, cs.outlineVariant, RoundedCornerShape(14.dp))
+                .padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+        ) {
+            SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f) { st.size = it }
+            SliderRow("Giãn dòng", "%.1f×".format(st.lh), st.lh, 1.3f..2.2f) { st.lh = (it * 10).roundToInt() / 10f }
+            SliderRow("Viền 2 bên", "${st.margin.roundToInt()}", st.margin, 8f..48f) { st.margin = it }
+            if (!st.page) SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, startAuto) { st.speed = it }
+        }
+        Spacer(Modifier.height(4.dp))
         @OptIn(ExperimentalLayoutApi::class)
         FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Opt("Căn đều", st.justify) { st.justify = it }
@@ -705,19 +714,38 @@ private fun Seg(labels: List<String>, value: Int, modifier: Modifier = Modifier,
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SliderRow(
-    label: String, value: String, v: Float, range: ClosedFloatingPointRange<Float>, steps: Int, play: (() -> Unit)? = null, set: (Float) -> Unit,
-) = Row(Modifier.height(38.dp), verticalAlignment = Alignment.CenterVertically) {
-    Text(label, Modifier.width(80.dp), style = MaterialTheme.typography.labelMedium)
-    Slider(v, set, Modifier.weight(1f), valueRange = range, steps = steps)
-    Text(value, Modifier.width(40.dp), textAlign = TextAlign.End, style = monoStyle(13, MaterialTheme.colorScheme.onSurface))
-    play?.let { IconButton(it, Modifier.size(32.dp)) { Icon(Icons.Rounded.PlayArrow, "Bắt đầu tự cuộn", tint = MaterialTheme.colorScheme.primary) } }
+    label: String, value: String, v: Float, range: ClosedFloatingPointRange<Float>, play: (() -> Unit)? = null, set: (Float) -> Unit,
+) = Row(Modifier.height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+    val cs = MaterialTheme.colorScheme
+    Text(label, Modifier.width(78.dp), style = MaterialTheme.typography.labelMedium)
+    Slider(
+        v, set, Modifier.weight(1f), valueRange = range,
+        thumb = { Box(Modifier.size(20.dp).shadow(2.dp, CircleShape).background(cs.primary, CircleShape).border(3.dp, cs.card, CircleShape)) },
+        track = { SliderDefaults.Track(it, Modifier.height(4.dp), drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
+    )
+    Text(value, Modifier.width(40.dp), textAlign = TextAlign.End, style = monoStyle(13, cs.onSurface))
+    if (play != null) Box(Modifier.padding(start = 4.dp).size(30.dp).clip(CircleShape).background(cs.primary).clickable(onClick = play), Alignment.Center) {
+        Icon(Icons.Rounded.PlayArrow, "Bắt đầu tự cuộn", Modifier.size(20.dp), tint = cs.onPrimary)
+    } else Spacer(Modifier.width(34.dp))
 }
 
 @Composable
-private fun Opt(label: String, on: Boolean, set: (Boolean) -> Unit) =
-    FilterChip(on, { set(!on) }, { Text(label, style = MaterialTheme.typography.labelMedium) })
+private fun Opt(label: String, on: Boolean, set: (Boolean) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(17.dp)
+    Row(
+        Modifier.height(34.dp).clip(shape).background(if (on) cs.primary.copy(alpha = 0.12f) else cs.background)
+            .border(1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, shape)
+            .clickable { set(!on) }.padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (on) Icon(Icons.Rounded.Check, null, Modifier.padding(end = 6.dp).size(15.dp), tint = cs.primary)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = if (on) cs.primary else cs.onSurfaceVariant)
+    }
+}
 
 @Composable
 private fun ReportDialog(dismiss: () -> Unit, send: (String) -> Unit) {
