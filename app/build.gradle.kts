@@ -15,7 +15,11 @@ val env = rootProject.file("../Novel_Persona/app/.env").takeIf { it.exists() }?.
 // Bản phát hành trỏ endpoint public: supabase.url=https://... trong local.properties
 val supabaseUrl = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
-}.getProperty("supabase.url") ?: env["SUPABASE_URL"].orEmpty()
+}.getProperty("supabase.url") ?: System.getenv("SUPABASE_URL") ?: env["SUPABASE_URL"].orEmpty()
+// CI (release.yml) lấy từ GitHub Secrets; máy dev đọc .env của Flutter
+val anonKey = System.getenv("SUPABASE_ANON_KEY") ?: env["SUPABASE_ANON_KEY"].orEmpty()
+// Ký phát hành: CI giải keystore từ secret ra file rồi đặt ANDROID_KEYSTORE_FILE/ANDROID_KEYSTORE_PASSWORD (alias "upload")
+val keystoreFile: String? = System.getenv("ANDROID_KEYSTORE_FILE")
 
 android {
     namespace = "com.thanhnb.novelnative"
@@ -25,10 +29,20 @@ android {
         applicationId = "com.thanhnb.novelnative"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        // CI truyền -PversionName từ tag, -PversionCode từ số lần chạy
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 2
+        versionName = findProperty("versionName") as String? ?: "0.2.0"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${env["SUPABASE_ANON_KEY"].orEmpty()}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$anonKey\"")
+    }
+
+    signingConfigs {
+        create("upload") {
+            keystoreFile?.let { storeFile = file(it) }
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = "upload"
+            keyPassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -36,8 +50,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            // ponytail: ký bằng debug key cho bản thử, cần keystore thật nếu phát hành
-            signingConfig = signingConfigs.getByName("debug")
+            // Máy dev: ký debug để thử bản R8; CI phát hành: keystore thật (cập nhật cài đè cần cùng chữ ký)
+            signingConfig = signingConfigs.getByName(if (keystoreFile != null) "upload" else "debug")
         }
     }
 

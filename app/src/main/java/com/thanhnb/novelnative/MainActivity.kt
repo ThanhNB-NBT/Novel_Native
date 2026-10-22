@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
                 val stack = Nav.stack
                 val key = "${stack.lastIndex}:${stack.last()}"
                 BackHandler(stack.size > 1) { holder.removeState(key); Nav.pop() }
+                AutoUpdatePrompt()
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     holder.SaveableStateProvider(key) {
                         when (val s = stack.last()) {

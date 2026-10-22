@@ -109,7 +109,7 @@ private class RFont(val key: String, val name: String, val family: FontFamily, v
 
 private fun ff(regular: Int, bold: Int) = FontFamily(Font(regular), Font(bold, FontWeight.Bold))
 
-// ponytail: chỉ các font đóng gói sẵn (Flutter còn ~12 font Sans tải từ Google Fonts); thêm bằng ui-text-google-fonts nếu cần
+// Đóng gói sẵn (Flutter tải từ Google Fonts lúc chạy): bản tĩnh 400/700 có bảng chữ Việt, ~40–70 KB mỗi file
 private val readerFonts = listOf(
     RFont("lora", "Lora", ff(R.font.lora_regular, R.font.lora_bold), true),
     RFont("merriweather", "Merriweather", ff(R.font.merriweather_regular, R.font.merriweather_bold), true),
@@ -118,6 +118,17 @@ private val readerFonts = listOf(
     RFont("jakarta", "Plus Jakarta Sans", Jakarta, false),
     RFont("bevietnam", "Be Vietnam Pro", ff(R.font.bevietnampro_regular, R.font.bevietnampro_bold), false),
     RFont("roboto", "Roboto", FontFamily.SansSerif, false),
+    RFont("inter", "Inter", ff(R.font.inter_regular, R.font.inter_bold), false),
+    RFont("manrope", "Manrope", ff(R.font.manrope_regular, R.font.manrope_bold), false),
+    RFont("nunitosans", "Nunito Sans", ff(R.font.nunitosans_regular, R.font.nunitosans_bold), false),
+    RFont("mulish", "Mulish", ff(R.font.mulish_regular, R.font.mulish_bold), false),
+    RFont("sarabun", "Sarabun", ff(R.font.sarabun_regular, R.font.sarabun_bold), false),
+    RFont("lexend", "Lexend", ff(R.font.lexend_regular, R.font.lexend_bold), false),
+    RFont("opensans", "Open Sans", ff(R.font.opensans_regular, R.font.opensans_bold), false),
+    RFont("notosans", "Noto Sans", ff(R.font.notosans_regular, R.font.notosans_bold), false),
+    RFont("montserrat", "Montserrat", ff(R.font.montserrat_regular, R.font.montserrat_bold), false),
+    RFont("worksans", "Work Sans", ff(R.font.worksans_regular, R.font.worksans_bold), false),
+    RFont("quicksand", "Quicksand", ff(R.font.quicksand_regular, R.font.quicksand_bold), false),
 )
 
 /** Khoá prefs giống bản Flutter (rd_*). */
@@ -641,7 +652,7 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
             if ((it == 0) != serif) st.font = readerFonts.first { f -> f.serif == (it == 0) }.key
         }
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.horizontalScroll(rememberScrollState()), Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             readerFonts.filter { it.serif == serif }.forEach { f ->
                 val on = st.font == f.key
                 Text(

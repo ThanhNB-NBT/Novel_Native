@@ -1,0 +1,44 @@
+# Phát hành: git tag v0.3.0; git push origin v0.3.0
+# → build APK release ký keystore cố định, tạo GitHub Release kèm APK; app tự báo bản mới (Update.kt).
+# Secrets (Settings → Secrets → Actions), cùng giá trị với Novel_Persona:
+#   ANDROID_KEYSTORE_BASE64   keystore (alias "upload") mã hoá base64
+#   ANDROID_KEYSTORE_PASSWORD mật khẩu keystore = mật khẩu key
+#   SUPABASE_URL, SUPABASE_ANON_KEY  endpoint public
+name: Release APK
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # tạo release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Giải keystore từ secret
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+      - name: Build APK release (ký keystore)
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" && test -n "$SUPABASE_ANON_KEY" || { echo "Thiếu secret SUPABASE_URL/SUPABASE_ANON_KEY"; exit 1; }
+          # Key sai vẫn build ra APK, chỉ tới lúc gọi API mới 401 — hỏi thử server trước
+          curl -fsS -o /dev/null "$SUPABASE_URL/auth/v1/settings" -H "apikey: $SUPABASE_ANON_KEY" || { echo "Server từ chối SUPABASE_ANON_KEY"; exit 1; }
+          chmod +x gradlew
+          ./gradlew --console=plain :app:assembleRelease -PversionName="${GITHUB_REF_NAME#v}" -PversionCode="$((100 + ${{ github.run_number }}))"
+          mv app/build/outputs/apk/release/app-release.apk "GacTruyenNative-$GITHUB_REF_NAME.apk"
+      - name: Tạo GitHub Release kèm APK
+        uses: softprops/action-gh-release@v3
+        with:
+          files: GacTruyenNative-*.apk
+          generate_release_notes: true

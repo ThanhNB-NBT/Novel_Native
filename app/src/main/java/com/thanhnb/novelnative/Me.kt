@@ -225,6 +225,8 @@ fun AccountTab() {
                     Switch(ahead, { ahead = it; Prefs.autoAhead = it })
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            UpdateCard()
             Text(
                 "Gác Truyện native · ${BuildConfig.VERSION_NAME}", Modifier.fillMaxWidth().padding(top = 20.dp, bottom = DockSpace),
                 textAlign = TextAlign.Center, style = monoStyle(),
