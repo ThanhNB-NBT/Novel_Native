@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
                             Screen.Tabs -> Tabs()
                             is Screen.Detail -> DetailScreen(s.id)
                             is Screen.Read -> ReaderScreen(s)
+                            is Screen.Glossary -> GlossaryScreen(s.novelId)
                             is Screen.More -> MoreScreen(s.section)
                             Screen.Search -> SearchScreen()
                             Screen.Login -> LoginScreen()

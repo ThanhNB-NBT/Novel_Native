@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EditNote
@@ -105,6 +106,16 @@ fun DetailScreen(id: Int) {
                                 Fact("Tác giả", n.author)
                                 Fact("Nguồn", n.source)
                                 Fact("Mã truyện", "#${n.id}")
+                            }
+                        }
+                        PaperCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), onClick = { Nav.push(Screen.Glossary(n.id)) }) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Translate, null, tint = cs.primary)
+                                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                                    Text("Thuật ngữ truyện", style = MaterialTheme.typography.titleMedium)
+                                    Text("Tên người, địa danh… dịch thống nhất cả truyện", style = MaterialTheme.typography.labelMedium)
+                                }
+                                Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
                             }
                         }
                     }

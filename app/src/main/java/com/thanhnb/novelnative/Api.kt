@@ -37,6 +37,13 @@ data class Novel(
 
 /** Kết quả gợi ý AI: [thay] = cụm AI xét, [dung] = bản dịch hiện tại đã đúng, [items] = (cách dịch, ý). */
 class Suggest(val thay: String, val dung: Boolean, val items: List<Pair<String, String>>)
+/** Thuật ngữ của truyện (hoặc toàn cục); [approved] = false là gợi ý LLM chờ duyệt. */
+class Term(
+    val id: Long, val zh: String?, val wrong: String?, val correct: String, val type: String,
+    val scope: String?, val approved: Boolean, val narrator: String?,
+)
+/** Job vá chương cũ gần nhất: [status] pending/running/done/failed, [result] "N/M chương". */
+class PatchJob(val status: String, val result: String?)
 data class ChapterRef(val index: Int, val title: String, val done: Boolean)
 data class Chapter(val index: Int, val title: String, val status: String, val paragraphs: List<String>)
 data class Bookmark(val id: Int, val chapter: Int, val percent: Double, val excerpt: String?)
@@ -355,6 +362,41 @@ object Api {
 
     suspend fun report(novelId: Int, index: Int, reason: String) =
         insert("glossary_reports", mapOf("novel_id" to novelId, "reason" to "Chương $index: $reason", "reported_by" to uid()))
+
+    // ---------- Thuật ngữ truyện (bảng glossary_terms, cùng Flutter data/glossary.dart) ----------
+
+    /** Term của truyện + term toàn cục; chưa duyệt lên trước, mới tạo lên trước. */
+    suspend fun terms(novelId: Int): List<Term> =
+        get("glossary_terms?select=id,term_zh,wrong_vi,correct_vi,term_type,scope,approved,narrator_term&or=(novel_id.eq.$novelId,novel_id.is.null)&order=approved.asc,created_at.desc")
+            .objs().map {
+                Term(it.getLong("id"), it.str("term_zh"), it.str("wrong_vi"), it.optString("correct_vi"), it.optString("term_type", "other"),
+                    it.str("scope"), it.optBoolean("approved"), it.str("narrator_term"))
+            }
+
+    /** [id] null = thêm mới (đã duyệt luôn); không thì sửa. Trường rỗng ghi NULL để xoá giá trị cũ. */
+    suspend fun saveTerm(novelId: Int, id: Long?, zh: String, correct: String, wrong: String, type: String, narrator: String) {
+        fun v(s: String): Any = s.trim().ifEmpty { null } ?: JSONObject.NULL
+        val fields = mapOf(
+            "term_zh" to v(zh), "correct_vi" to correct.trim(), "wrong_vi" to v(wrong), "term_type" to type,
+            "narrator_term" to if (type == "person") v(narrator) else JSONObject.NULL, // đổi khỏi nhân vật thì bỏ cách gọi
+        )
+        if (id == null) insert("glossary_terms", fields + mapOf("novel_id" to novelId, "approved" to true, "created_by" to uid()))
+        else raw("PATCH", "rest/v1/glossary_terms?id=eq.$id", JSONObject(fields), prefer = "return=minimal")
+    }
+
+    suspend fun approveTerm(id: Long) =
+        raw("PATCH", "rest/v1/glossary_terms?id=eq.$id", JSONObject(mapOf("approved" to true)), prefer = "return=minimal")
+
+    suspend fun deleteTerms(ids: Collection<Long>) = delete("glossary_terms?id=in.(${ids.joinToString(",")})")
+
+    /** Xếp job vá chương đã dịch bằng cặp "sai → đúng" (string-replace phía worker). */
+    suspend fun requestPatch(novelId: Int) = rpc("request_patch", "p_novel_id" to novelId)
+
+    suspend fun latestPatch(novelId: Int): PatchJob? =
+        JSONArray(rpc("latest_patch_status", "p_novel_id" to novelId)).objs().firstOrNull()?.let { PatchJob(it.optString("status"), it.str("result")) }
+
+    suspend fun reportTerm(termId: Long, novelId: Int, reason: String) =
+        insert("glossary_reports", mapOf("term_id" to termId, "novel_id" to novelId, "reason" to reason, "reported_by" to uid()))
 
     // ---------- Tủ truyện + tiến độ ----------
 

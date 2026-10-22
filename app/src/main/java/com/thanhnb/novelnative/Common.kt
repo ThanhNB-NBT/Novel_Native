@@ -36,6 +36,7 @@ import coil3.compose.AsyncImage
 sealed interface Screen {
     data object Tabs : Screen
     data class Detail(val id: Int) : Screen
+    data class Glossary(val novelId: Int) : Screen
     data class Read(val novelId: Int, val title: String, val index: Int) : Screen
     data class More(val section: Section) : Screen
     data object Search : Screen
