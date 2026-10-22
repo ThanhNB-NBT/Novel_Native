@@ -358,7 +358,7 @@ fun ReaderScreen(s: Screen.Read) {
         msg?.let { Snackbar(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp)) { Text(it) } }
     }
 
-    if (sheet != 0) ModalBottomSheet({ sheet = 0 }, containerColor = MaterialTheme.colorScheme.card) {
+    if (sheet != 0) ModalBottomSheet({ sheet = 0 }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.card) {
         if (sheet == 1) TocSheet(s.novelId, s.index) { sheet = 0; go(it) }
         else StyleSheet(st, dark) { sheet = 0; auto = true }
     }
@@ -599,97 +599,88 @@ private fun TocSheet(novelId: Int, current: Int, pick: (Int) -> Unit) {
     }
 }
 
-/** Cài đặt đọc như Flutter: khung xem trước thật ở đầu, chỉnh gì thấy ngay. */
+/** Cài đặt đọc: gói gọn một màn hình (không cuộn) — màu/font là một hàng vuốt ngang, công tắc là chip. */
 @Composable
 private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
     DisposableEffect(Unit) { onDispose { st.save() } }
     val cs = MaterialTheme.colorScheme
     val col = readerColors.getOrElse(if (dark) st.dark else st.light) { readerColors[13] }
-    Column(Modifier.fillMaxHeight(0.72f).verticalScroll(rememberScrollState()).padding(20.dp, 0.dp, 20.dp, 24.dp)) {
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp, 0.dp, 20.dp, 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Cài đặt đọc", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            Text("Cài đặt đọc", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             Seg(listOf("Cuộn", "Lật trang"), if (st.page) 1 else 0, Modifier.width(172.dp)) { st.page = it == 1 }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         // khung xem trước: nền/chữ/font/cỡ/giãn/lề đều là giá trị THẬT đang chọn
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(col.bg).border(1.dp, cs.outlineVariant, RoundedCornerShape(14.dp))
-                .padding((st.margin / 1.6f).dp, 12.dp, (st.margin / 1.6f).dp, 10.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(col.bg).border(1.dp, cs.outlineVariant, RoundedCornerShape(12.dp))
+                .padding((st.margin / 1.6f).dp, 10.dp),
         ) {
             Text(
-                "Lục Trầm khẽ nhắm mắt, linh khí quanh thân tụ lại như sương sớm. “Đạo hữu, mời.”", maxLines = 3, overflow = TextOverflow.Ellipsis,
+                "Lục Trầm khẽ nhắm mắt, linh khí quanh thân tụ lại như sương sớm. “Đạo hữu, mời.”", maxLines = 2, overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
                     fontFamily = st.rfont.family, fontSize = st.size.sp, lineHeight = (st.size * st.lh).sp, color = col.fg,
                     textAlign = if (st.justify) TextAlign.Justify else TextAlign.Start,
                 ),
             )
-            Spacer(Modifier.height(8.dp))
-            Row {
-                Text(col.name, Modifier.weight(1f), fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp, color = col.fg.copy(alpha = 0.45f))
-                Text("${st.rfont.name} · ${st.size.roundToInt()}", fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = col.fg.copy(alpha = 0.45f))
-            }
         }
 
-        SheetLabel("Màu nền", if (dark) "đang chỉnh nền tối" else "đang chỉnh nền sáng")
-        Seg(listOf("Tự động", "Sáng", "Tối"), st.mode, Modifier.width(210.dp)) { st.mode = it }
-        Spacer(Modifier.height(10.dp))
-        @OptIn(ExperimentalLayoutApi::class)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetLabel("Màu nền", if (dark) "nền tối" else "nền sáng") {
+            Seg(listOf("Tự động", "Sáng", "Tối"), st.mode, Modifier.width(170.dp)) { st.mode = it }
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             readerColors.forEachIndexed { i, rc ->
                 val on = i == (if (dark) st.dark else st.light)
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(rc.bg)
+                    Modifier.size(34.dp).clip(CircleShape).background(rc.bg)
                         .border(if (on) 2.4.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, CircleShape)
                         .clickable { if (dark) st.dark = i else st.light = i },
                     Alignment.Center,
-                ) { Text("A", color = rc.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
+                ) { Text("A", color = rc.fg, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
             }
         }
 
         val serif = st.rfont.serif
-        SheetLabel("Phông chữ", if (serif) "font có chân (Serif)" else "font không chân (Sans)")
-        Seg(listOf("Có chân (Serif)", "Không chân (Sans)"), if (serif) 0 else 1) {
-            if ((it == 0) != serif) st.font = readerFonts.first { f -> f.serif == (it == 0) }.key
+        SheetLabel("Phông chữ") {
+            Seg(listOf("Có chân", "Không chân"), if (serif) 0 else 1, Modifier.width(190.dp)) {
+                if ((it == 0) != serif) st.font = readerFonts.first { f -> f.serif == (it == 0) }.key
+            }
         }
-        Spacer(Modifier.height(10.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             readerFonts.filter { it.serif == serif }.forEach { f ->
                 val on = st.font == f.key
                 Text(
                     f.name,
-                    Modifier.height(38.dp).clip(RoundedCornerShape(19.dp))
+                    Modifier.height(34.dp).clip(RoundedCornerShape(17.dp))
                         .background(if (on) cs.primary.copy(alpha = 0.10f) else cs.background)
-                        .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(19.dp))
+                        .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(17.dp))
                         .clickable { st.font = f.key }.wrapContentHeight().padding(horizontal = 14.dp),
-                    fontFamily = f.family, fontSize = 13.5.sp, color = if (on) cs.primary else cs.onSurface,
+                    fontFamily = f.family, fontSize = 13.sp, color = if (on) cs.primary else cs.onSurface,
                 )
             }
         }
 
-        SheetLabel("Trình bày")
+        Spacer(Modifier.height(6.dp))
         SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f, 12) { st.size = it }
         SliderRow("Giãn dòng", "%.1f×".format(st.lh), st.lh, 1.3f..2.2f, 8) { st.lh = (it * 10).roundToInt() / 10f }
         SliderRow("Viền 2 bên", "${st.margin.roundToInt()}", st.margin, 8f..48f, 9) { st.margin = it }
-        Spacer(Modifier.height(6.dp))
-        Toggle("Căn đều 2 bên", "Chữ thẳng cả mép phải, như sách in", st.justify) { st.justify = it }
-        Toggle("Gạch chân thuật ngữ", "Đánh dấu tên riêng đã sửa theo bảng thuật ngữ", st.gloss) { st.gloss = it }
-        Toggle("Phím âm lượng lật trang", "Giảm = trang sau, tăng = trang trước", st.volume) { st.volume = it }
-        if (!st.page) {
-            SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, 20) { st.speed = it }
-            OutlinedButton(startAuto, Modifier.fillMaxWidth().padding(top = 4.dp), border = BorderStroke(1.dp, cs.outlineVariant)) {
-                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Bắt đầu tự cuộn (chạm màn hình để dừng)")
-            }
+        if (!st.page) SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, 20, startAuto) { st.speed = it }
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Opt("Căn đều", st.justify) { st.justify = it }
+            Opt("Gạch chân thuật ngữ", st.gloss) { st.gloss = it }
+            Opt("Phím âm lượng lật trang", st.volume) { st.volume = it }
         }
     }
 }
 
 @Composable
-private fun SheetLabel(text: String, hint: String? = null) =
-    Row(Modifier.padding(start = 2.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SheetLabel(text: String, hint: String? = null, end: @Composable () -> Unit = {}) =
+    Row(Modifier.padding(start = 2.dp, top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp, color = MaterialTheme.colorScheme.primary)
         hint?.let { Text(it, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, maxLines = 1) }
+        Spacer(Modifier.weight(1f))
+        end()
     }
 
 /** Segmented: viên màu nhấn trượt giữa các ô (đồng bộ với Flutter). */
@@ -697,7 +688,7 @@ private fun SheetLabel(text: String, hint: String? = null) =
 private fun Seg(labels: List<String>, value: Int, modifier: Modifier = Modifier, pick: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(12.dp)
-    BoxWithConstraints(modifier.fillMaxWidth().height(42.dp).clip(shape).background(cs.background).border(1.dp, cs.outlineVariant, shape).padding(4.dp)) {
+    BoxWithConstraints(modifier.fillMaxWidth().height(36.dp).clip(shape).background(cs.background).border(1.dp, cs.outlineVariant, shape).padding(4.dp)) {
         val w = maxWidth / labels.size
         val x by animateDpAsState(w * value, tween(260), label = "seg")
         Box(Modifier.offset(x = x).width(w).fillMaxHeight().background(cs.primary, RoundedCornerShape(9.dp)))
@@ -715,23 +706,18 @@ private fun Seg(labels: List<String>, value: Int, modifier: Modifier = Modifier,
 }
 
 @Composable
-private fun SliderRow(label: String, value: String, v: Float, range: ClosedFloatingPointRange<Float>, steps: Int, set: (Float) -> Unit) =
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.width(86.dp), style = MaterialTheme.typography.labelMedium)
-        Slider(v, set, Modifier.weight(1f), valueRange = range, steps = steps)
-        Text(value, Modifier.width(44.dp), textAlign = TextAlign.End, style = monoStyle(13, MaterialTheme.colorScheme.onSurface))
-    }
+private fun SliderRow(
+    label: String, value: String, v: Float, range: ClosedFloatingPointRange<Float>, steps: Int, play: (() -> Unit)? = null, set: (Float) -> Unit,
+) = Row(Modifier.height(38.dp), verticalAlignment = Alignment.CenterVertically) {
+    Text(label, Modifier.width(80.dp), style = MaterialTheme.typography.labelMedium)
+    Slider(v, set, Modifier.weight(1f), valueRange = range, steps = steps)
+    Text(value, Modifier.width(40.dp), textAlign = TextAlign.End, style = monoStyle(13, MaterialTheme.colorScheme.onSurface))
+    play?.let { IconButton(it, Modifier.size(32.dp)) { Icon(Icons.Rounded.PlayArrow, "Bắt đầu tự cuộn", tint = MaterialTheme.colorScheme.primary) } }
+}
 
 @Composable
-private fun Toggle(label: String, hint: String, v: Boolean, set: (Boolean) -> Unit) =
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { set(!v) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
-            Text(hint, style = MaterialTheme.typography.bodySmall)
-        }
-        Spacer(Modifier.width(12.dp))
-        Switch(v, set)
-    }
+private fun Opt(label: String, on: Boolean, set: (Boolean) -> Unit) =
+    FilterChip(on, { set(!on) }, { Text(label, style = MaterialTheme.typography.labelMedium) })
 
 @Composable
 private fun ReportDialog(dismiss: () -> Unit, send: (String) -> Unit) {
