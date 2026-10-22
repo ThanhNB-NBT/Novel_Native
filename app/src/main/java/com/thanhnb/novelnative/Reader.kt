@@ -174,7 +174,6 @@ fun ReaderScreen(s: Screen.Read) {
     val bg = col.bg
     val fg = col.fg
     val scope = rememberCoroutineScope()
-    var bars by remember { mutableStateOf(true) }
     var auto by remember { mutableStateOf(autoCarry.also { autoCarry = false }) }
     var sheet by remember { mutableIntStateOf(0) } // 0 không · 1 mục lục · 2 cài đặt
     var report by remember { mutableStateOf(false) }
@@ -250,7 +249,6 @@ fun ReaderScreen(s: Screen.Read) {
     val density = LocalDensity.current.density
     LaunchedEffect(auto, paras.size, st.page) {
         if (!auto || st.page || paras.isEmpty()) return@LaunchedEffect
-        bars = false
         delay(400) // chờ khôi phục vị trí đọc xong, không thì cuộn từ đầu rồi bị nhảy
         var last = 0L
         while (true) {
@@ -285,7 +283,7 @@ fun ReaderScreen(s: Screen.Read) {
                     val down = awaitFirstDown(pass = PointerEventPass.Initial)
                     val up = waitForUpOrCancellation(PointerEventPass.Initial) ?: return@awaitEachGesture
                     if (up.uptimeMillis - down.uptimeMillis < 250 && (up.position - down.position).getDistance() < 24f) {
-                        if (auto) auto = false else bars = !bars
+                        if (auto) auto = false
                     }
                 }
             },
@@ -293,8 +291,8 @@ fun ReaderScreen(s: Screen.Read) {
     ) {
         // Header ghim như Flutter (appBar của Scaffold): chữ nằm DƯỚI thanh, ẩn thanh thì chữ giãn lên
         Column(Modifier.fillMaxSize()) {
-        if (!bars || auto) Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars).fillMaxWidth().background(bg))
-        AnimatedVisibility(bars && !auto) {
+        if (auto) Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars).fillMaxWidth().background(bg))
+        AnimatedVisibility(!auto) {
             Column(Modifier.background(bg).statusBarsPadding()) {
                 Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
                     CompositionLocalProvider(LocalContentColor provides fg.copy(alpha = 0.55f)) {
@@ -345,7 +343,7 @@ fun ReaderScreen(s: Screen.Read) {
                             scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
                         }) { Text("Dịch lại chương") }
                     }
-                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go) { bars = !bars }
+                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go) {}
                     else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, go)
                 }
             }
