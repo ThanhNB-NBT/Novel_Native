@@ -13,7 +13,7 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
    - còn: ~12 font Sans tải từ Google Fonts (native chỉ có 6 font đóng gói + Roboto hệ thống), quà tu tiên cuối chương (bỏ)
 2. ~~Sửa bản dịch~~ xong (Edit.kt): nhấn giữ đoạn → bôi từ + Thay từ (edit_chapter_vi, tên riêng học vào thuật ngữ), Lưu cả đoạn (edit_chapter_para), Gợi ý AI (goi-y-dich), báo lỗi. Chưa có: gợi ý chip thuật ngữ/Hán-Việt, nút "Áp cả truyện", tra Google Dịch
 3. ~~Thuật ngữ truyện~~ xong (Glossary.kt, vào từ trang chi tiết): duyệt/bỏ gợi ý LLM, thêm/sửa/xoá, chọn nhiều để xoá, vá chương cũ + thanh tiến trình, báo cáo dịch sai. Chưa có: tra Hán-Việt, văn phong dịch + quét lỗi (admin), cập nhật bản offline sau vá
-4. Nghe truyện (TTS) — tts.dart
+4. ~~Nghe truyện (TTS)~~ xong (Tts.kt): menu ⋮ → Nghe truyện, thanh điều khiển đáy, chọn giọng + tốc độ, đọc nền (foreground service), highlight + cuộn theo đoạn, tự sang chương sau. Chưa có: highlight ở chế độ lật trang, hẹn giờ tắt
 5. Đọc offline — offline.dart, screens/library/offline_library.dart
 6. Chi tiết: chọn nhiều chương để dịch lại, nút Dịch, mã truyện — novel_detail.dart
 7. Hồ sơ: tên hiển thị, ảnh đại diện, chuỗi ngày đọc — data/profile.dart, account/edit_profile.dart, settings.dart

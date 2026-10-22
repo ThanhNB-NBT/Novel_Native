@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- cleartext: endpoint dev là http://10.0.2.2:8000 qua ssh tunnel -->
@@ -18,6 +21,7 @@
             </intent-filter>
         </activity>
         <!-- APK bản mới tải vào cacheDir/updates, chia cho trình cài hệ thống -->
+        <service android:name=".TtsService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"

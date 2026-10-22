@@ -82,6 +82,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
@@ -218,6 +219,14 @@ fun ReaderScreen(s: Screen.Read) {
     val setPct = { p: Float -> pct = p.coerceIn(0f, 1f); Prefs.setPercent(s.novelId, s.index, p) }
     val list = rememberLazyListState()
     val paras = ch?.paragraphs.orEmpty()
+    val hl = if (TtsPlayer.novelId == s.novelId && TtsPlayer.chapter == s.index) TtsPlayer.paraAt else -1
+    LaunchedEffect(hl) { if (hl >= 0 && !st.page) list.animateScrollToItem(1 + hl) } // cuộn theo đoạn đang đọc
+    LaunchedEffect(Unit) { // máy đọc tự sang chương sau → màn đọc đi theo
+        snapshotFlow { TtsPlayer.chapter }.drop(1).collect { c -> if (TtsPlayer.novelId == s.novelId && c != s.index) go(c) }
+    }
+    LaunchedEffect(s.index) { // tự đổi chương khi đang nghe thì dừng nghe (khác với máy đọc tự sang chương)
+        if (TtsPlayer.novelId == s.novelId && TtsPlayer.chapter != s.index) TtsPlayer.stop()
+    }
     // Khôi phục vị trí đọc dở trong chương (lưu theo % số đoạn, khoá giống Flutter)
     LaunchedEffect(paras.size, st.page) {
         if (paras.isEmpty() || st.page) return@LaunchedEffect
@@ -240,8 +249,8 @@ fun ReaderScreen(s: Screen.Read) {
             }
         }
     }
-    DisposableEffect(st.volume) {
-        ReaderKeys.handler = if (!st.volume) null else { e ->
+    DisposableEffect(st.volume, TtsPlayer.playing) {
+        ReaderKeys.handler = if (!st.volume || TtsPlayer.playing) null else { e ->
             val dir = when (e.keyCode) { KeyEvent.KEYCODE_VOLUME_DOWN -> 1; KeyEvent.KEYCODE_VOLUME_UP -> -1; else -> 0 }
             if (dir != 0 && e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) turn(dir)
             dir != 0 // nuốt cả DOWN lẫn UP để âm lượng không đổi
@@ -278,7 +287,8 @@ fun ReaderScreen(s: Screen.Read) {
     val title = TextStyle(fontFamily = font, fontWeight = FontWeight.Bold, fontSize = (st.size + 4).sp, lineHeight = ((st.size + 4) * 1.3f).sp, color = fg)
 
     // Phần thanh trạng thái luôn thuộc về header (hoặc dải nền khi ẩn thanh) → nội dung không bao giờ cuộn lên dưới pin/đồng hồ
-    val insets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+    val ttsOn = TtsPlayer.novelId == s.novelId // thanh nghe đã chừa thanh điều hướng → nội dung khỏi chừa lần nữa
+    val insets = WindowInsets.safeDrawing.only(if (ttsOn) WindowInsetsSides.Horizontal else WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
     Box(
         Modifier.fillMaxSize().background(bg).then(
             if (st.page) Modifier else Modifier.pointerInput(Unit) {
@@ -316,6 +326,15 @@ fun ReaderScreen(s: Screen.Read) {
                         Box {
                             IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Thêm", Modifier.size(20.dp)) }
                             DropdownMenu(menu, { menu = false }) {
+                                DropdownMenuItem({ Text(if (TtsPlayer.active) "Dừng nghe" else "Nghe truyện") }, {
+                                    menu = false
+                                    if (TtsPlayer.active) TtsPlayer.stop()
+                                    else if (paras.isNotEmpty()) scope.launch {
+                                        // đọc từ đoạn đang đọc dở, không từ đầu; truyền đoạn đang hiện để highlight khớp
+                                        val from = (if (st.page) (pct * paras.size).toInt() else list.firstVisibleItemIndex - 1).coerceIn(0, paras.size - 1)
+                                        TtsPlayer.start(view.context, s.novelId, s.index, from, paras, ch?.title)?.let { msg = it }
+                                    }
+                                })
                                 DropdownMenuItem({ Text("Báo lỗi chương") }, { menu = false; report = true })
                                 DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(s.novelId)) })
                             }
@@ -348,11 +367,12 @@ fun ReaderScreen(s: Screen.Read) {
                         }) { Text("Dịch lại chương") }
                     }
                     st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, { editing = it }) {}
-                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, go) { editing = it }
+                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go) { editing = it }
                 }
             }
         }
         }
+        if (ttsOn) TtsBar(fg, bg) { sheet = 3 }
         }
         if (auto) Text(
             "Đang tự cuộn · chạm để dừng",
@@ -365,6 +385,7 @@ fun ReaderScreen(s: Screen.Read) {
 
     if (sheet != 0) ModalBottomSheet({ sheet = 0 }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.card) {
         if (sheet == 1) TocSheet(s.novelId, s.index) { sheet = 0; go(it) }
+        else if (sheet == 3) TtsSheet()
         else StyleSheet(st, dark) { sheet = 0; auto = true }
     }
     editing?.let { p ->
@@ -387,7 +408,7 @@ fun ReaderScreen(s: Screen.Read) {
 
 /** Cuộn dọc. Cuộn hết rồi kéo tiếp quá mép → đổi chương (đo khoảng vượt mép lúc nhấc tay). */
 @Composable
-private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, go: (Int) -> Unit, onEdit: (String) -> Unit) {
+private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, hl: Int, go: (Int) -> Unit, onEdit: (String) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val limit = with(LocalDensity.current) { 72.dp.toPx() }
     var over by remember { mutableFloatStateOf(0f) } // >0 kéo quá đáy · <0 kéo quá đỉnh
@@ -409,11 +430,12 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().nestedScroll(conn), list, contentPadding = insets.asPaddingValues()) {
             item { Text(c.title, Modifier.padding(st.margin.dp, 24.dp, st.margin.dp, 20.dp), style = title) }
-            items(c.paragraphs) { p ->
+            itemsIndexed(c.paragraphs) { i, p ->
                 // nhấn giữ một đoạn → sửa bản dịch (thay cho bôi chọn chữ của hệ thống)
                 Text(
                     marked(p, terms),
                     Modifier.pointerInput(p) { detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEdit(p) }) }
+                        .background(if (i == hl) fg.copy(alpha = 0.10f) else Color.Transparent) // đoạn đang được đọc
                         .padding(st.margin.dp, (st.size * 0.45f).dp),
                     style = body,
                 )
@@ -747,7 +769,7 @@ private fun Seg(labels: List<String>, value: Int, modifier: Modifier = Modifier,
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SliderRow(
+internal fun SliderRow(
     label: String, value: String, v: Float, range: ClosedFloatingPointRange<Float>, play: (() -> Unit)? = null, set: (Float) -> Unit,
 ) = Row(Modifier.height(44.dp), verticalAlignment = Alignment.CenterVertically) {
     val cs = MaterialTheme.colorScheme
