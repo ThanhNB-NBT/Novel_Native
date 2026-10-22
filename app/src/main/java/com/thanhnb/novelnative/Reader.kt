@@ -366,7 +366,7 @@ fun ReaderScreen(s: Screen.Read) {
                             scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
                         }) { Text("Dịch lại chương") }
                     }
-                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, { editing = it }) {}
+                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, hl, { editing = it }) {}
                     else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go) { editing = it }
                 }
             }
@@ -475,7 +475,7 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
 @Composable
 private fun PagedChapter(
     c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets,
-    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, onEdit: (String) -> Unit, tap: () -> Unit,
+    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, hl: Int, onEdit: (String) -> Unit, tap: () -> Unit,
 ) = BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(insets)) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
@@ -500,6 +500,19 @@ private fun PagedChapter(
                 i < total - 2 -> onPct(if (pages.size > 1) (i - lead).toFloat() / (pages.size - 1) else 1f)
             }
         }
+    }
+    // Trang là các lát liên tiếp của văn bản nối ("\n\n" giữa đoạn) → tính vùng từng trang/đoạn để tô nền đoạn đang nghe
+    val joined = remember(c.paragraphs) { c.paragraphs.joinToString("\n\n") }
+    val pageStart = remember(pages, joined) { var from = 0; pages.map { p -> joined.indexOf(p, from).also { if (it >= 0) from = it + p.length } } }
+    val hlRange = remember(hl, c.paragraphs) {
+        if (hl !in c.paragraphs.indices) null
+        else (0 until hl).sumOf { c.paragraphs[it].length + 2 }.let { it until it + c.paragraphs[hl].length }
+    }
+    LaunchedEffect(hl, pages) { // đoạn đang đọc không còn trên trang hiện tại → lật tới trang đầu của đoạn
+        val r = hlRange ?: return@LaunchedEffect
+        fun overlaps(i: Int) = pageStart[i] >= 0 && pageStart[i] <= r.last && pageStart[i] + pages[i].length > r.first
+        if (pager.currentPage - lead in pages.indices && overlaps(pager.currentPage - lead)) return@LaunchedEffect
+        pages.indices.firstOrNull(::overlaps)?.let { pager.animateScrollToPage(lead + it) }
     }
     SideEffect { turn.f = { dir -> pager.animateScrollToPage((pager.currentPage + dir).coerceIn(0, total - 1)) } }
     HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { i ->
@@ -533,7 +546,16 @@ private fun PagedChapter(
                     val pageText = pages[i - lead]
                     var lay by remember(pageText) { mutableStateOf<TextLayoutResult?>(null) }
                     Text(
-                        marked(pageText, terms),
+                        marked(pageText, terms).let { m ->
+                            val ps = pageStart.getOrElse(i - lead) { -1 }
+                            val r = hlRange
+                            if (r == null || ps < 0) m else buildAnnotatedString {
+                                append(m)
+                                val a = (r.first - ps).coerceIn(0, m.length)
+                                val b = (r.last + 1 - ps).coerceIn(0, m.length)
+                                if (b > a) addStyle(SpanStyle(background = fg.copy(alpha = 0.10f)), a, b)
+                            }
+                        },
                         // nhấn giữ → tìm đoạn chứa chỗ chạm (một đoạn có thể bị cắt dở giữa hai trang)
                         Modifier.pointerInput(pageText) {
                             detectTapGestures(onLongPress = { o ->
@@ -786,7 +808,7 @@ internal fun SliderRow(
 }
 
 @Composable
-private fun Opt(label: String, on: Boolean, set: (Boolean) -> Unit) {
+internal fun Opt(label: String, on: Boolean, set: (Boolean) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(17.dp)
     Row(

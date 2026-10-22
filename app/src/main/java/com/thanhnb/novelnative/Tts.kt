@@ -52,6 +52,10 @@ object TtsPlayer {
     var rate by mutableFloatStateOf(1f) // 1 = tốc độ chuẩn của máy
         private set
     var voice by mutableStateOf<String?>(null); private set
+    /** Hẹn giờ tắt: 0 = tắt · -1 = hết chương này · n = n phút. [sleepLeft] = số ms còn lại (chỉ khi hẹn theo phút). */
+    var sleepSel by mutableIntStateOf(0); private set
+    var sleepLeft by mutableLongStateOf(0L); private set
+    private var sleepJob: Job? = null
 
     private var ctx: Context? = null
     private var tts: TextToSpeech? = null
@@ -67,6 +71,21 @@ object TtsPlayer {
     fun changeRate(r: Float) {
         rate = r
         Prefs.sp.edit().putFloat("tts_rate", r).apply()
+    }
+
+    fun sleep(sel: Int) {
+        sleepJob?.cancel()
+        sleepSel = sel
+        sleepLeft = 0
+        if (sel <= 0) return
+        val until = System.currentTimeMillis() + sel * 60_000L
+        sleepJob = scope.launch {
+            while (true) {
+                sleepLeft = until - System.currentTimeMillis()
+                if (sleepLeft <= 0) { stop(); return@launch }
+                delay(5_000)
+            }
+        }
     }
 
     /** Giọng tiếng Việt của máy, tốt nhất lên đầu. Rỗng nếu máy chưa có/chưa khởi tạo xong. */
@@ -148,6 +167,7 @@ object TtsPlayer {
     }
 
     fun stop() {
+        sleep(0)
         job?.cancel()
         tts?.stop()
         novelId = null
@@ -192,6 +212,7 @@ object TtsPlayer {
                 for (chunk in chunks(paras[i])) if (!say(chunk)) { stop(); return } // engine lỗi → tắt gọn thay vì kẹt im
             }
             paraAt = -1
+            if (sleepSel == -1) { stop(); return } // hẹn giờ "hết chương"
             startAt = null
             index++ // hết chương → đọc tiếp chương sau
         }
@@ -263,8 +284,12 @@ fun TtsBar(fg: Color, bg: Color, openSheet: () -> Unit) {
             Icon(if (TtsPlayer.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (TtsPlayer.playing) "Tạm dừng" else "Tiếp tục", tint = fg)
         }
         Text(
-            (if (TtsPlayer.playing) "Đang đọc" else "Tạm dừng") + " · chương ${TtsPlayer.chapter}",
-            Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = dim,
+            when {
+                TtsPlayer.sleepSel == -1 -> "Chương ${TtsPlayer.chapter} · tắt hết chương"
+                TtsPlayer.sleepSel > 0 -> "Chương ${TtsPlayer.chapter} · tắt sau ${(TtsPlayer.sleepLeft + 59_999) / 60_000}′"
+                else -> (if (TtsPlayer.playing) "Đang đọc" else "Tạm dừng") + " · chương ${TtsPlayer.chapter}"
+            },
+            Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = dim, maxLines = 1,
         )
         Text("%.1f×".format(TtsPlayer.rate), Modifier.clickable(onClick = openSheet).padding(8.dp), style = monoStyle(13, dim))
         IconButton(openSheet) { Icon(Icons.Rounded.Tune, "Giọng đọc và tốc độ", tint = dim) }
@@ -280,6 +305,13 @@ fun TtsSheet() {
     Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp, 0.dp, 20.dp, 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Giọng đọc", style = MaterialTheme.typography.titleMedium)
         SliderRow("Tốc độ", "%.1f×".format(TtsPlayer.rate), TtsPlayer.rate, 0.5f..2f) { TtsPlayer.changeRate((it * 10).toInt() / 10f) }
+        Text("Hẹn giờ tắt", Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelMedium)
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0 to "Không", 15 to "15 phút", 30 to "30 phút", 45 to "45 phút", 60 to "60 phút", -1 to "Hết chương").forEach { (v, l) ->
+                Opt(l, TtsPlayer.sleepSel == v) { TtsPlayer.sleep(v) }
+            }
+        }
         if (voices.isEmpty()) Text(
             "Chưa tìm thấy giọng tiếng Việt.\nHãy tải giọng tiếng Việt trong Cài đặt → Văn bản thành giọng nói của máy.",
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
