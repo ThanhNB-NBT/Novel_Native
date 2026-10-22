@@ -72,6 +72,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -177,6 +180,7 @@ fun ReaderScreen(s: Screen.Read) {
     var auto by remember { mutableStateOf(autoCarry.also { autoCarry = false }) }
     var sheet by remember { mutableIntStateOf(0) } // 0 không · 1 mục lục · 2 cài đặt
     var report by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<String?>(null) } // đoạn đang sửa bản dịch
     var msg by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(msg) { delay(2500); msg = null }
     val go = { i: Int -> if (i >= 1) Nav.replace(s.copy(index = i)) }
@@ -343,8 +347,8 @@ fun ReaderScreen(s: Screen.Read) {
                             scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
                         }) { Text("Dịch lại chương") }
                     }
-                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go) {}
-                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, go)
+                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, { editing = it }) {}
+                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, go) { editing = it }
                 }
             }
         }
@@ -363,6 +367,16 @@ fun ReaderScreen(s: Screen.Read) {
         if (sheet == 1) TocSheet(s.novelId, s.index) { sheet = 0; go(it) }
         else StyleSheet(st, dark) { sheet = 0; auto = true }
     }
+    editing?.let { p ->
+        ModalBottomSheet({ editing = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.card) {
+            // câu gốc chỉ dùng được khi số dòng Trung khớp số đoạn Việt (dịch 1-1)
+            val zh by produceState<String?>(null, s.novelId, s.index) {
+                val lines = Api.chapterZh(s.novelId, s.index)
+                value = if (lines.size == paras.size) lines.getOrNull(paras.indexOf(p)) else null
+            }
+            EditSheet(s.novelId, s.index, p, zh, onDone = { editing = null; msg = it; l.reload() }, onReport = { editing = null; report = true })
+        }
+    }
     if (report) ReportDialog({ report = false }) { reason ->
         report = false
         scope.launch {
@@ -373,7 +387,8 @@ fun ReaderScreen(s: Screen.Read) {
 
 /** Cuộn dọc. Cuộn hết rồi kéo tiếp quá mép → đổi chương (đo khoảng vượt mép lúc nhấc tay). */
 @Composable
-private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, go: (Int) -> Unit) {
+private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, go: (Int) -> Unit, onEdit: (String) -> Unit) {
+    val haptic = LocalHapticFeedback.current
     val limit = with(LocalDensity.current) { 72.dp.toPx() }
     var over by remember { mutableFloatStateOf(0f) } // >0 kéo quá đáy · <0 kéo quá đỉnh
     val conn = remember(c.index) {
@@ -395,9 +410,13 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
         LazyColumn(Modifier.fillMaxSize().nestedScroll(conn), list, contentPadding = insets.asPaddingValues()) {
             item { Text(c.title, Modifier.padding(st.margin.dp, 24.dp, st.margin.dp, 20.dp), style = title) }
             items(c.paragraphs) { p ->
-                SelectionContainer {
-                    Text(marked(p, terms), Modifier.padding(st.margin.dp, (st.size * 0.45f).dp), style = body)
-                }
+                // nhấn giữ một đoạn → sửa bản dịch (thay cho bôi chọn chữ của hệ thống)
+                Text(
+                    marked(p, terms),
+                    Modifier.pointerInput(p) { detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEdit(p) }) }
+                        .padding(st.margin.dp, (st.size * 0.45f).dp),
+                    style = body,
+                )
             }
             item {
                 Column(Modifier.fillMaxWidth().padding(st.margin.dp, 28.dp, st.margin.dp, 80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -434,7 +453,7 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
 @Composable
 private fun PagedChapter(
     c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets,
-    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, tap: () -> Unit,
+    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, onEdit: (String) -> Unit, tap: () -> Unit,
 ) = BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(insets)) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
@@ -489,7 +508,21 @@ private fun PagedChapter(
                         Text(c.title, style = title)
                         Spacer(Modifier.height(18.dp))
                     }
-                    Text(marked(pages[i - lead], terms), style = body)
+                    val pageText = pages[i - lead]
+                    var lay by remember(pageText) { mutableStateOf<TextLayoutResult?>(null) }
+                    Text(
+                        marked(pageText, terms),
+                        // nhấn giữ → tìm đoạn chứa chỗ chạm (một đoạn có thể bị cắt dở giữa hai trang)
+                        Modifier.pointerInput(pageText) {
+                            detectTapGestures(onLongPress = { o ->
+                                val off = lay?.getOffsetForPosition(o)?.coerceIn(0, pageText.length) ?: return@detectTapGestures
+                                var acc = 0
+                                val chunk = pageText.split("\n\n").firstOrNull { acc += it.length + 2; off < acc }?.trim().orEmpty()
+                                c.paragraphs.firstOrNull { it.contains(chunk) }?.let(onEdit)
+                            })
+                        },
+                        onTextLayout = { lay = it }, style = body,
+                    )
                 }
             }
         }

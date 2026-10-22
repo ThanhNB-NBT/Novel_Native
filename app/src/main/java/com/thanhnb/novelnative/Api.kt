@@ -35,6 +35,8 @@ data class Novel(
     val curChapter: Int? = null, // chỉ có ở Tủ truyện
 )
 
+/** Kết quả gợi ý AI: [thay] = cụm AI xét, [dung] = bản dịch hiện tại đã đúng, [items] = (cách dịch, ý). */
+class Suggest(val thay: String, val dung: Boolean, val items: List<Pair<String, String>>)
 data class ChapterRef(val index: Int, val title: String, val done: Boolean)
 data class Chapter(val index: Int, val title: String, val status: String, val paragraphs: List<String>)
 data class Bookmark(val id: Int, val chapter: Int, val percent: Double, val excerpt: String?)
@@ -321,6 +323,36 @@ object Api {
     suspend fun requestTranslation(novelId: Int, upTo: Int, priority: Int = 5) =
         rpc("request_translation", "p_novel_id" to novelId, "p_up_to" to upTo, "p_priority" to priority)
     suspend fun retranslate(novelId: Int, index: Int) = rpc("retranslate_chapter", "p_novel_id" to novelId, "p_index" to index)
+    // ---------- Sửa bản dịch (RPC SECURITY DEFINER, cùng Flutter data/chapters.dart) ----------
+
+    /** Thay [wrong]→[correct] CHỈ trong đoạn [para] (server từ chối nếu đoạn không có trong chương). */
+    suspend fun editWord(novelId: Int, index: Int, wrong: String, correct: String, para: String) =
+        rpc("edit_chapter_vi", "p_novel_id" to novelId, "p_index" to index, "p_wrong" to wrong, "p_correct" to correct, "p_para" to para)
+
+    /** Viết lại nguyên đoạn; server báo lỗi nếu đoạn cũ đã bị ai đó đổi. */
+    suspend fun editPara(novelId: Int, index: Int, old: String, new: String) =
+        rpc("edit_chapter_para", "p_novel_id" to novelId, "p_index" to index, "p_old" to old, "p_new" to new)
+
+    /** Các dòng chữ Trung của chương (để AI có câu gốc); lỗi mạng → rỗng. */
+    suspend fun chapterZh(novelId: Int, index: Int): List<String> = runCatching {
+        get("chapters?select=content_zh&novel_id=eq.$novelId&chapter_index=eq.$index&limit=1").objs().firstOrNull()
+            ?.str("content_zh").orEmpty().split('\n').map(String::trim).filter(String::isNotEmpty)
+    }.getOrDefault(emptyList())
+
+    /** Gợi ý AI (Edge Function goi-y-dich): các cách dịch khác cho [chon] trong câu [vi] có nguồn [zh]. */
+    suspend fun suggest(zh: String, vi: String, chon: String): Suggest {
+        val r = JSONObject(raw("POST", "functions/v1/goi-y-dich", JSONObject(mapOf("zh" to zh, "vi" to vi, "chon" to chon))))
+        val items = r.optJSONArray("goi_y")?.objs().orEmpty().map { it.optString("vi") to it.optString("y") }.filter { it.first.isNotBlank() }
+        return Suggest(r.optString("thay").ifBlank { chon }, r.optBoolean("dung"), items)
+    }
+
+    /** Tên riêng đã sửa → ghi vào thuật ngữ truyện để chương dịch SAU đúng tên (chỉ sửa term đang mang đúng bản sai, như Flutter). */
+    suspend fun learnTerm(novelId: Int, wrong: String, correct: String) {
+        get("glossary_terms?select=id&novel_id=eq.$novelId&correct_vi=eq.${enc(wrong)}").objs().forEach {
+            raw("PATCH", "rest/v1/glossary_terms?id=eq.${it.getLong("id")}", JSONObject(mapOf("correct_vi" to correct, "wrong_vi" to wrong, "approved" to true)), prefer = "return=minimal")
+        }
+    }
+
     suspend fun report(novelId: Int, index: Int, reason: String) =
         insert("glossary_reports", mapOf("novel_id" to novelId, "reason" to "Chương $index: $reason", "reported_by" to uid()))
 
