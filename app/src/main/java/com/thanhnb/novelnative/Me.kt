@@ -73,16 +73,15 @@ fun LibraryTab() {
         var confirm by remember { mutableStateOf<Novel?>(null) }
         Loaded(l) { novels ->
             PullToRefreshBox(false, l.reload) {
-                // kệ sách: lưới 3 cột bìa + tiến độ; trên cùng là thẻ "Đọc tiếp" cho truyện đang dở gần nhất
-                val cw = ((LocalConfiguration.current.screenWidthDp - 32 - 24) / 3).dp
-                LazyVerticalGrid(
-                    GridCells.Fixed(3), Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = DockSpace),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(18.dp),
-                ) {
-                    if (novels.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Empty("Tủ truyện trống — bấm Theo dõi ở trang truyện, hoặc đọc một chương là truyện tự vào đây.") }
-                    novels.firstOrNull { it.curChapter != null }?.let { n -> item(span = { GridItemSpan(maxLineSpan) }) { ResumeCard(n) } }
-                    items(novels, key = { it.id }) { n -> ShelfItem(n, cw) { confirm = n } }
+                // chia nhóm theo trạng thái; mỗi truyện một dòng phẳng: bìa nhỏ, tên, chương/tổng, vạch tiến độ
+                val reading = novels.filter { it.curChapter != null }
+                val fresh = novels.filter { it.curChapter == null }
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = DockSpace)) {
+                    if (novels.isEmpty()) item { Empty("Tủ truyện trống — bấm Theo dõi ở trang truyện, hoặc đọc một chương là truyện tự vào đây.") }
+                    if (reading.isNotEmpty()) item { ShelfLabel("Đang đọc", reading.size) }
+                    items(reading, key = { it.id }) { n -> ShelfRow(n) { confirm = n } }
+                    if (fresh.isNotEmpty()) item { ShelfLabel("Chưa đọc", fresh.size) }
+                    items(fresh, key = { it.id }) { n -> ShelfRow(n) { confirm = n } }
                 }
             }
         }
@@ -357,64 +356,42 @@ fun LoginScreen() {
 }
 
 
-/** Thẻ "Đọc tiếp": truyện đang đọc dở gần nhất, một chạm vào lại đúng chương. */
 @Composable
-private fun ResumeCard(n: Novel) {
-    val cs = MaterialTheme.colorScheme
-    val cur = n.curChapter ?: 1
-    val total = n.chaptersSource.coerceAtLeast(1)
-    PaperCard(Modifier.padding(bottom = 4.dp), onClick = { Nav.push(Screen.Detail(n.id)) }) {
-        Row(Modifier.padding(14.dp)) {
-            Cover(n.cover, 84.dp, 118.dp, label = n.title)
-            Column(Modifier.weight(1f).heightIn(min = 118.dp).padding(start = 14.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("ĐỌC TIẾP", style = MaterialTheme.typography.labelSmall, color = cs.primary, letterSpacing = 1.2.sp)
-                    Text(n.title, Modifier.padding(top = 2.dp), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("Chương $cur/${n.chaptersSource}", Modifier.padding(top = 2.dp), style = monoStyle(12))
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LinearProgressIndicator(
-                        { (cur.toFloat() / total).coerceIn(.03f, 1f) }, Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                        color = cs.primary, trackColor = cs.outlineVariant.copy(.6f), gapSize = 0.dp, drawStopIndicator = {},
-                    )
-                    Button({ Nav.push(Screen.Read(n.id, n.title, cur)) }, Modifier.fillMaxWidth().height(40.dp), contentPadding = PaddingValues(horizontal = 16.dp)) {
-                        Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp))
-                        Text("Đọc chương $cur", Modifier.padding(start = 4.dp), fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-        }
+private fun ShelfLabel(text: String, count: Int) =
+    Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text("$count", style = monoStyle(12))
     }
-}
 
-/** Một cuốn trên kệ: bìa, vạch tiến độ mảnh, tên; chạm → trang truyện, giữ → menu (thông tin / xoá). */
-@OptIn(ExperimentalFoundationApi::class)
+/** Một dòng trên kệ: chạm → trang truyện; ⋮ → đọc tiếp / thông tin / xoá. */
 @Composable
-private fun ShelfItem(n: Novel, w: Dp, remove: () -> Unit) {
+private fun ShelfRow(n: Novel, remove: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val cur = n.curChapter
     var menu by remember { mutableStateOf(false) }
-    val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) .96f else 1f, spring(dampingRatio = .5f, stiffness = 520f), label = "shelf")
-    Box {
-        Column(
-            Modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-                .combinedClickable(src, LocalIndication.current, onClick = { Nav.push(Screen.Detail(n.id)) }, onLongClick = { menu = true }),
-        ) {
-            Cover(n.cover, w, w * 1.42f, label = n.title)
-            LinearProgressIndicator(
-                { if (cur == null) 0f else (cur.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(.03f, 1f) },
-                Modifier.padding(top = 8.dp).width(w).height(3.dp).clip(RoundedCornerShape(2.dp)),
-                color = cs.primary, trackColor = cs.outlineVariant.copy(.6f), gapSize = 0.dp, drawStopIndicator = {},
-            )
-            Text(n.title, Modifier.padding(top = 6.dp).width(w), style = MaterialTheme.typography.labelLarge, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
-            Text(if (cur != null) "$cur/${n.chaptersSource}" else "Chưa đọc", style = monoStyle(11))
+    Row(
+        Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(start = 20.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Cover(n.cover, 48.dp, 67.dp, label = n.title, flat = true)
+        Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(n.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (cur != null) {
+                Text("Chương $cur/${n.chaptersSource}", style = monoStyle(12))
+                LinearProgressIndicator(
+                    { (cur.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(.03f, 1f) },
+                    Modifier.padding(top = 3.dp).fillMaxWidth(.7f).height(3.dp).clip(RoundedCornerShape(2.dp)),
+                    color = cs.primary, trackColor = cs.outlineVariant.copy(.6f), gapSize = 0.dp, drawStopIndicator = {},
+                )
+            } else Text("${n.chaptersSource} chương", style = monoStyle(12))
         }
-        DropdownMenu(menu, { menu = false }) {
-            DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
-            DropdownMenuItem({ Text("Đọc từ đầu") }, { menu = false; Nav.push(Screen.Read(n.id, n.title, 1)) })
-            DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; remove() })
+        Box {
+            IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = cs.onSurfaceVariant) }
+            DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem({ Text(if (cur == null) "Đọc từ chương 1" else "Đọc tiếp chương $cur") }, { menu = false; Nav.push(Screen.Read(n.id, n.title, cur ?: 1)) })
+                DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
+                DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; remove() })
+            }
         }
     }
 }
