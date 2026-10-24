@@ -187,7 +187,9 @@ fun ReaderScreen(s: Screen.Read) {
     var report by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<String?>(null) } // đoạn đang sửa bản dịch
     var msg by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(msg) { delay(2500); msg = null }
+    var offerPatch by remember { mutableStateOf(false) } // vừa sửa một TÊN RIÊNG → mời "Áp cả truyện" (từ thường không có gì để áp, vá chỉ tổ nhầm)
+    LaunchedEffect(msg) { delay(if (offerPatch) 6000 else 2500); msg = null; offerPatch = false }
+    val patchScope = rememberCoroutineScope()
     val go = { i: Int -> if (i >= 1) Nav.replace(s.copy(index = i)) }
 
     // Giữ màn hình sáng khi đang đọc
@@ -384,7 +386,18 @@ fun ReaderScreen(s: Screen.Read) {
                 .background(fg.copy(alpha = 0.08f), RoundedCornerShape(50)).padding(14.dp, 6.dp),
             color = fg.copy(alpha = 0.6f), fontSize = 12.sp, fontFamily = Jakarta,
         )
-        msg?.let { Snackbar(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp)) { Text(it) } }
+        msg?.let {
+            Snackbar(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp),
+                action = if (!offerPatch) null else ({
+                    TextButton({
+                        offerPatch = false
+                        msg = "Đang vá cả truyện ở chế độ nền…"
+                        patchScope.launch { runCatching { Api.requestPatch(s.novelId) }.onFailure { msg = friendly(it) } }
+                    }) { Text("Áp cả truyện") }
+                }),
+            ) { Text(it) }
+        }
     }
 
     if (sheet != 0) ModalBottomSheet({ sheet = 0 }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.card) {
@@ -399,7 +412,7 @@ fun ReaderScreen(s: Screen.Read) {
                 val lines = Api.chapterZh(s.novelId, s.index)
                 value = if (lines.size == paras.size) lines.getOrNull(paras.indexOf(p)) else null
             }
-            EditSheet(s.novelId, s.index, p, zh, onDone = { editing = null; msg = it; l.reload() }, onReport = { editing = null; report = true })
+            EditSheet(s.novelId, s.index, p, zh, onDone = { m, isName -> editing = null; offerPatch = isName; msg = m; l.reload() }, onReport = { editing = null; report = true })
         }
     }
     if (report) ReportDialog({ report = false }) { reason ->

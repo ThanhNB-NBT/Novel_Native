@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (String) -> Unit, onReport: () -> Unit) {
+fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (String, Boolean) -> Unit, onReport: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     var tf by remember { mutableStateOf(TextFieldValue(para)) }
@@ -49,7 +49,7 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (Stri
         scope.launch {
             try {
                 val name = job()
-                onDone(msg(name))
+                onDone(msg(name), name)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
