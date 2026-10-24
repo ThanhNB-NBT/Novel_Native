@@ -8,7 +8,7 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 - Màn đọc: chờ dịch (poll), tự dịch trước 15 chương, lưu tiến độ + % cuộn, cỡ chữ/giãn dòng/lề/màu/căn đều, mục lục, báo lỗi chương
 - Tủ truyện, Thông báo (pull 7 ngày, xoá), Tôi (giao diện, tự dịch trước), Đăng nhập email
 
-## Giao diện 24/10: thử phong cách ColorOS (thẻ không viền bo 24dp, tiêu đề lớn bỏ triện, dock kính mờ nở theo tab). Muốn bỏ: git revert commit "giao diện ColorOS".
+## Giao diện 24/10: phong cách ColorOS 17 "Living Flow" — thẻ kính bo 28dp có vệt sáng mép, nhún khi chạm (bounceClick), chuyển cảnh lò xo, tiêu đề lớn bỏ triện, dock kính nở theo tab. Muốn bỏ: git revert commit "giao diện ColorOS 17".
 
 ## Còn thiếu — theo thứ tự nên làm
 1. ~~Màn đọc nâng cao — lật trang, font chữ, phím âm lượng, tự cuộn, vuốt quá mép đổi chương, gạch chân thuật ngữ, 14 font Sans + 4 Serif, 15 màu nền sáng/tối riêng, sheet có khung xem trước~~ (xong)

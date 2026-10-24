@@ -179,7 +179,7 @@ fun GlossaryScreen(novelId: Int) {
 
 @Composable
 private fun Toggle(title: String, open: Boolean, onClick: () -> Unit) =
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(20.dp, 18.dp, 12.dp, 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().bounceClick(onClick = onClick).padding(20.dp, 18.dp, 12.dp, 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
         Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -191,7 +191,7 @@ private fun meta(t: Term) = listOfNotNull(
 
 @Composable
 private fun ApprovedRow(t: Term, report: () -> Unit, edit: () -> Unit) =
-    Row(Modifier.fillMaxWidth().clickable(onClick = edit).padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().bounceClick(onClick = edit).padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(head(t), style = MaterialTheme.typography.titleMedium)
             Text(meta(t), style = MaterialTheme.typography.labelMedium)
@@ -206,7 +206,7 @@ private fun PendingRow(t: Term, edit: () -> Unit, approve: () -> Unit, discard: 
     val cs = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(16.dp, 0.dp, 16.dp, 8.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer.copy(alpha = 0.55f))
-            .clickable(onClick = edit).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            .bounceClick(onClick = edit).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -220,7 +220,7 @@ private fun PendingRow(t: Term, edit: () -> Unit, approve: () -> Unit, discard: 
 
 @Composable
 private fun CheckRow(t: Term, on: Boolean, flip: () -> Unit) =
-    Row(Modifier.fillMaxWidth().clickable(onClick = flip).padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().bounceClick(onClick = flip).padding(horizontal = 12.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Checkbox(on, { flip() })
         Column(Modifier.padding(start = 4.dp)) {
             Text(head(t), style = MaterialTheme.typography.titleMedium)

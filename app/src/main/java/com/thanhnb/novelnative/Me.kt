@@ -63,12 +63,12 @@ fun LibraryTab() {
                     items(novels, key = { it.id }) { n ->
                         val cur = n.curChapter
                         val total = n.chaptersSource.coerceAtLeast(1)
-                        // dòng phẳng, không khung: bìa + thông tin, tiến độ nằm ngay dưới
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable { cur?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) }
-                                .padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
+                        // mỗi truyện một thẻ kính: bìa + thông tin, tiến độ nằm ngay dưới
+                        PaperCard(
+                            Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            onClick = { cur?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) },
                         ) {
+                        Row(Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp)) {
                             Cover(n.cover, 76.dp, 103.dp, label = n.title)
                             Column(Modifier.weight(1f).heightIn(min = 103.dp).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -101,6 +101,7 @@ fun LibraryTab() {
                                     DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -211,7 +212,7 @@ fun AccountTab() {
                     val on = Prefs.themeMode == i
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(17.dp)).background(if (on) cs.primary else Color.Transparent)
-                            .clickable { Prefs.setTheme(i) }.padding(vertical = 12.dp),
+                            .bounceClick { Prefs.setTheme(i) }.padding(vertical = 12.dp),
                         Alignment.Center,
                     ) { Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
                 }
@@ -299,7 +300,7 @@ fun SettingGroup(vararg tiles: @Composable () -> Unit) = PaperCard {
 @Composable
 fun SettingTile(icon: ImageVector, label: String, subtitle: String?, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().bounceClick(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(cs.primary.copy(.12f)), Alignment.Center) {
             Icon(icon, null, Modifier.size(20.dp), cs.primary)
         }
@@ -318,7 +319,7 @@ private fun Swatch(name: String, dots: List<Color>, bg: Color, on: Boolean, modi
     val shape = RoundedCornerShape(18.dp)
     Column(
         modifier.clip(shape).background(bg).then(if (on) Modifier.border(2.dp, cs.primary, shape) else Modifier)
-            .clickable(onClick = onClick).padding(vertical = 14.dp),
+            .bounceClick(onClick = onClick).padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box {

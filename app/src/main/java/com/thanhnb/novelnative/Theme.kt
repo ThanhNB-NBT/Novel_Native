@@ -119,8 +119,8 @@ fun AppTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         scheme,
         shapes = Shapes(
-            extraSmall = RoundedCornerShape(10.dp), small = RoundedCornerShape(10.dp), medium = RoundedCornerShape(14.dp),
-            large = RoundedCornerShape(18.dp), extraLarge = RoundedCornerShape(22.dp),
+            extraSmall = RoundedCornerShape(12.dp), small = RoundedCornerShape(16.dp), medium = RoundedCornerShape(22.dp),
+            large = RoundedCornerShape(28.dp), extraLarge = RoundedCornerShape(36.dp),
         ),
         typography = type(ink, soft),
     ) {

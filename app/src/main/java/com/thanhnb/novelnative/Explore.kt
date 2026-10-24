@@ -84,12 +84,8 @@ private fun Brand() {
         Image(painterResource(R.drawable.gt_logo), null, Modifier.height(44.dp), colorFilter = ColorFilter.tint(cs.onSurface))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.width(14.dp).height(2.dp).background(cs.primary))
-                Spacer(Modifier.width(6.dp))
-                Text("KHÁM PHÁ", style = MaterialTheme.typography.labelSmall, color = cs.primary, letterSpacing = 3.sp)
-            }
-            Text("Gác truyện", style = MaterialTheme.typography.displaySmall)
+            Text("Khám phá", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Text("Gác truyện", style = MaterialTheme.typography.headlineMedium.copy(fontFamily = Jakarta, fontWeight = FontWeight.ExtraBold, fontSize = 30.sp, letterSpacing = (-0.8).sp))
         }
         IconButton({ Nav.push(Screen.Search) }) { Icon(Icons.Rounded.Search, "Tìm truyện") }
         IconButton({ Nav.push(Screen.Search) }) { Icon(Icons.Rounded.Tune, "Lọc truyện") }
@@ -106,7 +102,7 @@ private fun HeroCarousel(items: List<Novel>) {
         HorizontalPager(pager, Modifier.fillMaxWidth().height(400.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())) { page ->
             val n = items[page]
             val delta = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
-            Box(Modifier.fillMaxSize().clickable { open(n) }) {
+            Box(Modifier.fillMaxSize().bounceClick { open(n) }) {
                 // giảm bão hoà để bìa rực (hồng, cam) không nhuộm cả trang
                 AsyncImage(
                     Api.thumb(n.cover, 300), null, Modifier.fillMaxSize().blur(16.dp), contentScale = ContentScale.Crop,
@@ -159,7 +155,7 @@ private fun Spotlight(s: Section, items: List<Novel>) = Column {
     SectionHeader(s.title) { Nav.push(Screen.More(s)) }
     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         items(items, key = { it.id }) { n ->
-            Column(Modifier.width(76.dp).clickable { open(n) }) {
+            Column(Modifier.width(76.dp).bounceClick { open(n) }) {
                 Cover(n.cover, 76.dp, 106.dp, label = n.title, flat = true)
                 Spacer(Modifier.height(6.dp))
                 Text(n.title, style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
@@ -174,7 +170,7 @@ private fun Rail(s: Section, items: List<Novel>) = Column {
     SectionHeader(s.title) { Nav.push(Screen.More(s)) }
     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         items(items, key = { it.id }) { n ->
-            Column(Modifier.width(132.dp).clickable { open(n) }) {
+            Column(Modifier.width(132.dp).bounceClick { open(n) }) {
                 Box {
                     Cover(n.cover, 132.dp, 185.dp, label = n.title)
                     Row(
@@ -200,7 +196,7 @@ private fun Ranking(s: Section, items: List<Novel>) = Column {
     val cs = MaterialTheme.colorScheme
     SectionHeader(s.title) { Nav.push(Screen.More(s)) }
     items.forEachIndexed { i, n ->
-        Row(Modifier.fillMaxWidth().clickable { open(n) }.padding(start = 20.dp, end = 20.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().bounceClick { open(n) }.padding(start = 20.dp, end = 20.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "${i + 1}", Modifier.width(34.dp), style = MaterialTheme.typography.headlineMedium,
                 fontStyle = FontStyle.Italic, fontWeight = FontWeight.ExtraBold, color = if (i < 3) cs.primary else cs.onSurfaceVariant.copy(.45f),
@@ -221,7 +217,7 @@ private fun PosterRail(s: Section, items: List<Novel>) = Column {
     SectionHeader(s.title) { Nav.push(Screen.More(s)) }
     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         items(items, key = { it.id }) { n ->
-            Box(Modifier.clickable { open(n) }) {
+            Box(Modifier.bounceClick { open(n) }) {
                 Cover(n.cover, 130.dp, 182.dp, label = n.title)
                 Box(Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(.75f))))
                 if (n.source.isNotEmpty()) SourceBadge(n.source, Modifier.align(Alignment.TopStart).padding(8.dp))

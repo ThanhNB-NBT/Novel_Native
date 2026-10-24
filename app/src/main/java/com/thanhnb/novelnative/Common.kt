@@ -1,5 +1,12 @@
 package com.thanhnb.novelnative
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.composed
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -150,10 +157,14 @@ fun Seal(char: String?, size: Dp = 20.dp) {
 @Composable
 fun SectionHeader(title: String, onMore: (() -> Unit)? = null) =
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 18.dp, end = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-        if (onMore != null) TextButton(onMore, contentPadding = PaddingValues(horizontal = 10.dp)) {
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall.copy(fontFamily = Jakarta, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = (-0.4).sp))
+        // nút "Xem tất cả" dạng viên thuốc nền nhấn nhạt, nhún khi chạm
+        if (onMore != null) Row(
+            Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary.copy(.10f)).bounceClick(onClick = onMore).padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text("Xem tất cả", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            Icon(Icons.Rounded.ChevronRight, null, Modifier.size(16.dp))
+            Icon(Icons.Rounded.ChevronRight, null, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
         }
     }
 
@@ -208,7 +219,7 @@ fun SourceBadge(name: String, modifier: Modifier = Modifier) = Text(
 /** Một dòng truyện liền mạch: bìa 76 + tên, tác giả, thể loại, số chương/nguồn ngang chân bìa. */
 @Composable
 fun NovelRow(n: Novel, sub: String? = null, onClick: () -> Unit = { Nav.push(Screen.Detail(n.id)) }, trailing: @Composable () -> Unit = {}) =
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp)) {
+    Row(Modifier.fillMaxWidth().bounceClick(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp)) {
         val t = MaterialTheme.typography
         val cs = MaterialTheme.colorScheme
         Cover(n.cover, 76.dp, 103.dp, label = n.title)
@@ -228,15 +239,37 @@ fun NovelRow(n: Novel, sub: String? = null, onClick: () -> Unit = { Nav.push(Scr
     }
 
 /** Thẻ giấy: nền sáng hơn trang một bậc, viền mảnh, bo 18. */
+/**
+ * Flexible Feedback (ColorOS 17): chạm thì nhún xuống, nhả ra bật về bằng lò xo hơi nảy.
+ * Dùng thay `.clickable` cho dòng/thẻ/ô bấm được.
+ */
+fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) .965f else 1f, spring(dampingRatio = .5f, stiffness = 520f), label = "bounce")
+    graphicsLayer { scaleX = scale; scaleY = scale }.clickable(src, LocalIndication.current, enabled, onClick = onClick)
+}
+
+/**
+ * Thẻ "kính": nền sáng không viền cứng, bo 28dp, vệt sáng mềm chạy dọc mép trên (Luminous Effect),
+ * bóng rất nhẹ; thẻ bấm được thì nhún khi chạm.
+ */
 @Composable
 fun PaperCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val dark = cs.background.luminance() < .5f
     val colors = CardDefaults.cardColors(containerColor = cs.card)
-    // thẻ không viền, bo lớn, bóng rất nhẹ — nền thẻ sáng hơn nền trang là đủ tách lớp
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(28.dp)
     val elev = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    if (onClick != null) Card(onClick, modifier, shape = shape, colors = colors, elevation = elev, content = content)
-    else Card(modifier, shape = shape, colors = colors, elevation = elev, content = content)
+    val edge = BorderStroke(1.dp, Brush.verticalGradient(listOf(Color.White.copy(if (dark) .16f else .75f), Color.White.copy(0f))))
+    val glow = Brush.verticalGradient(listOf(Color.White.copy(if (dark) .05f else .45f), Color.White.copy(0f)), endY = 260f)
+    val inner: @Composable ColumnScope.() -> Unit = { Column(Modifier.background(glow), content = content) }
+    if (onClick != null) {
+        val src = remember { MutableInteractionSource() }
+        val pressed by src.collectIsPressedAsState()
+        val scale by animateFloatAsState(if (pressed) .97f else 1f, spring(dampingRatio = .5f, stiffness = 520f), label = "card")
+        Card(onClick, modifier.graphicsLayer { scaleX = scale; scaleY = scale }, shape = shape, colors = colors, elevation = elev, border = edge, interactionSource = src, content = inner)
+    } else Card(modifier, shape = shape, colors = colors, elevation = elev, border = edge, content = inner)
 }
 
 /** Nhãn mục nhỏ in hoa giãn chữ màu son ("GIAO DIỆN", "ỨNG DỤNG"). */

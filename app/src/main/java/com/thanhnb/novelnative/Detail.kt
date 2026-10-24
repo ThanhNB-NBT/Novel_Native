@@ -104,7 +104,7 @@ fun DetailScreen(id: Int) {
                         }
                         n.description?.let {
                             Text(
-                                it, Modifier.clickable { desc = !desc }.padding(20.dp, 14.dp),
+                                it, Modifier.bounceClick { desc = !desc }.padding(20.dp, 14.dp),
                                 maxLines = if (desc) Int.MAX_VALUE else 6, overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp), color = cs.onSurface,
                             )
@@ -133,7 +133,7 @@ fun DetailScreen(id: Int) {
                         item { SectionHeader("Dấu trang") }
                         items(bm, key = { "b${it.id}" }) { b ->
                             Row(
-                                Modifier.fillMaxWidth().clickable {
+                                Modifier.fillMaxWidth().bounceClick {
                                     Prefs.setPercent(n.id, b.chapter, b.percent.toFloat()) // reader tự cuộn tới %
                                     read(b.chapter)
                                 }.padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -192,7 +192,7 @@ fun DetailScreen(id: Int) {
                         val reading = c.index == cur
                         Row(
                             Modifier.fillMaxWidth()
-                                .clickable { if (!selecting) read(c.index) else if (c.done) sel = if (c.index in sel) sel - c.index else sel + c.index }
+                                .bounceClick { if (!selecting) read(c.index) else if (c.done) sel = if (c.index in sel) sel - c.index else sel + c.index }
                                 .padding(20.dp, 13.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

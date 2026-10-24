@@ -116,7 +116,7 @@ private fun EditForm(p: Profile?) {
                 Box(
                     Modifier.size(50.dp).clip(shape).background(if (on) cs.primaryContainer else cs.card)
                         .border(if (on) 2.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, shape)
-                        .clickable { avatar = if (on) null else e },
+                        .bounceClick { avatar = if (on) null else e },
                     Alignment.Center,
                 ) { Text(e, fontSize = 24.sp) }
             }

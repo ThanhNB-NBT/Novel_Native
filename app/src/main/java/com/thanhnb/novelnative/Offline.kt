@@ -252,7 +252,7 @@ fun OfflineScreen() {
                 items(list, key = { it.novel.id }) { it ->
                     val n = it.novel
                     Row(
-                        Modifier.fillMaxWidth().clickable { Nav.push(Screen.Detail(n.id)) }.padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
+                        Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Cover(n.cover, 48.dp, 65.dp, label = n.title)

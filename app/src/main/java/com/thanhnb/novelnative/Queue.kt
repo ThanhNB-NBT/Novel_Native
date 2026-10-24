@@ -73,7 +73,7 @@ fun QueueScreen() {
                         }
                         items(recent.groupBy { it.novelId }.values.toList(), key = { "d${it.first().novelId}" }) { cs ->
                             val d = cs.first()
-                            Row(Modifier.fillMaxWidth().clickable { Nav.push(Screen.Detail(d.novelId)) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Detail(d.novelId)) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Cover(d.cover, 40.dp, 54.dp, label = d.novelTitle)
                                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                                     Text(d.novelTitle, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)

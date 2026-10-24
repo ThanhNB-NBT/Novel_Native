@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
                         stack,
                         transitionSpec = {
                             val push = targetState.size - initialState.size
-                            val ease = tween<IntOffset>(320, easing = FastOutSlowInEasing)
+                            val ease = spring<IntOffset>(dampingRatio = .86f, stiffness = 380f)
                             when {
                                 push > 0 -> (slideInHorizontally(ease) { it } + fadeIn(tween(220))) togetherWith
                                     (slideOutHorizontally(ease) { -it / 4 } + fadeOut(tween(220, delayMillis = 60)))
