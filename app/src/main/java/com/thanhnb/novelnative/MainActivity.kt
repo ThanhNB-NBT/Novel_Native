@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
                                     Screen.Login -> LoginScreen()
                                     Screen.Offline -> OfflineScreen()
                                     Screen.EditProfile -> EditProfileScreen()
+                                    Screen.Queue -> QueueScreen()
                                 }
                             }
                         }

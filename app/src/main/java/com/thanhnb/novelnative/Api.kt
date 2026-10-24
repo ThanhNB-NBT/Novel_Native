@@ -111,6 +111,12 @@ object Prefs {
 data class User(val id: String, val email: String)
 
 /** profiles: tên hiển thị, avatar (emoji), chuỗi ngày đọc. */
+/** Một chương trong hàng đợi dịch. status: translating | downloading | queued | source_unavailable. */
+class QJob(val novelId: Int, val index: Int, val title: String?, val status: String, val novelTitle: String, val cover: String?, val done: Int, val total: Int)
+class QDone(val novelId: Int, val index: Int, val novelTitle: String, val cover: String?)
+/** [pendingTotal] = tổng job chờ THẬT; [active] chỉ là cửa sổ 200 job đầu hàng đợi. */
+class Queue(val active: List<QJob>, val recent: List<QDone>, val pendingTotal: Int)
+
 class Profile(val name: String?, val avatar: String?, val streak: Int, val lastRead: String?)
 
 /** Phiên GoTrue (email + mật khẩu) qua REST trần — đủ cho app đọc, khỏi kéo supabase-kt. */
@@ -167,7 +173,7 @@ object Api {
         "chapter_count_translated,genres,last_chapter_at,source_rank,source_id,sources(name,label)"
     private const val VISIBLE = "hidden=eq.false&is_canonical=eq.true"
 
-    suspend fun raw(method: String, path: String, body: Any? = null, prefer: String? = null, auth: Boolean = true, retry: Boolean = true): String =
+    suspend fun raw(method: String, path: String, body: Any? = null, prefer: String? = null, auth: Boolean = true, retry: Boolean = true, headerOut: MutableMap<String, String>? = null): String =
         withContext(Dispatchers.IO) {
             if (auth) Session.refresh()
             val conn = URL("${BuildConfig.SUPABASE_URL}/$path").openConnection() as HttpURLConnection
@@ -189,6 +195,7 @@ object Api {
                     return@withContext raw(method, path, body, prefer, auth, retry = false)
                 }
                 if (code !in 200..299) throw ApiError(code, conn.errorStream?.bufferedReader()?.readText().orEmpty())
+                headerOut?.put("range", conn.getHeaderField("Content-Range").orEmpty())
                 conn.inputStream.bufferedReader().readText()
             } finally {
                 conn.disconnect()
@@ -456,6 +463,67 @@ object Api {
         val u = uid() ?: return
         delete("reading_progress?user_id=eq.$u&novel_id=eq.$novelId")
         delete("library?user_id=eq.$u&novel_id=eq.$novelId")
+    }
+
+    /**
+     * Hàng đợi dịch: job đang chạy (lấy riêng — worker chọn theo lane nên có thể ưu tiên cao hơn 200 job chờ đầu)
+     * + 200 job chờ đầu xếp y như claim_next_job + chương vừa dịch xong trong 1 giờ.
+     */
+    suspend fun queue(): Queue {
+        val cols = "priority,status,novel_id,chapter_id,created_at,chapters(chapter_index,title_vi,title_zh)," +
+            "novels(title_vi,title_zh,cover_url,chapter_count_translated,chapter_count_source,sources(name,label,enabled))"
+        val running = get("translation_jobs?select=$cols&type=eq.chapter&status=eq.running").objs()
+        val pending = sortLikeClaim(
+            get("translation_jobs?select=$cols&type=eq.chapter&status=eq.pending&order=priority.asc,created_at.asc&limit=200").objs(),
+        )
+        val h = mutableMapOf<String, String>()
+        raw("GET", "rest/v1/translation_jobs?select=id&type=eq.chapter&status=eq.pending&limit=1", prefer = "count=exact", headerOut = h)
+        val total = h["range"]?.substringAfter('/')?.toIntOrNull() ?: pending.size
+        // chương chờ mà content_zh chưa tải = crawler đang lấy nguồn
+        val ids = pending.map { it.optInt("chapter_id") }.filter { it > 0 }
+        val noZh = if (ids.isEmpty()) emptySet() else get("chapters?select=id&id=in.(${ids.joinToString(",")})&content_zh=is.null").objs().map { it.getInt("id") }.toSet()
+        val active = (running + pending).filter { !it.isNull("chapters") }.map { j ->
+            val c = j.getJSONObject("chapters")
+            val n = j.optJSONObject("novels")
+            val srcOff = n?.optJSONObject("sources")?.let { it.has("enabled") && !it.optBoolean("enabled", true) } == true
+            QJob(
+                novelId = j.getInt("novel_id"), index = c.getInt("chapter_index"), title = c.str("title_vi"),
+                status = when {
+                    j.optString("status") == "running" -> "translating"
+                    j.optInt("chapter_id") in noZh -> if (srcOff) "source_unavailable" else "downloading"
+                    else -> "queued"
+                },
+                novelTitle = n?.str("title_vi") ?: n?.str("title_zh") ?: "Truyện", cover = n?.str("cover_url"),
+                done = n?.optInt("chapter_count_translated") ?: 0, total = n?.optInt("chapter_count_source") ?: 0,
+            )
+        }
+        val since = Instant.now().minus(1, ChronoUnit.HOURS).toString()
+        val cleared = Prefs.sp.getString("queue_done_cleared_at", null) // user bấm "Xoá" lịch sử (chỉ ẩn trên máy)
+        val lower = if (cleared != null && cleared > since) cleared else since
+        val recent = get(
+            "chapters?select=chapter_index,title_vi,novel_id,translated_at,novels(title_vi,title_zh,cover_url)" +
+                "&translation_status=eq.done&translated_at=gte.${enc(lower)}&order=translated_at.desc&limit=60",
+        ).objs().map {
+            val n = it.optJSONObject("novels")
+            QDone(it.getInt("novel_id"), it.getInt("chapter_index"), n?.str("title_vi") ?: n?.str("title_zh") ?: "Truyện", n?.str("cover_url"))
+        }
+        return Queue(active, recent, total)
+    }
+
+    fun clearQueueDone() = Prefs.sp.edit().putString("queue_done_cleared_at", Instant.now().toString()).apply()
+
+    /** Xếp y như claim_next_job (migration 117): priority → truyện có job chờ lâu nhất ở mức đó → chapter_index → created_at. MIRROR câu ORDER BY trong SQL. */
+    private fun sortLikeClaim(jobs: List<JSONObject>): List<JSONObject> {
+        val since = HashMap<Pair<Int, Int>, String>()
+        jobs.forEach {
+            val k = it.optInt("novel_id") to it.optInt("priority")
+            val c = it.optString("created_at")
+            if (since[k] == null || c < since.getValue(k)) since[k] = c
+        }
+        fun idx(j: JSONObject) = j.optJSONObject("chapters")?.optInt("chapter_index", -1) ?: -1
+        return jobs.sortedWith(
+            compareBy<JSONObject>({ it.optInt("priority") }, { since.getValue(it.optInt("novel_id") to it.optInt("priority")) }, { idx(it) }, { it.optString("created_at") }),
+        )
     }
 
     suspend fun profile(): Profile? {

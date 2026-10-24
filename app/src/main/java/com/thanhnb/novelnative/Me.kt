@@ -17,7 +17,9 @@ import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.HourglassBottom
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material3.*
@@ -245,6 +247,19 @@ fun AccountTab() {
                         Text("Mở chương nào thì xếp dịch sẵn 15 chương kế tiếp", style = MaterialTheme.typography.labelMedium)
                     }
                     Switch(ahead, { ahead = it; Prefs.autoAhead = it })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            PaperCard(onClick = { Nav.push(Screen.Queue) }) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp).background(cs.primaryContainer, RoundedCornerShape(12.dp)), Alignment.Center) {
+                        Icon(Icons.Rounded.HourglassBottom, null, tint = cs.primary)
+                    }
+                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                        Text("Hàng đợi dịch", style = MaterialTheme.typography.titleMedium)
+                        Text("Chương nào đang dịch, đang chờ, vừa xong", style = MaterialTheme.typography.labelMedium)
+                    }
+                    Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(10.dp))

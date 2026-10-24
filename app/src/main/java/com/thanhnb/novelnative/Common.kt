@@ -51,6 +51,7 @@ sealed interface Screen {
     data object Login : Screen
     data object Offline : Screen
     data object EditProfile : Screen
+    data object Queue : Screen
 }
 
 // ponytail: ngăn xếp màn hình bằng state, thêm navigation-compose khi cần deep link
