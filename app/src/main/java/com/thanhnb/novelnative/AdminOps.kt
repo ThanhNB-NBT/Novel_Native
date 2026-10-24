@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.SettingsPower
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -36,7 +37,23 @@ fun VpsScreen() {
     val cmds = load("admin.hostcmds") { AdminApi.hostCommands() }
     LaunchedEffect(Unit) { while (true) { delay(15_000); hosts.reload(); cmds.reload() } }
     var act by remember { mutableStateOf<Act?>(null) }
+    var renaming by remember { mutableStateOf<Pair<String, String>?>(null) } // host to nhãn đang gõ
+    val scope = rememberCoroutineScope()
     val cs = MaterialTheme.colorScheme
+    renaming?.let { (host, text) ->
+        AlertDialog(
+            { renaming = null },
+            title = { Text("Nhãn cho $host") },
+            text = { OutlinedTextField(text, { renaming = host to it }, singleLine = true, label = { Text("Nhãn (để trống = dùng tên host)") }) },
+            dismissButton = { TextButton({ renaming = null }) { Text("Huỷ") } },
+            confirmButton = {
+                TextButton({
+                    renaming = null
+                    scope.launch { runCatching { AdminApi.renameHost(host, text.trim()) }; hosts.reload() }
+                }) { Text("Lưu") }
+            },
+        )
+    }
     Column(Modifier.fillMaxSize()) {
         PageHeader("Quản trị", "Theo dõi VPS", "機", back = true)
         Loaded(hosts) { list ->
@@ -60,6 +77,13 @@ fun VpsScreen() {
                                 Box {
                                     IconButton({ menu = true }) { Icon(Icons.Rounded.SettingsPower, "Khởi động lại worker", tint = cs.primary) }
                                     DropdownMenu(menu, { menu = false }) {
+                                        DropdownMenuItem({ Text("Sửa nhãn") }, { menu = false; renaming = host to (h.s("label") ?: "") })
+                                        DropdownMenuItem({ Text("Xoá dòng host", color = cs.error) }, {
+                                            menu = false
+                                            act = Act("Xoá dòng host?", "Xoá số liệu của $host khỏi danh sách. Nếu worker còn chạy, dòng mới sẽ tự hiện lại sau ~1 phút.", "Xoá", true) {
+                                                AdminApi.deleteHost(host); "Đã xoá $host"
+                                            }
+                                        })
                                         listOf("restart" to "toàn bộ worker", "restart_crawler" to "crawler", "restart_translator" to "translator").forEach { (cmd, what) ->
                                             DropdownMenuItem({ Text("Khởi động lại $what") }, {
                                                 menu = false
@@ -124,7 +148,19 @@ fun ErrorsScreen() {
             val failed = jobs.res?.getOrNull().orEmpty().filter { it.optString("status") == "failed" }
             PullToRefreshBox(false, { jobs.reload(); remote.reload() }) {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
-                    if (failed.isEmpty() && errs.isEmpty()) item { Empty("Chưa ghi nhận lỗi nào.") }
+                    val mine = AppErrorLog.entries
+                    if (failed.isEmpty() && errs.isEmpty() && mine.isEmpty()) item { Empty("Chưa ghi nhận lỗi nào.") }
+                    if (mine.isNotEmpty()) item {
+                        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Eyebrow("Lỗi trên máy này", Modifier.weight(1f))
+                            TextButton({ AppErrorLog.clear() }) { Text("Xoá") }
+                        }
+                    }
+                    items(mine, key = { "m" + it.optString("time") }) { e ->
+                        val k = "m" + e.optString("time")
+                        val head = e.optString("message")
+                        ErrRow(k, head, "${ago(e.optString("time"))} trước", open == k, head + '\n' + e.optString("stack"), { open = it }, Icons.Rounded.ErrorOutline, clip::setText)
+                    }
                     if (failed.isNotEmpty()) item { Eyebrow("Lỗi worker (dịch / crawl)", Modifier.padding(start = 20.dp, top = 12.dp, bottom = 6.dp)) }
                     items(failed, key = { "j" + it.getInt("id") }) { j ->
                         val id = j.getInt("novel_id")

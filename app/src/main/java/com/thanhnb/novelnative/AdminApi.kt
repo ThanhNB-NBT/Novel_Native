@@ -202,6 +202,10 @@ object AdminApi {
     }
 
     suspend fun hostMetrics() = get("host_metrics?select=*&order=updated_at.desc")
+    suspend fun renameHost(host: String, label: String) =
+        patch("host_metrics?host=eq.${java.net.URLEncoder.encode(host, "UTF-8")}", JSONObject().put("label", label.ifBlank { JSONObject.NULL }))
+    /** Xoá dòng số liệu của host đã tắt (worker còn sống sẽ tự đẩy lại dòng mới). */
+    suspend fun deleteHost(host: String) { Api.delete("host_metrics?host=eq.${java.net.URLEncoder.encode(host, "UTF-8")}") }
     suspend fun hostCommands() = get("host_commands?select=id,host,command,status,output,created_at&order=created_at.desc&limit=10")
     /** Worker trên host nhận lệnh trong ~10s. Whitelist phía worker: restart | restart_crawler | restart_translator. */
     suspend fun sendHostCommand(host: String, command: String) {

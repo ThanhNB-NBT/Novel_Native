@@ -97,6 +97,12 @@ private fun JobsSheet(novelId: Int, l: Loader<List<JSONObject>>, close: () -> Un
     ModalBottomSheet(close, containerColor = cs.card) {
         Text(jobs.firstOrNull()?.optJSONObject("novels").novelTitle(novelId), Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (jobs.isEmpty()) Empty("Không còn job nào.")
+        val title = jobs.firstOrNull()?.optJSONObject("novels").novelTitle(novelId)
+        TextButton({
+            act = Act("Xoá vĩnh viễn?", "\"$title\" cùng TOÀN BỘ chương đã dịch, glossary, tiến độ đọc và job sẽ bị xoá — không hoàn tác được.", "Xoá", true) {
+                AdminApi.deleteNovel(novelId); close(); "Đã xoá \"$title\""
+            }
+        }, Modifier.padding(horizontal = 8.dp)) { Text("Xoá truyện này", color = cs.error) }
         LazyColumn(Modifier.heightIn(max = 560.dp)) {
             items(jobs, key = { it.getInt("id") }) { j ->
                 val st = j.optString("status")

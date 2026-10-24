@@ -32,4 +32,6 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 - Thông báo hệ thống (Notify.kt): kiểm lúc mở app chương truyện trong tủ dịch xong sau lần trước (không có Realtime), xin quyền Android 13+, chương mình bấm Dịch lại (notify_mine) cũng báo và hiện ở tab Thông báo.
 - Hán-Việt (HanViet.kt + assets/hanviet.tsv): gợi ý âm đọc trong hộp Thêm/Sửa thuật ngữ. Chưa có: chip Hán-Việt ở form sửa bản dịch trong màn đọc, nút "Áp cả truyện", văn phong dịch (admin).
 - Màu theo bìa (Ambient.kt): nền trang Chi tiết ngả màu chủ đạo của bìa. Hero Khám phá cũng nhuộm nhẹ theo bìa từng trang.
+- 25/10: form sửa bản dịch có chip Hán-Việt (chữ Hán gốc của từ đang bôi + các cách đọc, chạm để điền "Bản sửa"). Compile qua, chưa thử trên máy.
+- 25/10: chip "Google Dịch" (mở trình duyệt, tra chữ Hán của từ bôi hoặc cả câu); màn VPS có Sửa nhãn + Xoá dòng host; sheet job ở tab Worker có "Xoá truyện này". Nhật ký lỗi cục bộ (ErrorLog.kt: bắt crash, 60 lỗi mới nhất, xem ở Quản trị → Nhật ký lỗi). Knob gemini_catalog/nvidia_catalog đã làm từ trước (AdminCrawl.kt). Đã chạy thử trên máy ảo: chip Hán-Việt + Google Dịch, nút xoá truyện ở sheet job, menu VPS.
 - Bỏ: ink_transition (đã có chuyển cảnh lò xo), skeleton (đã có).

@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        AppErrorLog.install()
         Offline.init(this)
         Notify.init(this)
         Thread { HanViet.load(applicationContext) }.start()

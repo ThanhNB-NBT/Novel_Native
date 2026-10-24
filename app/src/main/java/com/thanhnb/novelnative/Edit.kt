@@ -40,6 +40,8 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (Stri
     val untouched = tf.text == para
     val wrong = if (untouched) tf.text.substring(tf.selection.min, tf.selection.max).trim() else ""
     val wordOk = wrong.isNotEmpty() && correct.isNotBlank() && correct.trim() != wrong
+    val span = if (zh != null && wrong.isNotEmpty()) HanViet.zhSpanFor(wrong, zh) else null
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
     val paraOk = !untouched && tf.text.isNotBlank()
 
     fun run(msg: (Boolean) -> String, job: suspend () -> Boolean) {
@@ -82,6 +84,10 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (Stri
                 Chip("Hoa Từng Chữ") { correct = titleCase(correct.ifEmpty { wrong }) }
                 Chip("Hoa chữ đầu") { correct = correct.ifEmpty { wrong }.let { it.take(1).uppercase() + it.drop(1).lowercase() } }
                 Chip("thường") { correct = correct.ifEmpty { wrong }.lowercase() }
+                if (zh != null) Chip("Google Dịch") {
+                    val q = java.net.URLEncoder.encode(span ?: zh, "UTF-8") // có chữ Hán gốc của từ bôi thì tra từ đó, không thì cả câu
+                    uri.openUri("https://translate.google.com/?sl=zh-CN&tl=vi&op=translate&text=$q")
+                }
                 if (zh != null && wrong.isNotEmpty()) Chip("Gợi ý AI", true) {
                     aiBusy = true
                     ai = null
@@ -90,6 +96,11 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (Stri
                         aiBusy = false
                     }
                 }
+            }
+            // Chữ Hán gốc của từ đang bôi (nếu là âm Hán-Việt) + các cách đọc để chạm điền nhanh
+            if (span != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("$span →", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                HanViet.candidates(span).forEach { c -> Chip(c) { correct = c } }
             }
             if (aiBusy) Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
