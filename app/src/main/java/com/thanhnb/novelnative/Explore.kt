@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -112,6 +114,7 @@ private fun HeroCarousel(items: List<Novel>) {
         ) { page ->
             val n = items[page]
             val delta = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
+            val amb by animateColorAsState(rememberAmbient(n.cover).let { it ?: Color.Gray.copy(alpha = 0f) }, tween(500), label = "heroAmb")
             Box(Modifier.fillMaxSize().clipToBounds().bounceClick { open(n) }) {
                 // giảm bão hoà để bìa rực (hồng, cam) không nhuộm cả trang; đáy mờ dần thành trong suốt → luôn liền với nền trang
                 Box(
@@ -124,6 +127,8 @@ private fun HeroCarousel(items: List<Novel>) {
                     Api.thumb(n.cover, 300), null, Modifier.fillMaxSize().graphicsLayer { scaleX = 1.3f; scaleY = 1.3f; translationX = delta * size.width * .12f }.blur(16.dp), contentScale = ContentScale.Crop,
                     colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(.4f) }),
                 )
+                // màu chủ đạo của bìa nhuộm nhẹ lên lớp mờ; nằm trong vùng bị mặt nạ nên cũng tan dần về nền trang
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to amb.copy(amb.alpha * .45f), .7f to amb.copy(amb.alpha * .28f), 1f to amb.copy(amb.alpha * .28f))))
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to bg.copy(.78f), 0.3f to bg.copy(.25f), 0.62f to bg.copy(.8f), 1f to bg.copy(.8f))))
                 }
                 Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 78.dp), horizontalAlignment = Alignment.CenterHorizontally) {

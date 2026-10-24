@@ -254,6 +254,7 @@ fun AccountTab() {
             SectionLabel("Ứng dụng")
             SettingGroup(
                 { SettingTile(Icons.Rounded.Lightbulb, "Hướng dẫn sử dụng", "Mẹo đọc, lưu và yêu cầu dịch", { Nav.push(Screen.Guide) }) },
+                { SettingTile(Icons.Rounded.NewReleases, "Có gì mới", "Ghi chú các bản phát hành gần nhất", { Nav.push(Screen.Changelog) }) },
                 { UpdateTile() },
             )
             Text(

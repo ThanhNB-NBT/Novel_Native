@@ -60,6 +60,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
@@ -115,7 +116,11 @@ private val readerColors = listOf(
     RColor("Mực đêm", Color(0xFF14110E), Color(0xFFD9CCB4)),
 )
 
-private class RFont(val key: String, val name: String, val family: FontFamily, val serif: Boolean)
+private class RFont(val key: String, val name: String, private val own: FontFamily?, val serif: Boolean) {
+    /** Font tải từ Google Fonts (own == null): chưa có trên máy thì dùng Jakarta tạm. */
+    val family: FontFamily get() = own ?: WebFonts.ready[key] ?: Jakarta
+    val web get() = own == null
+}
 
 private fun ff(regular: Int, bold: Int) = FontFamily(Font(regular), Font(bold, FontWeight.Bold))
 
@@ -139,7 +144,7 @@ private val readerFonts = listOf(
     RFont("montserrat", "Montserrat", ff(R.font.montserrat_regular, R.font.montserrat_bold), false),
     RFont("worksans", "Work Sans", ff(R.font.worksans_regular, R.font.worksans_bold), false),
     RFont("quicksand", "Quicksand", ff(R.font.quicksand_regular, R.font.quicksand_bold), false),
-)
+) + WebFonts.sans.map { (k, n, _) -> RFont(k, n, null, false) }
 
 /** Khoá prefs giống bản Flutter (rd_*). */
 private class Style {
@@ -176,6 +181,8 @@ private class PageTurn { var f: (suspend (Int) -> Unit)? = null }
 @Composable
 fun ReaderScreen(s: Screen.Read) {
     val st = remember { Style() }
+    val ctx = LocalContext.current
+    LaunchedEffect(st.font) { if (st.rfont.web) WebFonts.ensure(ctx, st.font) }
     val appDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val dark = when (st.mode) { 1 -> false; 2 -> true; else -> appDark }
     val col = readerColors.getOrElse(if (dark) st.dark else st.light) { readerColors[13] }
@@ -770,7 +777,7 @@ private fun FontRow(fonts: List<RFont>, st: Style) {
         items(fonts) { f ->
             val on = st.font == f.key
             Text(
-                f.name,
+                if (f.web && f.key !in WebFonts.ready) f.name + " ↓" else f.name, // ↓ = sẽ tải khi chọn
                 Modifier.height(36.dp).clip(RoundedCornerShape(18.dp))
                     .background(if (on) cs.primary.copy(alpha = 0.10f) else Color.Transparent)
                     .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(18.dp))

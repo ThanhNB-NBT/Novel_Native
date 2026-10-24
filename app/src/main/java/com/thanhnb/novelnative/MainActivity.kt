@@ -126,6 +126,7 @@ class MainActivity : ComponentActivity() {
                                     Screen.EditProfile -> EditProfileScreen()
                                     Screen.Queue -> QueueScreen()
                                     Screen.Guide -> GuideScreen()
+                                    Screen.Changelog -> ChangelogScreen()
                                     Screen.Lunar -> LunarScreen()
                                     Screen.Admin -> AdminScreen()
                                     Screen.AdminLlm -> LlmScreen()

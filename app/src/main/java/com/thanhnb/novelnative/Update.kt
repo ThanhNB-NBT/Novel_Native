@@ -33,7 +33,7 @@ import java.net.URL
  */
 class Release(val version: String, val apkUrl: String, val notes: String)
 
-private const val REPO = "ThanhNB-NBT/Novel_Native"
+internal const val REPO = "ThanhNB-NBT/Novel_Native"
 
 /** Release mới hơn bản đang chạy, null nếu đã mới nhất (hoặc release chưa có APK). Lỗi mạng thì ném. */
 suspend fun latestRelease(current: String = BuildConfig.VERSION_NAME): Release? = withContext(Dispatchers.IO) {
