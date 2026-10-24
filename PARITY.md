@@ -21,9 +21,15 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 7. ~~Hồ sơ~~ xong (Profile.kt): tab Tôi hiện avatar + tên + số truyện đang đọc / chương đã đọc / chuỗi ngày; chạm thẻ → Sửa hồ sơ (tên hiển thị + 30 ảnh emoji). Bỏ: biểu tượng tab Tu Tiên
 8. ~~Hàng đợi dịch~~ xong (Queue.kt, vào từ tab Tôi): tóm tắt (chương/giờ, đang dịch, đang chờ), gom theo truyện, chạm xem từng chương, mục Vừa dịch xong + Xoá, tự làm mới 15 giây
 9. Hướng dẫn xong (Guide.kt, 8 mục bấm mở rộng); Có gì mới chưa có — (~~kiểm tra cập nhật~~ xong: Update.kt + release.yml, cần đặt secrets cho repo)
-10. Lịch âm: thẻ hôm nay xong (Lunar.kt, tab Tôi); còn lịch tháng — account/lunar_calendar.dart
+10. ~~Lịch âm~~ xong (Lunar.kt): thẻ hôm nay + lịch tháng (chạm dòng âm lịch ở Tôi)
 11. ~~Quản trị (admin)~~ xong bản gọn (Admin*.kt, vào từ tab Tôi → Quản trị, chỉ hiện khi profiles.is_admin): 5 tab (bỏ Tu Tiên)
    - Worker (nhịp tim, số job, gộp theo truyện, sheet job: chạy lại/ưu tiên lên đầu/huỷ; tự làm mới 20s), Crawl (nhịp 24h, cấu hình dịch + crawler sửa bằng hộp thoại, đổi engine, bật/tắt nguồn, truyện mới về 24h), Đang đọc, Truyện (thống kê kho, tìm không dấu, lọc, ẩn/hiện, sửa, xoá, trang quản trị 1 truyện: chương + model/token), Báo cáo (xử lý)
    - Nút trên thanh: chạy lại job lỗi, quét lỗi dịch; menu ⋮: Thống kê API (cột 14 ngày, lượt Gemini theo key, sức khoẻ model), Theo dõi VPS (CPU/RAM/disk/mạng + lệnh khởi động lại), Nhật ký lỗi (job lỗi + client_errors). Mọi thao tác ghi đều có hộp thoại xác nhận.
    - Bỏ/chưa làm: bộ chọn model có danh mục (model_picker; sửa knob bằng ô chữ), knob `gemini_catalog`/`nvidia_catalog`, "Yêu cầu dịch" theo khoảng chương trong trang quản trị truyện, xoá truyện từ tab Worker (vẫn xoá được ở tab Truyện), sửa nhãn/IP và xoá dòng host ở màn VPS, nhật ký lỗi cục bộ của app (native chưa có AppErrorLog)
 12. Giao diện: ~~theme.dart, header + triện, dock nổi, trang chủ 5 kiểu mục, chi tiết bìa mờ, màu nhấn/nền~~ (xong 0.2.0); còn skeleton, ink_transition, ambient (màu theo bìa)
+
+## 24/10 bổ sung
+- Thông báo hệ thống (Notify.kt): kiểm lúc mở app chương truyện trong tủ dịch xong sau lần trước (không có Realtime), xin quyền Android 13+, chương mình bấm Dịch lại (notify_mine) cũng báo và hiện ở tab Thông báo.
+- Hán-Việt (HanViet.kt + assets/hanviet.tsv): gợi ý âm đọc trong hộp Thêm/Sửa thuật ngữ. Chưa có: chip Hán-Việt ở form sửa bản dịch trong màn đọc, nút "Áp cả truyện", văn phong dịch (admin).
+- Màu theo bìa (Ambient.kt): nền trang Chi tiết ngả màu chủ đạo của bìa. Chưa áp cho Khám phá.
+- Bỏ: ink_transition (đã có chuyển cảnh lò xo), skeleton (đã có).

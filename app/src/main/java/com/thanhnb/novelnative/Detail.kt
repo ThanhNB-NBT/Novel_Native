@@ -84,7 +84,13 @@ fun DetailScreen(id: Int) {
             val first = chapters.firstOrNull()?.index ?: 1
             val cur = progress.res?.getOrNull()
             fun read(i: Int) = if (uid == null) Nav.push(Screen.Login) else Nav.push(Screen.Read(n.id, n.title, i))
-            Column(Modifier.fillMaxSize()) {
+            val amb = rememberAmbient(n.cover)
+            val dark = cs.background.luminance() < .5f
+            Column(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf((amb ?: Color.Transparent).copy(alpha = if (dark) .16f else .2f), Color.Transparent), endY = 2200f),
+                ),
+            ) {
                 Header(n)
                 TabRow(tab, containerColor = Color.Transparent, contentColor = cs.primary, divider = { HorizontalDivider(color = cs.outlineVariant) }) {
                     listOf("Giới thiệu", "Danh sách chương").forEachIndexed { i, t ->
@@ -267,7 +273,7 @@ fun DetailScreen(id: Int) {
                         scope.launch {
                             // chọn trọn bộ chương đã dịch → một lần gọi retranslate_all
                             runCatching { if (picked.size == all) Api.retranslateAll(n.id) else picked.forEach { Api.retranslate(n.id, it) } }
-                                .onSuccess { msg = "Đã xếp ${picked.size} chương để dịch lại" }
+                                .onSuccess { Notify.addMine(n.id, picked); msg = "Đã xếp ${picked.size} chương để dịch lại" }
                                 .onFailure { msg = friendly(it) }
                             toc.reload()
                         }

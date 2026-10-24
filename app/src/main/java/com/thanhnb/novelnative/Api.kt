@@ -595,8 +595,11 @@ object Api {
 
     suspend fun notifications(): List<Notif> {
         val u = uid() ?: return emptyList()
-        val ids = (get("library?select=novel_id&user_id=eq.$u").objs() + get("reading_progress?select=novel_id&user_id=eq.$u").objs())
+        val followed = (get("library?select=novel_id&user_id=eq.$u").objs() + get("reading_progress?select=novel_id&user_id=eq.$u").objs())
             .map { it.getInt("novel_id") }.toSet()
+        // chương mình bấm dịch lại (notify_mine) hiện cả khi truyện nằm ngoài tủ
+        val mine = Notify.mine()
+        val ids = followed + mine.mapNotNull { it.substringBefore(':').toIntOrNull() }
         if (ids.isEmpty()) return emptyList()
         val since = Instant.now().minus(7, ChronoUnit.DAYS).toString()
         val dismissed = Prefs.dismissed
@@ -604,7 +607,10 @@ object Api {
             "chapters?select=chapter_index,translated_at,novel_id,novels(title_vi,title_zh,cover_url)" +
                 "&novel_id=in.(${ids.joinToString(",")})&translation_status=eq.done&translated_at=gte.${enc(since)}" +
                 "&order=translated_at.desc&limit=200",
-        ).objs().filter { "${it.getInt("novel_id")}:${it.getInt("chapter_index")}" !in dismissed }
+        ).objs().filter {
+            val key = "${it.getInt("novel_id")}:${it.getInt("chapter_index")}"
+            key !in dismissed && (it.getInt("novel_id") in followed || key in mine)
+        }
             .groupBy { it.getInt("novel_id") }
             .map { (id, rows) ->
                 val n = rows[0].getJSONObject("novels")

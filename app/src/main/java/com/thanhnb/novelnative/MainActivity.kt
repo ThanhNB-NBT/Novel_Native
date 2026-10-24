@@ -1,5 +1,8 @@
 package com.thanhnb.novelnative
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import android.os.Bundle
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -69,7 +72,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
         Offline.init(this)
+        Notify.init(this)
+        Thread { HanViet.load(applicationContext) }.start()
         Session.load()
+        if (Session.user != null) {
+            Notify.askPermission(this)
+            val app = applicationContext
+            CoroutineScope(Dispatchers.IO).launch { Notify.checkMissed(app) }
+        }
         Nav.tab = if (Session.user != null) 0 else 1 // chưa đăng nhập → mở Khám phá
         enableEdgeToEdge()
         setContent {

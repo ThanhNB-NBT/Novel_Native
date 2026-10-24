@@ -261,6 +261,11 @@ private fun TermDialog(t: Term, onDismiss: () -> Unit, onDelete: (() -> Unit)?, 
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(zh, { zh = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Từ gốc (tiếng Trung)") })
                 OutlinedTextField(vi, { vi = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Bản dịch đúng *") })
+                // gợi ý âm Hán-Việt của từ gốc (chữ đa âm cho vài cách đọc)
+                val hv = remember(zh) { HanViet.candidates(zh.trim()) }
+                if (hv.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    hv.forEach { AssistChip({ vi = it }, { Text(it) }) }
+                }
                 OutlinedTextField(
                     wrong, { wrong = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Bản dịch sai (nếu có)") },
                     supportingText = { Text("Dùng để vá chương cũ: sai → đúng") },
