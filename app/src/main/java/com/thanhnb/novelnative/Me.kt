@@ -63,12 +63,9 @@ fun LibraryTab() {
                     items(novels, key = { it.id }) { n ->
                         val cur = n.curChapter
                         val total = n.chaptersSource.coerceAtLeast(1)
-                        // mỗi truyện một thẻ kính: bìa + thông tin, tiến độ nằm ngay dưới
-                        PaperCard(
-                            Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                            onClick = { cur?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) },
-                        ) {
-                        Row(Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp)) {
+                        // danh sách phẳng, không khung: bìa + thông tin, tiến độ nằm ngay trong dòng
+                        Column(Modifier.bounceClick { cur?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) }.padding(start = 20.dp, top = 10.dp, bottom = 10.dp)) {
+                        Row {
                             Cover(n.cover, 76.dp, 103.dp, label = n.title)
                             Column(Modifier.weight(1f).heightIn(min = 103.dp).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -151,12 +148,12 @@ fun NotifTab() {
         }
         Loaded(l) { notifs ->
             PullToRefreshBox(false, l.reload) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = DockSpace), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = DockSpace)) {
                     if (notifs.isEmpty()) item { Empty("Chưa có chương mới trong 7 ngày qua.") }
                     items(notifs, key = { it.novelId }) { n ->
                         val fresh = n.latestAt > seenBefore
-                        PaperCard(onClick = { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) }) {
-                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.bounceClick { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) }) {
+                            Row(Modifier.padding(start = 20.dp, top = 10.dp, bottom = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Cover(n.cover, 44.dp, 60.dp, label = n.title, flat = true)
                                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                                     Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -199,34 +196,29 @@ fun AccountTab() {
                 val prof = load("profile", u.id) { Api.profile() }.res?.getOrNull()
                 val stats = load("stats", u.id) { Api.readStats() }.res?.getOrNull()
                 ProfileCard(prof?.name ?: u.email.substringBefore('@'), u.email, prof?.avatar)
-                Spacer(Modifier.height(12.dp))
                 StatsCard(stats?.first ?: 0, stats?.second ?: 0, Api.liveStreak(prof))
             }
-            Spacer(Modifier.height(12.dp))
             LunarCard()
 
             SectionLabel("Giao diện")
-            // thanh chọn: nền thẻ không viền, viên nhấn đặc
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(cs.card).padding(5.dp)) {
-                listOf("Hệ thống", "Sáng", "Tối").forEachIndexed { i, label ->
-                    val on = Prefs.themeMode == i
-                    Box(
-                        Modifier.weight(1f).clip(RoundedCornerShape(17.dp)).background(if (on) cs.primary else Color.Transparent)
-                            .bounceClick { Prefs.setTheme(i) }.padding(vertical = 12.dp),
-                        Alignment.Center,
-                    ) { Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
-                }
-            }
-            Text("Màu nhấn", Modifier.padding(start = 6.dp, top = 18.dp, bottom = 8.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                accents.forEachIndexed { i, a ->
-                    Swatch(a.name, listOf(a.accent, a.seal, a.soft), cs.card, Prefs.accent == i, Modifier.weight(1f)) { Prefs.pickAccent(i) }
-                }
-            }
-            Text("Nền", Modifier.padding(start = 6.dp, top = 18.dp, bottom = 8.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                papers.forEachIndexed { i, p ->
-                    Swatch(p.name, listOf(p.surfaceAlt, p.inkSoft, p.ink), p.bg, Prefs.paper == i, Modifier.weight(1f), ink = p.ink) { Prefs.pickPaper(i) }
+            PaperCard {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(cs.onSurface.copy(.06f)).padding(4.dp)) {
+                        listOf("Hệ thống", "Sáng", "Tối").forEachIndexed { i, label ->
+                            val on = Prefs.themeMode == i
+                            Box(
+                                Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (on) cs.primary else Color.Transparent)
+                                    .bounceClick { Prefs.setTheme(i) }.padding(vertical = 10.dp),
+                                Alignment.Center,
+                            ) { Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        accents.forEachIndexed { i, a -> Dot(a.name, a.accent, Prefs.accent == i, cs.primary) { Prefs.pickAccent(i) } }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        papers.forEachIndexed { i, p -> Dot(p.name, p.bg, Prefs.paper == i, cs.primary, ring = p.ink.copy(.25f)) { Prefs.pickPaper(i) } }
+                    }
                 }
             }
 
@@ -261,26 +253,17 @@ fun AccountTab() {
     }
 }
 
-/** Thẻ hồ sơ: avatar + tên + email + nút đăng xuất; hình quyển sách mờ làm nền. */
+/** Hồ sơ: avatar + tên + email + đăng xuất, nằm thẳng trên nền, không khung. */
 @Composable
 private fun ProfileCard(name: String, email: String, avatar: String?) {
     val cs = MaterialTheme.colorScheme
-    PaperCard {
-        Box {
-            // matchParentSize + clip: hình trang trí tràn ra ngoài thẻ mà không làm thẻ cao thêm
-            Box(Modifier.matchParentSize().clipToBounds()) {
-                Icon(Icons.Rounded.AutoStories, null, Modifier.align(Alignment.TopEnd).offset(24.dp, (-38).dp).requiredSize(150.dp), cs.primary.copy(.07f))
-            }
-            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Avatar(avatar, name, 60.dp)
-                Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                    Text("THƯ CÁC CỦA BẠN", style = MaterialTheme.typography.labelSmall, color = cs.primary, letterSpacing = 1.2.sp)
-                    Text(name, Modifier.padding(top = 3.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(email, Modifier.padding(top = 2.dp), style = monoStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                IconButton(Session::signOut) { Icon(Icons.AutoMirrored.Rounded.Logout, "Đăng xuất", tint = cs.primary) }
-            }
+    Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar(avatar, name, 56.dp)
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(name, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(email, Modifier.padding(top = 2.dp), style = monoStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        IconButton(Session::signOut) { Icon(Icons.AutoMirrored.Rounded.Logout, "Đăng xuất", tint = cs.onSurfaceVariant) }
     }
 }
 
@@ -312,21 +295,12 @@ fun SettingTile(icon: ImageVector, label: String, subtitle: String?, onClick: ()
     }
 }
 
-/** Ô chọn màu: 3 chấm chồng nhau + tên; đang chọn thì viền son dày. */
+/** Chấm chọn màu: tròn đặc + tên; đang chọn thì có vòng viền ngoài. */
 @Composable
-private fun Swatch(name: String, dots: List<Color>, bg: Color, on: Boolean, modifier: Modifier, ink: Color? = null, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(18.dp)
-    Column(
-        modifier.clip(shape).background(bg).then(if (on) Modifier.border(2.dp, cs.primary, shape) else Modifier)
-            .bounceClick(onClick = onClick).padding(vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box {
-            dots.forEachIndexed { i, c -> Box(Modifier.padding(start = (i * 12).dp).size(18.dp).background(c, CircleShape)) }
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(name, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = ink?.copy(alpha = if (on) 1f else .7f) ?: if (on) cs.onSurface else cs.onSurfaceVariant, maxLines = 1)
+private fun Dot(name: String, fill: Color, on: Boolean, sel: Color, ring: Color = Color.Transparent, onClick: () -> Unit) {
+    Column(Modifier.bounceClick(onClick = onClick).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(44.dp).border(2.dp, if (on) sel else Color.Transparent, CircleShape).padding(4.dp).background(fill, CircleShape).border(1.dp, ring, CircleShape))
+        Text(name, Modifier.padding(top = 4.dp), fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 

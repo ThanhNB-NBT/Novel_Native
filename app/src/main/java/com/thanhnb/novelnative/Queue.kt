@@ -95,8 +95,8 @@ private fun Summary(q: Queue) {
     val cs = MaterialTheme.colorScheme
     val translating = q.active.count { it.status == "translating" }
     val live = translating > 0
-    PaperCard {
-        Column(Modifier.padding(16.dp)) {
+    Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
+        run {
             Text(if (live) "ĐANG DỊCH" else "ĐANG NGHỈ", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp, color = if (live) cs.primary else cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
                 Cell("${q.recent.size}", "chương/giờ", cs.primary, Modifier.weight(1f))
@@ -116,8 +116,8 @@ private fun Cell(v: String, label: String, c: Color, m: Modifier) = Column(m, ho
 @Composable
 private fun NovelRow(g: Group, onClick: () -> Unit) {
     val j = g.first
-    PaperCard(onClick = onClick) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.bounceClick(onClick = onClick)) {
+        Row(Modifier.padding(horizontal = 4.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Cover(j.cover, 40.dp, 54.dp, label = j.novelTitle)
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(j.novelTitle, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)

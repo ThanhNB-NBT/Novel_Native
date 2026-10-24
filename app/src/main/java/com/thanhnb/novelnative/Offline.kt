@@ -193,8 +193,8 @@ fun OfflineCard(n: Novel) {
     val have = load("offcount", n.id, Offline.version) { if (Offline.has(n.id)) Offline.count(n.id) else null }.res?.getOrNull()
     val prog = Offline.running[n.id]
     var confirm by remember { mutableStateOf(false) }
-    PaperCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), onClick = { if (prog == null) Offline.start(n.id) }) {
-        Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().bounceClick { if (prog == null) Offline.start(n.id) }) {
+        Row(Modifier.padding(start = 20.dp, top = 12.dp, bottom = 12.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(if (have != null) Icons.Rounded.DownloadDone else Icons.Rounded.Download, null, tint = cs.primary)
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 Text("Đọc offline", style = MaterialTheme.typography.titleMedium)
@@ -238,8 +238,8 @@ fun OfflineScreen() {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
                 if (list.isEmpty()) return@LazyColumn item { Empty("Chưa tải truyện nào về máy.\nMở một truyện → Đọc offline.") }
                 item {
-                    PaperCard(Modifier.fillMaxWidth().padding(16.dp, 4.dp, 16.dp, 8.dp)) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(20.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.Storage, null, tint = cs.primary)
                             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                                 Text("Dung lượng đã tải", style = MaterialTheme.typography.labelMedium)

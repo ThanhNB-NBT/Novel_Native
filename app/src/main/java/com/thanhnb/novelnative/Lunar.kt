@@ -144,24 +144,12 @@ fun LunarCard() {
     val l = toLunar(now)
     val sp = special(l)
     val solar = "%s, %02d/%02d/%d".format(WEEKDAYS[now.dayOfWeek.value - 1], now.dayOfMonth, now.monthValue, now.year)
-    PaperCard {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(
-                Modifier.width(64.dp).clip(RoundedCornerShape(14.dp)).background(cs.primaryContainer.copy(.7f)).padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("THÁNG ${l.month}${if (l.leap) "*" else ""}", style = MaterialTheme.typography.labelSmall, color = cs.primary, letterSpacing = 0.8.sp)
-                Text("${l.day}", style = monoStyle(30, cs.primary), fontWeight = FontWeight.Bold)
-            }
-            Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                Text("${l.monthName} năm ${l.yearName}", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Ngày ${l.dayCanChi} · tháng ${l.monthCanChi}", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    if (sp == null) solar else "$sp · $solar", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodySmall,
-                    color = if (sp == null) androidx.compose.ui.graphics.Color.Unspecified else cs.primary,
-                    fontWeight = if (sp == null) null else FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text("${l.monthName} năm ${l.yearName} · ngày ${l.day}${if (l.leap) "*" else ""} âm lịch", style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+        Text(
+            if (sp == null) solar else "$sp · $solar", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodySmall,
+            color = if (sp == null) androidx.compose.ui.graphics.Color.Unspecified else cs.primary,
+            fontWeight = if (sp == null) null else FontWeight.SemiBold,
+        )
     }
 }

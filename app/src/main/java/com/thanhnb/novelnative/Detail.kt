@@ -109,15 +109,16 @@ fun DetailScreen(id: Int) {
                                 style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp), color = cs.onSurface,
                             )
                         }
-                        PaperCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(20.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Fact("Tác giả", n.author)
                                 Fact("Nguồn", n.source)
                                 Fact("Mã truyện", "#${n.id}")
                             }
                         }
-                        PaperCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), onClick = { Nav.push(Screen.Glossary(n.id)) }) {
-                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 6.dp), color = cs.outlineVariant.copy(.5f))
+                        Column(Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Glossary(n.id)) }) {
+                            Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Rounded.Translate, null, tint = cs.primary)
                                 Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                                     Text("Thuật ngữ truyện", style = MaterialTheme.typography.titleMedium)

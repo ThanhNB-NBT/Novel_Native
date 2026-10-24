@@ -260,16 +260,14 @@ fun PaperCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, cont
     val dark = cs.background.luminance() < .5f
     val colors = CardDefaults.cardColors(containerColor = cs.card)
     val shape = RoundedCornerShape(28.dp)
-    val elev = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    val edge = BorderStroke(1.dp, Brush.verticalGradient(listOf(Color.White.copy(if (dark) .16f else .75f), Color.White.copy(0f))))
-    val glow = Brush.verticalGradient(listOf(Color.White.copy(if (dark) .05f else .45f), Color.White.copy(0f)), endY = 260f)
-    val inner: @Composable ColumnScope.() -> Unit = { Column(Modifier.background(glow), content = content) }
+    val elev = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    val inner: @Composable ColumnScope.() -> Unit = content
     if (onClick != null) {
         val src = remember { MutableInteractionSource() }
         val pressed by src.collectIsPressedAsState()
         val scale by animateFloatAsState(if (pressed) .97f else 1f, spring(dampingRatio = .5f, stiffness = 520f), label = "card")
-        Card(onClick, modifier.graphicsLayer { scaleX = scale; scaleY = scale }, shape = shape, colors = colors, elevation = elev, border = edge, interactionSource = src, content = inner)
-    } else Card(modifier, shape = shape, colors = colors, elevation = elev, border = edge, content = inner)
+        Card(onClick, modifier.graphicsLayer { scaleX = scale; scaleY = scale }, shape = shape, colors = colors, elevation = elev, interactionSource = src, content = inner)
+    } else Card(modifier, shape = shape, colors = colors, elevation = elev, content = inner)
 }
 
 /** Nhãn mục nhỏ in hoa giãn chữ màu son ("GIAO DIỆN", "ỨNG DỤNG"). */

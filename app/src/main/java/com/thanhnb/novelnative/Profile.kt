@@ -41,23 +41,15 @@ fun Avatar(emoji: String?, name: String, size: Dp) {
     }
 }
 
-/** Số liệu đọc: chuỗi ngày (vàng khi còn chuỗi) | đang đọc | chương đã đọc, ngăn bằng vạch mảnh. */
+/** Số liệu đọc: ba con số cạnh nhau ngay trên nền, không khung, không vạch. */
 @Composable
 fun StatsCard(novels: Int, chapters: Int, streak: Int) {
     val cs = MaterialTheme.colorScheme
     val hot = streak > 0
-    val gold = cs.secondary
-    PaperCard {
-        Row(
-            Modifier.fillMaxWidth().background(if (hot) gold.copy(.08f) else androidx.compose.ui.graphics.Color.Transparent).padding(vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Stat("$streak", "NGÀY LIÊN TIẾP", if (hot) gold else cs.onSurface, Modifier.weight(1f), fire = true, fireColor = if (hot) gold else cs.onSurfaceVariant)
-            Box(Modifier.width(1.dp).height(30.dp).background(cs.outlineVariant.copy(.7f)))
-            Stat("$novels", "ĐANG ĐỌC", cs.onSurface, Modifier.weight(1f))
-            Box(Modifier.width(1.dp).height(30.dp).background(cs.outlineVariant.copy(.7f)))
-            Stat("$chapters", "CHƯƠNG ĐÃ ĐỌC", cs.onSurface, Modifier.weight(1f))
-        }
+    Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Stat("$streak", "NGÀY LIÊN TIẾP", if (hot) cs.secondary else cs.onSurface, Modifier.weight(1f), fire = true, fireColor = if (hot) cs.secondary else cs.onSurfaceVariant)
+        Stat("$novels", "ĐANG ĐỌC", cs.onSurface, Modifier.weight(1f))
+        Stat("$chapters", "CHƯƠNG ĐÃ ĐỌC", cs.onSurface, Modifier.weight(1f))
     }
 }
 
