@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -235,6 +236,7 @@ fun AccountTab() {
                         papers.forEachIndexed { i, p -> Dot(p.bg, Prefs.paper == i, cs.primary, ring = p.ink.copy(.25f)) { Prefs.pickPaper(i) } }
                     }
                 } },
+                inset = 16.dp,
             )
 
             if (u != null) {
@@ -274,9 +276,9 @@ fun SectionLabel(text: String) =
 
 /** Nhóm dòng cài đặt trong một thẻ, ngăn bằng vạch mảnh thụt vào. */
 @Composable
-fun SettingGroup(vararg tiles: @Composable () -> Unit) = PaperCard {
+fun SettingGroup(vararg tiles: @Composable () -> Unit, inset: Dp = 66.dp) = PaperCard {
     tiles.forEachIndexed { i, t ->
-        if (i > 0) HorizontalDivider(Modifier.padding(start = 66.dp, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(.5f))
+        if (i > 0) HorizontalDivider(Modifier.padding(start = inset, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(.5f))
         t()
     }
 }
