@@ -202,15 +202,15 @@ object Api {
             }
         }
 
-    private suspend fun get(path: String) = JSONArray(raw("GET", "rest/v1/$path"))
-    private suspend fun rpc(name: String, vararg params: Pair<String, Any?>) = raw("POST", "rest/v1/rpc/$name", JSONObject(mapOf(*params)))
+    internal suspend fun get(path: String) = JSONArray(raw("GET", "rest/v1/$path"))
+    internal suspend fun rpc(name: String, vararg params: Pair<String, Any?>) = raw("POST", "rest/v1/rpc/$name", JSONObject(mapOf(*params)))
     private suspend fun insert(table: String, row: Map<String, Any?>, upsert: Boolean = false) = raw(
         "POST", "rest/v1/$table", JSONObject(row),
         prefer = if (upsert) "resolution=merge-duplicates,return=minimal" else "return=minimal",
     )
-    private suspend fun delete(path: String) = raw("DELETE", "rest/v1/$path")
+    internal suspend fun delete(path: String) = raw("DELETE", "rest/v1/$path")
 
-    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+    internal fun enc(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
     private fun JSONArray.objs() = List(length()) { getJSONObject(it) }
     private fun JSONObject.str(k: String) = optString(k).takeIf { !isNull(k) && it.isNotEmpty() }
     private fun uid() = Session.user?.id
@@ -513,7 +513,7 @@ object Api {
     fun clearQueueDone() = Prefs.sp.edit().putString("queue_done_cleared_at", Instant.now().toString()).apply()
 
     /** Xếp y như claim_next_job (migration 117): priority → truyện có job chờ lâu nhất ở mức đó → chapter_index → created_at. MIRROR câu ORDER BY trong SQL. */
-    private fun sortLikeClaim(jobs: List<JSONObject>): List<JSONObject> {
+    internal fun sortLikeClaim(jobs: List<JSONObject>): List<JSONObject> {
         val since = HashMap<Pair<Int, Int>, String>()
         jobs.forEach {
             val k = it.optInt("novel_id") to it.optInt("priority")

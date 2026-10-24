@@ -246,7 +246,11 @@ fun AccountTab() {
                     { SettingTile(Icons.Rounded.HourglassBottom, "Hàng đợi dịch", "Chương đang chờ và đang dịch", { Nav.push(Screen.Queue) }) },
                 )
                 SectionLabel("Tài khoản")
-                SettingGroup({ SettingTile(Icons.Rounded.PersonOutline, "Sửa thông tin", "Tên hiển thị và ảnh đại diện", { Nav.push(Screen.EditProfile) }) })
+                val isAdmin = load("admin", u.id) { Api.isAdmin() }.res?.getOrNull() == true
+                SettingGroup(
+                    { SettingTile(Icons.Rounded.PersonOutline, "Sửa thông tin", "Tên hiển thị và ảnh đại diện", { Nav.push(Screen.EditProfile) }) },
+                    *(if (isAdmin) arrayOf<@Composable () -> Unit>({ SettingTile(Icons.Rounded.AdminPanelSettings, "Quản trị", "Worker, crawl, truyện, báo cáo", { Nav.push(Screen.Admin) }) }) else emptyArray()),
+                )
             }
 
             SectionLabel("Ứng dụng")

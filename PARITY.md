@@ -22,5 +22,8 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 8. ~~Hàng đợi dịch~~ xong (Queue.kt, vào từ tab Tôi): tóm tắt (chương/giờ, đang dịch, đang chờ), gom theo truyện, chạm xem từng chương, mục Vừa dịch xong + Xoá, tự làm mới 15 giây
 9. Hướng dẫn xong (Guide.kt, 8 mục bấm mở rộng); Có gì mới chưa có — (~~kiểm tra cập nhật~~ xong: Update.kt + release.yml, cần đặt secrets cho repo)
 10. Lịch âm: thẻ hôm nay xong (Lunar.kt, tab Tôi); còn lịch tháng — account/lunar_calendar.dart
-11. Quản trị (admin) — screens/admin/*, data/admin.dart (lớn nhất ngoài Tu Tiên)
+11. ~~Quản trị (admin)~~ xong bản gọn (Admin*.kt, vào từ tab Tôi → Quản trị, chỉ hiện khi profiles.is_admin): 5 tab (bỏ Tu Tiên)
+   - Worker (nhịp tim, số job, gộp theo truyện, sheet job: chạy lại/ưu tiên lên đầu/huỷ; tự làm mới 20s), Crawl (nhịp 24h, cấu hình dịch + crawler sửa bằng hộp thoại, đổi engine, bật/tắt nguồn, truyện mới về 24h), Đang đọc, Truyện (thống kê kho, tìm không dấu, lọc, ẩn/hiện, sửa, xoá, trang quản trị 1 truyện: chương + model/token), Báo cáo (xử lý)
+   - Nút trên thanh: chạy lại job lỗi, quét lỗi dịch; menu ⋮: Thống kê API (cột 14 ngày, lượt Gemini theo key, sức khoẻ model), Theo dõi VPS (CPU/RAM/disk/mạng + lệnh khởi động lại), Nhật ký lỗi (job lỗi + client_errors). Mọi thao tác ghi đều có hộp thoại xác nhận.
+   - Bỏ/chưa làm: bộ chọn model có danh mục (model_picker; sửa knob bằng ô chữ), knob `gemini_catalog`/`nvidia_catalog`, "Yêu cầu dịch" theo khoảng chương trong trang quản trị truyện, xoá truyện từ tab Worker (vẫn xoá được ở tab Truyện), sửa nhãn/IP và xoá dòng host ở màn VPS, nhật ký lỗi cục bộ của app (native chưa có AppErrorLog)
 12. Giao diện: ~~theme.dart, header + triện, dock nổi, trang chủ 5 kiểu mục, chi tiết bìa mờ, màu nhấn/nền~~ (xong 0.2.0); còn skeleton, ink_transition, ambient (màu theo bìa)

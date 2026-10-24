@@ -62,6 +62,11 @@ sealed interface Screen {
     data object Queue : Screen
     data object Guide : Screen
     data object Lunar : Screen
+    data object Admin : Screen
+    data object AdminLlm : Screen
+    data object AdminVps : Screen
+    data object AdminErrors : Screen
+    data class AdminNovel(val id: Int) : Screen
 }
 
 // ponytail: ngăn xếp màn hình bằng state, thêm navigation-compose khi cần deep link

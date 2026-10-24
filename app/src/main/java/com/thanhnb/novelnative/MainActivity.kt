@@ -114,6 +114,11 @@ class MainActivity : ComponentActivity() {
                                     Screen.Queue -> QueueScreen()
                                     Screen.Guide -> GuideScreen()
                                     Screen.Lunar -> LunarScreen()
+                                    Screen.Admin -> AdminScreen()
+                                    Screen.AdminLlm -> LlmScreen()
+                                    Screen.AdminVps -> VpsScreen()
+                                    Screen.AdminErrors -> ErrorsScreen()
+                                    is Screen.AdminNovel -> AdminNovelScreen(s.id)
                                 }
                             }
                         }
