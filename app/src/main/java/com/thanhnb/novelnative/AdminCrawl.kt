@@ -10,6 +10,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -167,7 +172,78 @@ fun CrawlTab() {
         }
     }
     ConfirmDialog(act, { act = null }) { sources.reload(); settings.reload() }
-    edit?.let { s -> EditSettingDialog(s, { edit = null }) { settings.reload() } }
+    edit?.let { s ->
+        val catKey = when (s.optString("key")) { "gemini_models", "gemini_metadata_models" -> "gemini_catalog"; "llm_model" -> "nvidia_catalog"; else -> null }
+        val cat = catKey?.let { k -> settings.res?.getOrNull()?.firstOrNull { it.optString("key") == k }?.optString("value") }?.let(::parseCatalog).orEmpty()
+        // danh mục trống/thiếu → sửa bằng ô chữ như cũ
+        if (cat.isEmpty()) EditSettingDialog(s, { edit = null }) { settings.reload() }
+        else ModelPickerDialog(s, cat, { edit = null }) { act = it }
+    }
+}
+
+/** 1 dòng danh mục model: `id | RPM/TPM/RPD | ghi chú` (mirror knob gemini_catalog / nvidia_catalog, mig 137). */
+class CatalogItem(val id: String, val limits: String, val note: String)
+
+fun parseCatalog(raw: String): List<CatalogItem> = raw.lines().mapNotNull { line ->
+    val f = line.split('|').map { it.trim() }
+    if (f.first().isEmpty()) null else CatalogItem(f.first(), f.getOrElse(1) { "" }, f.drop(2).joinToString(" | "))
+}
+
+/**
+ * Chọn model từ danh mục. Gemini (knob `gemini_*`): chọn nhiều, thứ tự = ưu tiên (nút ↑↓); NVIDIA (`llm_model`): chọn một.
+ * Ghi giá trị qua hộp xác nhận. Model đang dùng mà không có trong danh mục vẫn hiện (nhãn "ngoài danh mục") để không bị mất âm thầm.
+ */
+@Composable
+private fun ModelPickerDialog(s: JSONObject, cat: List<CatalogItem>, close: () -> Unit, ask: (Act) -> Unit) {
+    val key = s.optString("key")
+    val multi = key != "llm_model"
+    val cs = MaterialTheme.colorScheme
+    val cur = s.optString("value")
+    // id → token đang lưu (giữ nguyên trần tuỳ chỉnh/số 0 "tắt" của model có sẵn)
+    val tokens = remember { cur.split(',').map { it.trim() }.filter { it.isNotEmpty() }.associateBy { it.split(Regex("\\s+")).first() } }
+    val picked = remember { mutableStateListOf<String>().apply { addAll(if (multi) tokens.keys else tokens.keys.take(1)) } }
+    val byId = cat.associateBy { it.id }
+    val all = picked + cat.map { it.id }.filter { it !in picked }
+    fun token(id: String) = tokens[id] ?: byId[id]?.let { if (it.limits.isEmpty()) it.id else "${it.id} ${it.limits}" } ?: id
+    val newValue = picked.joinToString(", ") { token(it) }
+    AlertDialog(
+        close, title = { Text(s.settingTitle()) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(if (multi) "Tick để dùng; model ở trên được gọi trước, hết lượt mới tới model dưới." else "Chọn một model.", style = MaterialTheme.typography.bodySmall)
+                all.forEach { id ->
+                    val on = id in picked
+                    val item = byId[id]
+                    val i = picked.indexOf(id)
+                    Row(
+                        Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).background(if (on) cs.primary.copy(.09f) else Color.Transparent)
+                            .bounceClick { if (multi) { if (on) picked.remove(id) else picked.add(id) } else { picked.clear(); picked.add(id) } }.padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (multi) Checkbox(on, null, Modifier.padding(8.dp)) else RadioButton(on, null, Modifier.padding(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(id, style = monoStyle(12, if (on) cs.primary else cs.onSurface))
+                            val sub = listOfNotNull(if (on && multi) "ưu tiên ${i + 1}" else null, item?.limits?.split("/")?.takeIf { it.size == 3 }?.let { "${it[0]} RPM · ${it[2].toIntOrNull()?.let(::fmtK) ?: it[2]}/ngày" }, item?.note?.ifEmpty { null }, if (item == null) "ngoài danh mục" else null).joinToString(" · ")
+                            if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                        }
+                        if (multi && on) {
+                            IconButton({ if (i > 0) java.util.Collections.swap(picked, i, i - 1) }, enabled = i > 0, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowUp, "Lên") }
+                            IconButton({ if (i < picked.lastIndex) java.util.Collections.swap(picked, i, i + 1) }, enabled = i < picked.lastIndex, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.KeyboardArrowDown, "Xuống") }
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = { TextButton(close) { Text("Huỷ") } },
+        confirmButton = {
+            TextButton({
+                close()
+                ask(Act("Lưu danh sách model?", "${s.settingTitle()}:\n" + picked.mapIndexed { i, id -> "${i + 1}. $id" }.joinToString("\n"), "Lưu") {
+                    AdminApi.saveSetting(key, newValue); "Đã lưu — worker tự nhận ở chu kỳ kế"
+                })
+            }, enabled = picked.isNotEmpty() && newValue != cur) { Text("Lưu") }
+        },
+    )
 }
 
 /** Một knob: tên thân thiện + key mono + giá trị (model dài thì xuống từng dòng). Engine là nút chọn. */
@@ -194,14 +270,16 @@ private fun SettingRow(s: JSONObject, ask: (Act) -> Unit, edit: (JSONObject) -> 
         HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.5f))
         return
     }
-    val long = value.length > 16 || ',' in value
+    val lines = value.count { it == '\n' } + 1
+    val long = (value.length > 16 || ',' in value) && lines == 1
+    val summary = if (lines > 1) "$lines dòng" else null
     Column(Modifier.fillMaxWidth().bounceClick { edit(s) }.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(s.settingTitle(), style = MaterialTheme.typography.titleSmall)
                 Text(key, style = monoStyle(10))
             }
-            if (!long) Text(value, Modifier.padding(start = 10.dp), style = monoStyle(13, cs.primary))
+            if (!long) Text(summary ?: value, Modifier.padding(start = 10.dp), style = monoStyle(13, cs.primary))
         }
         // giá trị dài (chuỗi model): mỗi model một dòng
         if (long) value.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { part ->

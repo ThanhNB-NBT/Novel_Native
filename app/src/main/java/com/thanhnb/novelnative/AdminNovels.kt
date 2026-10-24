@@ -16,6 +16,9 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlaylistRemove
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Title
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -204,10 +207,12 @@ fun AdminNovelScreen(id: Int) {
     val state = rememberLazyListState()
     LoadMoreOnScroll(state, pg)
     var act by remember { mutableStateOf<Act?>(null) }
+    var askRange by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
     val n = novel.res?.getOrNull()
     Column(Modifier.fillMaxSize()) {
         PageHeader("Quản trị truyện", n.novelTitle(id), "管", back = true) {
+            IconButton({ askRange = true }, enabled = n != null) { Icon(Icons.Rounded.Translate, "Yêu cầu dịch") }
             IconButton({
                 act = Act("Dịch lại tên + mô tả?", "Xếp job dịch lại tên, mô tả, thể loại theo prompt hiện tại (đè lên tên cũ).", "Dịch lại") { AdminApi.requestMeta(id); "Đã xếp dịch lại tên — vài giây nữa kéo làm mới" }
             }) { Icon(Icons.Rounded.Title, "Dịch lại tên + mô tả") }
@@ -257,5 +262,38 @@ fun AdminNovelScreen(id: Int) {
             }
         }
     }
-    ConfirmDialog(act, { act = null }) { rev++ }
+    ConfirmDialog(act, { act = null }) { rev++; novel.reload() }
+    if (askRange && n != null) RangeDialog(n.optInt("chapter_count_source"), n.optInt("chapter_count_translated"), { askRange = false }) { from, to ->
+        askRange = false
+        act = Act("Yêu cầu dịch chương $from–$to?", "Xếp job dịch các chương CHƯA dịch hoặc lỗi trong khoảng $from–$to của \"${n.novelTitle(id)}\" (chương đã dịch giữ nguyên).", "Dịch") {
+            val c = AdminApi.requestRange(id, from, to); if (c > 0) "Đã xếp $c chương vào hàng đợi" else "Không có chương nào cần xếp (đã dịch/đang chờ hết)"
+        }
+    }
+}
+
+/** "Yêu cầu dịch" theo khoảng chương: từ A đến B (1 ≤ A ≤ B ≤ số chương nguồn). Bấm Tiếp tục → hộp xác nhận. */
+@Composable
+private fun RangeDialog(source: Int, translated: Int, close: () -> Unit, next: (Int, Int) -> Unit) {
+    var from by remember { mutableStateOf((translated + 1).coerceAtMost(source.coerceAtLeast(1)).toString()) }
+    var to by remember { mutableStateOf("") }
+    val a = from.toIntOrNull()
+    val b = to.toIntOrNull()
+    val ok = a != null && b != null && a >= 1 && a <= b && (source == 0 || b <= source)
+    val num = KeyboardOptions(keyboardType = KeyboardType.Number)
+    AlertDialog(
+        close, title = { Text("Yêu cầu dịch") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Đã dịch $translated/$source chương. Chọn khoảng chương cần dịch:", style = MaterialTheme.typography.bodyMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(from, { from = it.filter(Char::isDigit).take(6) }, Modifier.weight(1f), label = { Text("Từ chương") }, singleLine = true, keyboardOptions = num)
+                    OutlinedTextField(to, { to = it.filter(Char::isDigit).take(6) }, Modifier.weight(1f), label = { Text("Đến chương") }, singleLine = true, keyboardOptions = num)
+                }
+                if (b != null && source > 0 && b > source) Text("Truyện chỉ có $source chương.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                else if (a != null && b != null && a > b) Text("Chương đầu phải nhỏ hơn hoặc bằng chương cuối.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(close) { Text("Huỷ") } },
+        confirmButton = { TextButton({ next(a!!, b!!) }, enabled = ok) { Text("Tiếp tục") } },
+    )
 }

@@ -145,6 +145,10 @@ object AdminApi {
     }
     /** Xoá VĨNH VIỄN — FK cascade dọn chapters/glossary/tiến độ/tủ sách/job. */
     suspend fun deleteNovel(id: Int) { Api.delete("novels?id=eq.$id") }
+    /** Dịch chương [from, to]. from ≤ 1 dùng RPC cũ (tới chương `to`); từ chương > 1 cần RPC request_translation_range (mig 139). */
+    suspend fun requestRange(novelId: Int, from: Int, to: Int): Int =
+        (if (from <= 1) Api.rpc("request_translation", "p_novel_id" to novelId, "p_up_to" to to, "p_priority" to 50)
+        else Api.rpc("request_translation_range", "p_novel_id" to novelId, "p_from" to from, "p_to" to to, "p_priority" to 50)).trim().toIntOrNull() ?: 0
     suspend fun requestMeta(novelId: Int) { Api.rpc("request_meta", "p_novel_id" to novelId) }
 
     suspend fun chapterPage(novelId: Int, offset: Int, limit: Int) = get(
