@@ -37,7 +37,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
-import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Check
@@ -326,28 +326,33 @@ fun ReaderScreen(s: Screen.Read) {
                         IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", Modifier.size(20.dp)) }
                         Text("Chương ${s.index}", Modifier.weight(1f), fontFamily = Jakarta, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         Text("${(pct * 100).roundToInt()}%", Modifier.padding(end = 4.dp), style = monoStyle(11, fg.copy(alpha = 0.45f)))
-                        IconButton({
-                            val i = if (st.page) (pct * paras.size).toInt() else list.firstVisibleItemIndex - 1
-                            scope.launch {
-                                runCatching { Api.addBookmark(s.novelId, s.index, pct, paras.getOrNull(i.coerceIn(0, (paras.size - 1).coerceAtLeast(0)))?.take(120)) }
-                                    .onSuccess { msg = "Đã thêm dấu trang" }.onFailure { msg = friendly(it) }
+                        val toggleTts = {
+                            if (TtsPlayer.active) TtsPlayer.stop()
+                            else if (paras.isNotEmpty()) scope.launch {
+                                // đọc từ đoạn đang đọc dở, không từ đầu; truyền đoạn đang hiện để highlight khớp
+                                val from = (if (st.page) (pct * paras.size).toInt() else list.firstVisibleItemIndex - 1).coerceIn(0, paras.size - 1)
+                                TtsPlayer.start(view.context, s.novelId, s.index, from, paras, ch?.title)?.let { msg = it }
                             }
-                        }) { Icon(Icons.Rounded.BookmarkBorder, "Thêm dấu trang", Modifier.size(20.dp)) }
-                        IconButton({ sheet = 1 }) { Icon(Icons.AutoMirrored.Rounded.FormatListBulleted, "Mục lục", Modifier.size(20.dp)) }
+                        }
+                        // Header chỉ giữ Nghe truyện + Cài đặt đọc; còn lại nằm trong menu ⋮
+                        IconButton({ toggleTts() }) {
+                            Icon(Icons.Rounded.Headphones, if (TtsPlayer.active) "Dừng nghe" else "Nghe truyện", Modifier.size(20.dp),
+                                tint = if (TtsPlayer.active) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                        }
                         IconButton({ sheet = 2 }) { Icon(Icons.Rounded.TextFields, "Cài đặt đọc", Modifier.size(20.dp)) }
                         var menu by remember { mutableStateOf(false) }
                         Box {
                             IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Thêm", Modifier.size(20.dp)) }
                             DropdownMenu(menu, { menu = false }) {
-                                DropdownMenuItem({ Text(if (TtsPlayer.active) "Dừng nghe" else "Nghe truyện") }, {
+                                DropdownMenuItem({ Text("Thêm dấu trang") }, {
                                     menu = false
-                                    if (TtsPlayer.active) TtsPlayer.stop()
-                                    else if (paras.isNotEmpty()) scope.launch {
-                                        // đọc từ đoạn đang đọc dở, không từ đầu; truyền đoạn đang hiện để highlight khớp
-                                        val from = (if (st.page) (pct * paras.size).toInt() else list.firstVisibleItemIndex - 1).coerceIn(0, paras.size - 1)
-                                        TtsPlayer.start(view.context, s.novelId, s.index, from, paras, ch?.title)?.let { msg = it }
+                                    val i = if (st.page) (pct * paras.size).toInt() else list.firstVisibleItemIndex - 1
+                                    scope.launch {
+                                        runCatching { Api.addBookmark(s.novelId, s.index, pct, paras.getOrNull(i.coerceIn(0, (paras.size - 1).coerceAtLeast(0)))?.take(120)) }
+                                            .onSuccess { msg = "Đã thêm dấu trang" }.onFailure { msg = friendly(it) }
                                     }
                                 })
+                                DropdownMenuItem({ Text("Mục lục") }, { menu = false; sheet = 1 })
                                 DropdownMenuItem({ Text("Báo lỗi chương") }, { menu = false; report = true })
                                 DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(s.novelId)) })
                             }
