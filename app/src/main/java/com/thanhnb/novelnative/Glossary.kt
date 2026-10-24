@@ -205,8 +205,7 @@ private fun ApprovedRow(t: Term, report: () -> Unit, edit: () -> Unit) =
 private fun PendingRow(t: Term, edit: () -> Unit, approve: () -> Unit, discard: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Row(
-        Modifier.fillMaxWidth().padding(16.dp, 0.dp, 16.dp, 8.dp).clip(RoundedCornerShape(16.dp)).background(cs.primaryContainer.copy(alpha = 0.55f))
-            .bounceClick(onClick = edit).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().bounceClick(onClick = edit).padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {

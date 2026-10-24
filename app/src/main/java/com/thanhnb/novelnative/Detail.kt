@@ -339,7 +339,7 @@ private fun Header(n: Novel) {
             }
             Text(
                 listOf("${n.chaptersSource} chương", "${n.chaptersTranslated} đã dịch", Api.statusLabel(n.status), n.source).filter(String::isNotEmpty).joinToString(" · "),
-                Modifier.padding(20.dp, 16.dp), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(.9f),
+                Modifier.padding(20.dp, 16.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
