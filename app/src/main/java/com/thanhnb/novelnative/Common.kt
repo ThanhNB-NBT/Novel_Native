@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -158,14 +159,8 @@ fun Seal(char: String?, size: Dp = 20.dp) {
 fun SectionHeader(title: String, onMore: (() -> Unit)? = null) =
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 18.dp, end = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall.copy(fontFamily = Jakarta, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = (-0.4).sp))
-        // nút "Xem tất cả" dạng viên thuốc nền nhấn nhạt, nhún khi chạm
-        if (onMore != null) Row(
-            Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary.copy(.10f)).bounceClick(onClick = onMore).padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Xem tất cả", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            Icon(Icons.Rounded.ChevronRight, null, Modifier.size(16.dp), MaterialTheme.colorScheme.primary)
-        }
+        // chỉ một icon mũi tên, không khung, không chữ; vùng chạm 40dp
+        if (onMore != null) IconButton(onMore) { Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Xem tất cả", Modifier.size(22.dp), MaterialTheme.colorScheme.primary) }
     }
 
 val Mono = FontFamily(Font(R.font.mono_medium, FontWeight.Medium))
