@@ -193,7 +193,7 @@ fun AdminScreen() {
                     divider = { HorizontalDivider(color = cs.outlineVariant.copy(.5f)) },
                 ) {
                     tabs.forEachIndexed { i, t ->
-                        Tab(tab == i, { tab = i }, text = { Text(t, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp) })
+                        Tab(tab == i, { tab = i }, selectedContentColor = cs.primary, unselectedContentColor = cs.onSurfaceVariant, text = { Text(t, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp) })
                     }
                 }
                 when (tab) {
