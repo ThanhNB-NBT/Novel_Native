@@ -1,5 +1,6 @@
 package com.thanhnb.novelnative
 
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,34 +76,34 @@ fun LibraryTab() {
                                     style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 )
                                 Spacer(Modifier.weight(1f))
-                                if (cur != null) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("Chương $cur/${n.chaptersSource}", style = monoStyle(12, MaterialTheme.colorScheme.primary))
-                                        Spacer(Modifier.weight(1f))
-                                        Text("${(cur * 100 / total).coerceIn(0, 100)}%", style = monoStyle(12))
-                                    }
-                                    // tối thiểu 3% để truyện mới đọc vẫn thấy một vệt tiến độ, không phải một chấm
-                                    LinearProgressIndicator(
-                                        { (cur.toFloat() / total).coerceIn(.03f, 1f) },
-                                        Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.outlineVariant.copy(.6f),
-                                        gapSize = 0.dp, drawStopIndicator = {},
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        if (cur != null) "Chương $cur/${n.chaptersSource} · ${(cur * 100 / total).coerceIn(0, 100)}%" else "Theo dõi · ${n.chaptersSource} chương",
+                                        Modifier.weight(1f), style = monoStyle(12, MaterialTheme.colorScheme.primary),
                                     )
-                                } else Text("Đang theo dõi · ${n.chaptersSource} chương", style = monoStyle(12, MaterialTheme.colorScheme.primary))
-                            }
-                            var menu by remember { mutableStateOf(false) }
-                            // cột phải: menu ⋮ phía trên, nút Đọc tiếp phía dưới (một chạm vào thẳng chương đang dở)
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Box {
-                                    IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                    DropdownMenu(menu, { menu = false }) {
-                                        DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
-                                        DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
+                                    Row(
+                                        Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary)
+                                            .bounceClick { Nav.push(Screen.Read(n.id, n.title, cur ?: 1)) }.padding(start = 8.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(Icons.Rounded.PlayArrow, null, Modifier.size(16.dp), MaterialTheme.colorScheme.onPrimary)
+                                        Text(if (cur == null) "Đọc" else "Đọc tiếp", Modifier.padding(start = 2.dp), color = MaterialTheme.colorScheme.onPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
-                                FilledTonalIconButton({ Nav.push(Screen.Read(n.id, n.title, cur ?: 1)) }) {
-                                    Icon(Icons.AutoMirrored.Rounded.MenuBook, if (cur == null) "Đọc từ chương 1" else "Đọc tiếp chương $cur")
+                                if (cur != null) LinearProgressIndicator(
+                                    { (cur.toFloat() / total).coerceIn(.03f, 1f) },
+                                    Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(.6f),
+                                    gapSize = 0.dp, drawStopIndicator = {},
+                                )
+                            }
+                            var menu by remember { mutableStateOf(false) }
+                            Box {
+                                IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                DropdownMenu(menu, { menu = false }) {
+                                    DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
+                                    DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
                                 }
                             }
                         }
