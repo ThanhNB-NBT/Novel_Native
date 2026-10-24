@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -19,13 +20,58 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 /**
  * Thuật ngữ truyện (như screens/novel/glossary.dart, bỏ phần admin): bảng "chữ Trung → bản dịch đúng"
  * dùng cho mọi chương dịch SAU; gợi ý của LLM chờ duyệt; vá chương cũ; chọn nhiều để xoá.
- * Chưa có: tra bảng Hán-Việt, văn phong dịch (admin).
+ * Admin: văn phong dịch (novels.translation_style) + quét lỗi dịch của truyện.
  */
 private val termTypes = linkedMapOf("person" to "Nhân vật", "place" to "Địa danh", "sect" to "Môn phái", "item" to "Vật phẩm", "skill" to "Chiêu thức", "other" to "Khác")
+
+private val povs = listOf("ngôi ba" to "Ngôi ba", "ngôi nhất" to "Ngôi nhất")
+private val hanViets = listOf("đậm" to "Đậm — tu tiên/cổ trang", "vừa" to "Vừa", "nhạt" to "Nhạt — đô thị hiện đại")
+
+private suspend fun loadStyle(novelId: Int): JSONObject =
+    Api.get("novels?select=translation_style&id=eq.$novelId").optJSONObject(0)?.optJSONObject("translation_style") ?: JSONObject()
+
+@Composable
+private fun StyleDialog(init: JSONObject, onDismiss: () -> Unit, onSave: (JSONObject?) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var pov by remember { mutableStateOf(init.optString("pov")) }
+    var han by remember { mutableStateOf(init.optString("han_viet")) }
+    var setting by remember { mutableStateOf(init.optString("setting")) }
+    var tone by remember { mutableStateOf(init.optString("tone")) }
+    @Composable fun chips(opts: List<Pair<String, String>>, cur: String, set: (String) -> Unit) =
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            opts.forEach { (v, label) -> FilterChip(cur == v, { set(if (cur == v) "" else v) }, { Text(label) }) }
+        }
+    AlertDialog(
+        onDismiss, containerColor = cs.card,
+        title = { Text("Văn phong dịch") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Ngôi kể", style = MaterialTheme.typography.labelMedium); chips(povs, pov) { pov = it }
+                OutlinedTextField(setting, { setting = it.take(80) }, label = { Text("Bối cảnh") }, placeholder = { Text("tu tiên cổ đại / đô thị hiện đại…") })
+                Text("Mức Hán-Việt", style = MaterialTheme.typography.labelMedium); chips(hanViets, han) { han = it }
+                OutlinedTextField(tone, { tone = it.take(80) }, label = { Text("Nhịp văn") }, placeholder = { Text("gọn / hài / lạnh / trang trọng…") })
+                Text("Để trống tất cả rồi Lưu → xoá hồ sơ, worker tự sinh lại từ chương 1.", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            }
+        },
+        confirmButton = {
+            TextButton({
+                // Lưu tay thì bỏ src_chapter (như Flutter) để worker không tưởng bản máy sinh mà tạo đè
+                val o = JSONObject()
+                if (pov.isNotEmpty()) o.put("pov", pov)
+                if (setting.isNotBlank()) o.put("setting", setting.trim())
+                if (han.isNotEmpty()) o.put("han_viet", han)
+                if (tone.isNotBlank()) o.put("tone", tone.trim())
+                onSave(if (o.length() == 0) null else o)
+            }) { Text("Lưu") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Huỷ") } },
+    )
+}
 
 @Composable
 fun GlossaryScreen(novelId: Int) {
@@ -40,6 +86,9 @@ fun GlossaryScreen(novelId: Int) {
     var editing by remember { mutableStateOf<Term?>(null) } // id = -1 → thêm mới
     var reporting by remember { mutableStateOf<Term?>(null) }
     var confirmPatch by remember { mutableStateOf(false) }
+    val admin = load("admin", Session.user?.id) { Api.isAdmin() }.res?.getOrNull() == true
+    var style by remember { mutableStateOf<JSONObject?>(null) }
+    var confirmAudit by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(msg) { delay(2500); msg = null }
@@ -65,6 +114,10 @@ fun GlossaryScreen(novelId: Int) {
                     IconButton({ confirmDelete = true }, enabled = picked.isNotEmpty()) { Icon(Icons.Rounded.DeleteOutline, "Xoá đã chọn") }
                     TextButton({ selecting = false; picked.clear() }) { Text("Xong") }
                 } else {
+                    if (admin) {
+                        IconButton({ act { style = loadStyle(novelId) } }) { Icon(Icons.Rounded.AutoStories, "Văn phong dịch") }
+                        IconButton({ confirmAudit = true }) { Icon(Icons.Rounded.FactCheck, "Quét lỗi dịch truyện này") }
+                    }
                     IconButton({ confirmPatch = true }) { Icon(Icons.Rounded.Healing, "Vá chương cũ") }
                     IconButton({ selecting = true; picked.clear() }) { Icon(Icons.Rounded.Checklist, "Chọn để xoá hàng loạt") }
                 }
@@ -114,6 +167,21 @@ fun GlossaryScreen(novelId: Int) {
             act { Api.saveTerm(novelId, t.id.takeIf { it >= 0 }, zh, vi, w, type, narr) }
         }
     }
+    style?.let { st ->
+        StyleDialog(st, { style = null }) { next ->
+            style = null
+            act(if (next == null) "Đã xoá hồ sơ văn phong — worker sẽ sinh lại từ chương 1" else "Đã lưu văn phong — áp dụng cho các chương dịch mới") {
+                Api.raw("PATCH", "rest/v1/novels?id=eq.$novelId", JSONObject().put("translation_style", next ?: JSONObject.NULL), prefer = "return=minimal")
+            }
+        }
+    }
+    if (confirmAudit) AlertDialog(
+        { confirmAudit = false }, containerColor = cs.card,
+        title = { Text("Quét lỗi dịch truyện này?") },
+        text = { Text("Worker rà các chương đã dịch còn tiếng Trung / cụt / mất đoạn và tự xếp lại dịch. Xem kết quả ở Quản trị → tab Worker.") },
+        confirmButton = { TextButton({ confirmAudit = false; act("Đã bắt đầu quét — chương lỗi sẽ tự xếp lại dịch") { Api.rpc("request_novel_audit", "p_novel_id" to novelId) } }) { Text("Bắt đầu quét") } },
+        dismissButton = { TextButton({ confirmAudit = false }) { Text("Huỷ") } },
+    )
     reporting?.let { t ->
         var reason by remember(t.id) { mutableStateOf("") }
         AlertDialog(
