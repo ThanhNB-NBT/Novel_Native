@@ -359,6 +359,13 @@ private fun Header(n: Novel, tail: Color) {
                     Text(it, Modifier.clip(CircleShape).background(Color.White.copy(.16f)).padding(horizontal = 11.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium, color = Color.White, maxLines = 1)
                 }
             }
+            if (n.facts.isNotEmpty()) @OptIn(ExperimentalLayoutApi::class) FlowRow(
+                Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                n.facts.forEach {
+                    Text(it, Modifier.clip(CircleShape).border(1.dp, Color.White.copy(.28f), CircleShape).padding(horizontal = 11.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.9f), maxLines = 1)
+                }
+            }
             val frac = if (n.chaptersSource > 0) (n.chaptersTranslated.toFloat() / n.chaptersSource).coerceIn(0f, 1f) else 0f
             Column(Modifier.padding(20.dp, 12.dp, 20.dp, 18.dp)) {
                 Row {

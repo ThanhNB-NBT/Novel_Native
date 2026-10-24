@@ -287,6 +287,8 @@ fun MoreScreen(s: Section) {
 @Composable
 fun SearchScreen() {
     var q by rememberSaveable { mutableStateOf("") }
+    var history by remember { mutableStateOf(SearchHistory.load()) }
+    var reqQuery by remember { mutableStateOf<String?>(null) }
     var f by remember { mutableStateOf(Filter()) }
     val genres = load("genres") { Api.genres() }.res?.getOrNull().orEmpty()
     val sources = load("sources") { Api.sources() }.res?.getOrNull().orEmpty()
@@ -306,6 +308,8 @@ fun SearchScreen() {
                 leadingIcon = { Icon(Icons.Rounded.Search, null) },
                 trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Icons.Rounded.Clear, "Xoá") } },
                 singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { history = SearchHistory.add(q) }),
                 shape = RoundedCornerShape(28.dp),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = cs.card, unfocusedContainerColor = cs.card,
@@ -328,11 +332,16 @@ fun SearchScreen() {
             ) { f = f.copy(sources = setOfNotNull(it)) }
         }
         val r = res
+        reqQuery?.let { RequestSheet(it) { reqQuery = null } }
         when {
+            q.isBlank() && f == Filter() -> SearchSuggestions(history, { q = it; history = SearchHistory.add(it) }, { history = SearchHistory.remove(it) }, { history = SearchHistory.clear() })
             r == null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(strokeWidth = 3.dp) }
             r.isFailure -> Empty(friendly(r.exceptionOrNull()))
-            r.getOrThrow().isEmpty() -> Empty("Không tìm thấy truyện nào")
-            else -> LazyColumn(contentPadding = WindowInsets.navigationBars.asPaddingValues()) { items(r.getOrThrow(), key = { it.id }) { NovelRow(it) } }
+            r.getOrThrow().isEmpty() -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Empty(if (q.isBlank()) "Không có truyện phù hợp bộ lọc." else "Không tìm thấy “$q”.")
+                if (q.isNotBlank()) OutlinedButton({ if (Session.user == null) Nav.push(Screen.Login) else reqQuery = q.trim() }) { Text("Yêu cầu tìm truyện này") }
+            }
+            else -> LazyColumn(contentPadding = WindowInsets.navigationBars.asPaddingValues()) { items(r.getOrThrow(), key = { it.id }) { n -> NovelRow(n, onClick = { if (q.isNotBlank()) history = SearchHistory.add(q); Nav.push(Screen.Detail(n.id)) }) } }
         }
     }
 }

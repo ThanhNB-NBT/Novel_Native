@@ -18,6 +18,9 @@ val supabaseUrl = Properties().apply {
 }.getProperty("supabase.url") ?: System.getenv("SUPABASE_URL") ?: env["SUPABASE_URL"].orEmpty()
 // CI (release.yml) lấy từ GitHub Secrets; máy dev đọc .env của Flutter
 val anonKey = System.getenv("SUPABASE_ANON_KEY") ?: env["SUPABASE_ANON_KEY"].orEmpty()
+// Endpoint động (tuỳ chọn): file cấu hình từ xa + danh sách host cho phép; để trống = chỉ dùng SUPABASE_URL
+val endpointConfigUrl = System.getenv("ENDPOINT_CONFIG_URL") ?: env["ENDPOINT_CONFIG_URL"].orEmpty()
+val endpointAllowedHosts = System.getenv("ENDPOINT_ALLOWED_HOSTS") ?: env["ENDPOINT_ALLOWED_HOSTS"].orEmpty()
 // Ký phát hành: CI giải keystore từ secret ra file rồi đặt ANDROID_KEYSTORE_FILE/ANDROID_KEYSTORE_PASSWORD (alias "upload")
 val keystoreFile: String? = System.getenv("ANDROID_KEYSTORE_FILE")
 
@@ -34,6 +37,8 @@ android {
         versionName = findProperty("versionName") as String? ?: "0.2.0"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$anonKey\"")
+        buildConfigField("String", "ENDPOINT_CONFIG_URL", "\"$endpointConfigUrl\"")
+        buildConfigField("String", "ENDPOINT_ALLOWED_HOSTS", "\"$endpointAllowedHosts\"")
     }
 
     signingConfigs {

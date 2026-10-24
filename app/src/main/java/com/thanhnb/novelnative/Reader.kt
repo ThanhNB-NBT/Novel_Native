@@ -192,7 +192,9 @@ fun ReaderScreen(s: Screen.Read) {
     var auto by remember { mutableStateOf(autoCarry.also { autoCarry = false }) }
     var sheet by remember { mutableIntStateOf(0) } // 0 không · 1 mục lục · 2 cài đặt
     var report by remember { mutableStateOf(false) }
+    var reportCtx by remember { mutableStateOf<Pair<String, String>?>(null) } // (từ đang chọn, đoạn chứa nó) nếu báo từ form sửa
     var editing by remember { mutableStateOf<String?>(null) } // đoạn đang sửa bản dịch
+    var hitAt by remember { mutableIntStateOf(-1) } // vị trí ký tự bị nhấn giữ trong đoạn (-1 = không biết)
     var msg by remember { mutableStateOf<String?>(null) }
     var offerPatch by remember { mutableStateOf(false) } // vừa sửa một TÊN RIÊNG → mời "Áp cả truyện" (từ thường không có gì để áp, vá chỉ tổ nhầm)
     LaunchedEffect(msg) { delay(if (offerPatch) 6000 else 2500); msg = null; offerPatch = false }
@@ -353,7 +355,7 @@ fun ReaderScreen(s: Screen.Read) {
                                     }
                                 })
                                 DropdownMenuItem({ Text("Mục lục") }, { menu = false; sheet = 1 })
-                                DropdownMenuItem({ Text("Báo lỗi chương") }, { menu = false; report = true })
+                                DropdownMenuItem({ Text("Báo lỗi chương") }, { menu = false; reportCtx = null; report = true })
                                 DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(s.novelId)) })
                             }
                         }
@@ -384,8 +386,8 @@ fun ReaderScreen(s: Screen.Read) {
                             scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
                         }) { Text("Dịch lại chương") }
                     }
-                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, hl, { editing = it }) {}
-                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go) { editing = it }
+                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, hl, { p, off -> hitAt = off; editing = p }) {}
+                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go) { p, off -> hitAt = off; editing = p }
                 }
             }
         }
@@ -424,10 +426,10 @@ fun ReaderScreen(s: Screen.Read) {
                 val lines = Api.chapterZh(s.novelId, s.index)
                 value = if (lines.size == paras.size) lines.getOrNull(paras.indexOf(p)) else null
             }
-            EditSheet(s.novelId, s.index, p, zh, onDone = { m, isName -> editing = null; offerPatch = isName; msg = m; l.reload() }, onReport = { editing = null; report = true })
+            EditSheet(s.novelId, s.index, p, zh, hitAt, onDone = { m, isName -> editing = null; offerPatch = isName; msg = m; l.reload() }, onReport = { w, para -> editing = null; reportCtx = w to para; report = true })
         }
     }
-    if (report) ReportDialog({ report = false }) { reason ->
+    if (report) ReportDialog(reportCtx, { report = false }) { reason ->
         report = false
         scope.launch {
             runCatching { Api.report(s.novelId, s.index, reason) }.onSuccess { msg = "Đã gửi báo lỗi" }.onFailure { msg = friendly(it) }
@@ -437,7 +439,7 @@ fun ReaderScreen(s: Screen.Read) {
 
 /** Cuộn dọc. Cuộn hết rồi kéo tiếp quá mép → đổi chương (đo khoảng vượt mép lúc nhấc tay). */
 @Composable
-private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, hl: Int, go: (Int) -> Unit, onEdit: (String) -> Unit) {
+private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, hl: Int, go: (Int) -> Unit, onEdit: (String, Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val limit = with(LocalDensity.current) { 72.dp.toPx() }
     var over by remember { mutableFloatStateOf(0f) } // >0 kéo quá đáy · <0 kéo quá đỉnh
@@ -461,12 +463,20 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
             item { Text(c.title, Modifier.padding(st.margin.dp, 24.dp, st.margin.dp, 20.dp), style = title) }
             itemsIndexed(c.paragraphs) { i, p ->
                 // nhấn giữ một đoạn → sửa bản dịch (thay cho bôi chọn chữ của hệ thống)
+                var lay by remember(p) { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                 Text(
                     marked(p, terms),
-                    Modifier.pointerInput(p) { detectTapGestures(onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEdit(p) }) }
+                    Modifier.pointerInput(p) {
+                        // toạ độ chạm tính từ mép ngoài (kể cả lề) → trừ lề để ra vị trí trong chữ
+                        val pad = androidx.compose.ui.geometry.Offset(st.margin.dp.toPx(), (st.size * 0.45f).dp.toPx())
+                        detectTapGestures(onLongPress = { o ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onEdit(p, lay?.getOffsetForPosition(o - pad)?.coerceIn(0, p.length) ?: -1)
+                        })
+                    }
                         .background(if (i == hl) fg.copy(alpha = 0.10f) else Color.Transparent) // đoạn đang được đọc
                         .padding(st.margin.dp, (st.size * 0.45f).dp),
-                    style = body,
+                    onTextLayout = { lay = it }, style = body,
                 )
             }
             item {
@@ -504,7 +514,7 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
 @Composable
 private fun PagedChapter(
     c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets,
-    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, hl: Int, onEdit: (String) -> Unit, tap: () -> Unit,
+    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, hl: Int, onEdit: (String, Int) -> Unit, tap: () -> Unit,
 ) = BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(insets)) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
@@ -590,8 +600,9 @@ private fun PagedChapter(
                             detectTapGestures(onLongPress = { o ->
                                 val off = lay?.getOffsetForPosition(o)?.coerceIn(0, pageText.length) ?: return@detectTapGestures
                                 var acc = 0
-                                val chunk = pageText.split("\n\n").firstOrNull { acc += it.length + 2; off < acc }?.trim().orEmpty()
-                                c.paragraphs.firstOrNull { it.contains(chunk) }?.let(onEdit)
+                                var chunkStart = 0
+                                val chunk = pageText.split("\n\n").firstOrNull { val st0 = acc; acc += it.length + 2; (off < acc).also { hit -> if (hit) chunkStart = st0 } }?.trim().orEmpty()
+                                c.paragraphs.firstOrNull { it.contains(chunk) }?.let { para -> onEdit(para, (para.indexOf(chunk) + off - chunkStart).coerceIn(0, para.length)) }
                             })
                         },
                         onTextLayout = { lay = it }, style = body,
@@ -875,13 +886,42 @@ internal fun Opt(label: String, on: Boolean, set: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun ReportDialog(dismiss: () -> Unit, send: (String) -> Unit) {
-    var reason by remember { mutableStateOf("") }
+private fun ReportDialog(ctx: Pair<String, String>?, dismiss: () -> Unit, send: (String) -> Unit) {
+    val types = listOf("Sai nghĩa", "Xưng hô/giọng", "Chính tả", "Cảm thán/chữ đệm", "Khác")
+    var type by remember { mutableStateOf(types[0]) }
+    var note by remember { mutableStateOf("") }
+    val sel = ctx?.first?.trim().orEmpty()
+    // có từ đang chọn thì ghi kèm ngữ cảnh, không bắt buộc ghi chú; báo cả chương thì phải mô tả
+    val canSend = sel.isNotEmpty() || note.isNotBlank()
     AlertDialog(
         dismiss,
-        confirmButton = { TextButton({ send(reason.trim()) }, enabled = reason.isNotBlank()) { Text("Gửi") } },
+        confirmButton = {
+            TextButton({
+                val head = "[$type]"
+                val body = if (sel.isNotEmpty()) {
+                    val flat = ctx!!.second.replace(Regex("\\s+"), " ").trim()
+                    val excerpt = if (flat.length <= 400) flat else flat.take(400) + "…"
+                    " Chọn: “$sel”. Ngữ cảnh: “$excerpt”. ${note.trim()}"
+                } else " ${note.trim()}"
+                send((head + body).trim())
+            }, enabled = canSend) { Text("Gửi báo lỗi") }
+        },
         dismissButton = { TextButton(dismiss) { Text("Huỷ") } },
-        title = { Text("Báo lỗi chương") },
-        text = { OutlinedTextField(reason, { reason = it }, placeholder = { Text("Sai tên, sót đoạn, lẫn chữ Trung…") }) },
+        title = { Text(if (sel.isNotEmpty()) "Báo lỗi bản dịch" else "Báo lỗi chương") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (sel.isNotEmpty()) Text("Đoạn chọn: “$sel”", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                Text("Loại lỗi", style = MaterialTheme.typography.labelMedium)
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    types.forEach { t -> FilterChip(type == t, { type = t }, { Text(t) }) }
+                }
+                OutlinedTextField(
+                    note, { note = it }, Modifier.fillMaxWidth(), minLines = 2, maxLines = 4,
+                    label = { Text(if (sel.isNotEmpty()) "Ghi chú (không bắt buộc)" else "Mô tả lỗi") },
+                    placeholder = { Text(if (sel.isNotEmpty()) "Không sửa nội dung chương" else "Sai tên, sót đoạn, lẫn chữ Trung…") },
+                )
+            }
+        },
     )
 }

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.HourglassBottom
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsNone
+import androidx.compose.material.icons.rounded.TravelExplore
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -67,8 +68,11 @@ import java.time.Instant
 @Composable
 fun LibraryTab() {
     val uid = Session.user?.id
+    var reqOpen by rememberSaveable { mutableStateOf(false) }
     Column {
+        if (reqOpen) RequestSheet { reqOpen = false }
         PageHeader("Theo dõi · Đang đọc", "Tủ truyện", "藏") {
+            IconButton({ if (uid == null) Nav.push(Screen.Login) else reqOpen = true }) { Icon(Icons.Rounded.TravelExplore, "Yêu cầu truyện mới") }
             IconButton({ Nav.push(Screen.Offline) }) { Icon(Icons.Rounded.DownloadDone, "Bản offline") }
         }
         if (uid == null) return NeedLogin("Đăng nhập để theo dõi truyện và lưu chỗ đang đọc", Icons.AutoMirrored.Rounded.Login)

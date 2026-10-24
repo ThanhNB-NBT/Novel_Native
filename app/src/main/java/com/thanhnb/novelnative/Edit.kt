@@ -28,10 +28,13 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (String, Boolean) -> Unit, onReport: () -> Unit) {
+fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, hit: Int = -1, onDone: (String, Boolean) -> Unit, onReport: (String, String) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
-    var tf by remember { mutableStateOf(TextFieldValue(para)) }
+    // nhấn giữ đúng một từ → chọn sẵn từ đó (cả cụm tên riêng); nhấn chỗ trống thì để người dùng tự bôi
+    var tf by remember {
+        mutableStateOf(TextFieldValue(para, (if (hit >= 0) WordBounds.selectAt(para, hit) else null)?.let { androidx.compose.ui.text.TextRange(it.first, it.second) } ?: androidx.compose.ui.text.TextRange.Zero))
+    }
     var correct by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var ai by remember { mutableStateOf<Suggest?>(null) }
@@ -80,6 +83,11 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (Stri
                 style = MaterialTheme.typography.bodyMedium, color = cs.error, maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             OutlinedTextField(correct, { correct = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Bản sửa") })
+            if (wrong.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // nới vùng chọn từng từ, chỉ vượt khoảng trắng — không nuốt dấu câu
+                Chip("◀ nới trái") { val a = tf.selection.min; val na = WordBounds.extendLeft(para, a); if (na != a) { tf = tf.copy(selection = androidx.compose.ui.text.TextRange(na, tf.selection.max)); correct = "" } }
+                Chip("nới phải ▶") { val b = tf.selection.max; val nb = WordBounds.extendRight(para, b); if (nb != b) { tf = tf.copy(selection = androidx.compose.ui.text.TextRange(tf.selection.min, nb)); correct = "" } }
+            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Chip("Hoa Từng Chữ") { correct = titleCase(correct.ifEmpty { wrong }) }
                 Chip("Hoa chữ đầu") { correct = correct.ifEmpty { wrong }.let { it.take(1).uppercase() + it.drop(1).lowercase() } }
@@ -141,7 +149,7 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, onDone: (Stri
             { run({ "Đã sửa đoạn" }) { Api.editPara(novelId, index, para, tf.text.trim()); false } },
             Modifier.fillMaxWidth(), enabled = paraOk && !busy, border = BorderStroke(1.dp, cs.outlineVariant),
         ) { Text("Lưu cả đoạn") }
-        TextButton(onReport, Modifier.fillMaxWidth()) { Text("Báo lỗi, không sửa chương") }
+        TextButton({ onReport(wrong, para) }, Modifier.fillMaxWidth()) { Text("Báo lỗi, không sửa chương") }
     }
 }
 

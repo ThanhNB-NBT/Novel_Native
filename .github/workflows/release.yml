@@ -33,6 +33,9 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.GTN_SIGN_PASS_Q9M4 }}
           SUPABASE_URL: ${{ secrets.GTN_API_ENDPOINT_R3V8 }}
           SUPABASE_ANON_KEY: ${{ secrets.GTN_API_PUBKEY_W5N1 }}
+          # tuỳ chọn: bỏ trống thì app chỉ dùng SUPABASE_URL (xem Endpoint.kt)
+          ENDPOINT_CONFIG_URL: ${{ secrets.ENDPOINT_CONFIG_URL }}
+          ENDPOINT_ALLOWED_HOSTS: ${{ secrets.ENDPOINT_ALLOWED_HOSTS }}
         run: |
           export ANDROID_KEYSTORE_PASSWORD="$(printf %s "$ANDROID_KEYSTORE_PASSWORD" | tr -d '\r\n')"
           keytool -list -keystore "$ANDROID_KEYSTORE_FILE" -storepass:env ANDROID_KEYSTORE_PASSWORD > /dev/null || { echo "Mật khẩu keystore (secret GTN_SIGN_PASS_Q9M4) không mở được keystore"; exit 1; }

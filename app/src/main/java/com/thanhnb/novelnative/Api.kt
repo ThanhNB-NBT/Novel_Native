@@ -35,6 +35,7 @@ data class Novel(
     val source: String,
     val description: String? = null,
     val curChapter: Int? = null, // chỉ có ở Tủ truyện
+    val facts: List<String> = emptyList(), // số liệu do nguồn Trung công bố (chỉ trang chi tiết)
 )
 
 /** Kết quả gợi ý AI: [thay] = cụm AI xét, [dung] = bản dịch hiện tại đã đúng, [items] = (cách dịch, ý). */
@@ -181,11 +182,12 @@ object Api {
 
     suspend fun raw(method: String, path: String, body: Any? = null, prefer: String? = null, auth: Boolean = true, retry: Boolean = true, headerOut: MutableMap<String, String>? = null): String =
         withContext(Dispatchers.IO) {
+            Endpoint.await()
             if (auth) Session.refresh()
-            val req = okhttp3.Request.Builder().url("${BuildConfig.SUPABASE_URL}/$path")
+            val req = okhttp3.Request.Builder().url("${Endpoint.url}/$path")
                 .method(method, if (method == "GET" || method == "HEAD") null else (body?.toString() ?: "").toRequestBody(JSON))
-                .header("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .header("Authorization", "Bearer ${(if (auth) Session.token else null) ?: BuildConfig.SUPABASE_ANON_KEY}")
+                .header("apikey", Endpoint.anon)
+                .header("Authorization", "Bearer ${(if (auth) Session.token else null) ?: Endpoint.anon}")
                 .apply { prefer?.let { header("Prefer", it) } }
                 .build()
             http.newCall(req).execute().use { resp ->
@@ -223,7 +225,7 @@ object Api {
         val marker = "/storage/v1/object/"
         val at = url?.indexOf(marker) ?: return null
         if (at < 0) return url
-        return "${BuildConfig.SUPABASE_URL.trimEnd('/')}/storage/v1/render/image/${url.substring(at + marker.length)}" +
+        return "${Endpoint.url}/storage/v1/render/image/${url.substring(at + marker.length)}" +
             "?width=$width&resize=contain&quality=70"
     }
 
@@ -249,7 +251,33 @@ object Api {
         genres = j.optJSONArray("genres")?.let { a -> List(a.length()) { a.getString(it) } }.orEmpty(),
         source = sourceLabel(j.optJSONObject("sources")),
         description = j.str("description_vi"),
+        facts = facts(j),
     )
+
+    /** 25930710 → "25,9 triệu" · 32685 → "33 nghìn" · 8500 → "8,5 nghìn" · 215 → "215". */
+    private fun short(v: Double): String {
+        fun f(x: Double, d: Int) = "%.${d}f".format(java.util.Locale.US, x).replace('.', ',')
+        return when {
+            v >= 1_000_000 -> "${f(v / 1_000_000, 1)} triệu"
+            v >= 10_000 -> "${f(v / 1000, 0)} nghìn"
+            v >= 1000 -> "${f(v / 1000, 1)} nghìn"
+            else -> v.toLong().toString()
+        }
+    }
+
+    /** Chỉ hiện dòng nào nguồn thật sự khai (novels.word_count + novels.source_stats, migration 099). */
+    private fun facts(j: JSONObject): List<String> {
+        val st = j.optJSONObject("source_stats")
+        fun num(k: String) = st?.takeIf { it.has(k) && !it.isNull(k) }?.optDouble(k)?.takeIf { !it.isNaN() }
+        return listOfNotNull(
+            if (j.has("word_count") && !j.isNull("word_count")) "${short(j.optDouble("word_count"))} chữ Trung" else null,
+            num("reads")?.let { "${short(it)} lượt đọc" },
+            num("favorites")?.let { "${short(it)} lưu" },
+            num("recommends")?.let { "${short(it)} đề cử" },
+            num("flowers")?.let { "${short(it)} hoa" },
+            st?.optString("updated_at")?.takeIf { it.isNotEmpty() }?.let { "nguồn cập nhật $it" },
+        )
+    }
 
     fun statusLabel(s: String) = when (s) { "ongoing" -> "Đang ra"; "completed" -> "Hoàn thành"; "hiatus" -> "Tạm ngưng"; else -> s }
 

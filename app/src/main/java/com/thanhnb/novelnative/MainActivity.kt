@@ -34,6 +34,9 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.activity.ComponentActivity
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.layout
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -74,6 +77,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        Endpoint.start(kotlinx.coroutines.MainScope())
         AppErrorLog.install()
         Offline.init(this)
         Notify.init(this)
@@ -192,16 +196,17 @@ private fun Tabs() {
         // mờ dần nội dung ở đầu: chữ không chồng lên đồng hồ
         Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp)
             .background(Brush.verticalGradient(0f to bg, .6f to bg.copy(.88f), 1f to Color.Transparent)))
-        Dock(unread, glass, Modifier.align(Alignment.BottomCenter))
+        Dock(unread, glass, { pager.currentPage + pager.currentPageOffsetFraction }, Modifier.align(Alignment.BottomCenter))
     }
 }
 
 /**
- * Dock kính mờ: viên thuốc nổi, nền làm mờ (Haze) + vệt sáng mảnh ở viền. Tab đang chọn nở ra thành viên nhấn
- * có kèm tên (độ rộng chạy theo lò xo, các tab khác co lại chỉ còn icon); chạm thì ô nhún nhẹ.
+ * Dock kính mờ: viên thuốc nổi, nền làm mờ (Haze) + vệt sáng mảnh ở viền. Viên nhấn bám THEO VỊ TRÍ LIÊN TỤC của pager
+ * ([pos] = trang hiện tại + phần lẻ khi đang vuốt): ngón tay kéo tới đâu, viên nhấn trượt/nở/co tới đó, thả tay thì lò xo của pager
+ * kéo nốt — không còn nhảy một phát khi qua nửa màn. Tab ở gần [pos] nở ra kèm tên, các tab khác co lại chỉ còn icon.
  */
 @Composable
-private fun Dock(unread: Int, glass: HazeState, modifier: Modifier) {
+private fun Dock(unread: Int, glass: HazeState, pos: () -> Float, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val dark = cs.background.luminance() < .5f
     val shape = RoundedCornerShape(32.dp)
@@ -220,36 +225,41 @@ private fun Dock(unread: Int, glass: HazeState, modifier: Modifier) {
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        tabs.forEachIndexed { i, t -> DockItem(t, Nav.tab == i, if (i == 2) unread else 0) { Nav.tab = i } }
+        val p = pos()
+        tabs.forEachIndexed { i, t ->
+            // mức "đang chọn" liên tục: 1 khi pager nằm đúng tab i, giảm tuyến tính về 0 khi lệch một trang
+            DockItem(t, (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f), if (i == 2) unread else 0) { Nav.tab = i }
+        }
     }
 }
 
 @Composable
-private fun RowScope.DockItem(t: TabItem, sel: Boolean, badge: Int, onClick: () -> Unit) {
+private fun RowScope.DockItem(t: TabItem, sel: Float, badge: Int, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val dark = cs.background.luminance() < .5f
-    val w by animateFloatAsState(if (sel) 2.15f else 1f, spring(dampingRatio = .78f, stiffness = 260f), label = "w")
-    val fill by animateFloatAsState(if (sel) 1f else 0f, tween(280), label = "fill")
-    val color by animateColorAsState(if (sel) cs.primary else cs.onSurfaceVariant, tween(220), label = "c")
+    val color = androidx.compose.ui.graphics.lerp(cs.onSurfaceVariant, cs.primary, sel)
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .9f else 1f, spring(.55f, 520f), label = "s")
     Box(
-        Modifier.weight(w).fillMaxHeight().graphicsLayer { scaleX = scale; scaleY = scale }
+        Modifier.weight(1f + 1.15f * sel).fillMaxHeight().graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(26.dp))
-            .background(cs.primary.copy(alpha = (if (dark) .26f else .15f) * fill))
+            .background(cs.primary.copy(alpha = (if (dark) .26f else .15f) * sel))
             .clickable(src, null, onClick = onClick),
         Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            BadgedBox({ if (badge > 0 && !sel) Badge { Text("$badge") } }) { Icon(if (sel) t.on else t.off, t.label, Modifier.size(25.dp), color) }
-            AnimatedVisibility(
-                sel,
-                enter = fadeIn(tween(220, 80)) + expandHorizontally(spring(.8f, 300f)),
-                exit = fadeOut(tween(120)) + shrinkHorizontally(spring(.9f, 400f)),
-            ) {
-                Text(t.label, Modifier.padding(start = 7.dp), color = color, fontSize = 13.5.sp, fontFamily = Jakarta, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
+            val on = sel > .5f
+            BadgedBox({ if (badge > 0 && !on) Badge { Text("$badge") } }) { Icon(if (on) t.on else t.off, t.label, Modifier.size(25.dp), color) }
+            // tên tab: bề rộng và độ đậm chạy theo sel — nở dần ra thay vì bật lên
+            Text(
+                t.label,
+                Modifier.padding(start = (7 * sel).dp).layout { m, c ->
+                    val pl = m.measure(c.copy(minWidth = 0, maxWidth = Constraints.Infinity))
+                    layout((pl.width * sel).roundToInt(), pl.height) { pl.placeRelative(0, 0) }
+                }.graphicsLayer { alpha = ((sel - .25f) / .75f).coerceIn(0f, 1f) },
+                color = color, fontSize = 13.5.sp, fontFamily = Jakarta, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
+            )
         }
     }
 }
