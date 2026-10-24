@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
                                     Screen.Search -> SearchScreen()
                                     Screen.Login -> LoginScreen()
                                     Screen.Offline -> OfflineScreen()
+                                    Screen.EditProfile -> EditProfileScreen()
                                 }
                             }
                         }

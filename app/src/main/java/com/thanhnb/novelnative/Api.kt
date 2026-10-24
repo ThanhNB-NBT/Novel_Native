@@ -110,6 +110,9 @@ object Prefs {
 
 data class User(val id: String, val email: String)
 
+/** profiles: tên hiển thị, avatar (emoji), chuỗi ngày đọc. */
+class Profile(val name: String?, val avatar: String?, val streak: Int, val lastRead: String?)
+
 /** Phiên GoTrue (email + mật khẩu) qua REST trần — đủ cho app đọc, khỏi kéo supabase-kt. */
 object Session {
     var user by mutableStateOf<User?>(null)
@@ -453,6 +456,32 @@ object Api {
         val u = uid() ?: return
         delete("reading_progress?user_id=eq.$u&novel_id=eq.$novelId")
         delete("library?user_id=eq.$u&novel_id=eq.$novelId")
+    }
+
+    suspend fun profile(): Profile? {
+        val u = uid() ?: return null
+        return get("profiles?select=display_name,avatar_url,streak,last_read_date&id=eq.$u&limit=1").objs().firstOrNull()?.let {
+            Profile(it.str("display_name"), it.str("avatar_url"), it.optInt("streak"), it.str("last_read_date"))
+        }
+    }
+
+    /** RLS own_profile cho sửa hàng của mình; is_admin bị trigger chặn nên không lo lộ quyền. */
+    suspend fun updateProfile(name: String, avatar: String) {
+        val u = uid() ?: return
+        raw("PATCH", "rest/v1/profiles?id=eq.$u", JSONObject(mapOf("display_name" to name, "avatar_url" to avatar)), prefer = "return=minimal")
+    }
+
+    /** (số truyện đang đọc, tổng chương đã tiến). */
+    suspend fun readStats(): Pair<Int, Int> {
+        val u = uid() ?: return 0 to 0
+        val rows = get("reading_progress?select=chapter_index&user_id=eq.$u").objs()
+        return rows.size to rows.sumOf { it.optInt("chapter_index") }
+    }
+
+    /** Chuỗi "còn sống" = đọc gần nhất là hôm nay/hôm qua; đứt thì 0. */
+    fun liveStreak(p: Profile?): Int {
+        val last = p?.lastRead?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() } ?: return 0
+        return if (p.streak > 0 && ChronoUnit.DAYS.between(last, LocalDate.now()) <= 1) p.streak else 0
     }
 
     suspend fun progress(novelId: Int): Int? {

@@ -189,18 +189,22 @@ fun AccountTab() {
                 }
                 Spacer(Modifier.height(24.dp))
             } else {
-                PaperCard {
+                val prof = load("profile", u.id) { Api.profile() }.res?.getOrNull()
+                val stats = load("stats", u.id) { Api.readStats() }.res?.getOrNull()
+                val name = prof?.name ?: u.email.substringBefore('@')
+                PaperCard(onClick = { Nav.push(Screen.EditProfile) }) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(52.dp).background(cs.primaryContainer, CircleShape), Alignment.Center) {
-                            Text(u.email.take(1).uppercase(), style = MaterialTheme.typography.headlineSmall, color = cs.primary)
-                        }
-                        Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                            Text(u.email.substringBefore('@'), style = MaterialTheme.typography.titleMedium)
+                        Avatar(prof?.avatar, name, 56.dp)
+                        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                            Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(u.email, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("Sửa hồ sơ", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelMedium, color = cs.primary, fontWeight = FontWeight.SemiBold)
                         }
                         OutlinedButton(Session::signOut, border = androidx.compose.foundation.BorderStroke(1.dp, cs.outlineVariant)) { Text("Đăng xuất") }
                     }
                 }
+                Spacer(Modifier.height(10.dp))
+                StatsCard(stats?.first ?: 0, stats?.second ?: 0, Api.liveStreak(prof))
             }
 
             Eyebrow("Giao diện", Modifier.padding(start = 4.dp, top = 28.dp, bottom = 10.dp))
