@@ -1,5 +1,15 @@
 package com.thanhnb.novelnative
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.*
+import androidx.compose.material3.*
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -125,7 +135,7 @@ fun toLunar(d: LocalDate): LunarDate {
 
 private val WEEKDAYS = listOf("Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật")
 
-private fun special(l: LunarDate): String? = when {
+fun special(l: LunarDate): String? = when {
     l.leap -> null
     l.day == 1 && l.month == 1 -> "Tết Nguyên Đán"
     l.day == 15 && l.month == 1 -> "Rằm tháng Giêng"
@@ -144,12 +154,105 @@ fun LunarCard() {
     val l = toLunar(now)
     val sp = special(l)
     val solar = "%s, %02d/%02d/%d".format(WEEKDAYS[now.dayOfWeek.value - 1], now.dayOfMonth, now.monthValue, now.year)
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Lunar) }.padding(vertical = 4.dp)) {
         Text("${l.monthName} năm ${l.yearName} · ngày ${l.day}${if (l.leap) "*" else ""} âm lịch", style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
         Text(
             if (sp == null) solar else "$sp · $solar", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodySmall,
             color = if (sp == null) androidx.compose.ui.graphics.Color.Unspecified else cs.primary,
             fontWeight = if (sp == null) null else FontWeight.SemiBold,
+        )
+    }
+}
+
+
+private fun solarLine(d: LocalDate) = "%s, %02d/%02d/%d".format(WEEKDAYS[d.dayOfWeek.value - 1], d.dayOfMonth, d.monthValue, d.year)
+
+/** Lịch tháng: lưới ngày dương, ngày âm nhỏ dưới mỗi ô; vuốt ngang hoặc mũi tên đổi tháng. */
+@Composable
+fun LunarScreen() {
+    val cs = MaterialTheme.colorScheme
+    val today = remember { LocalDate.now() }
+    var month by remember { mutableStateOf(today.withDayOfMonth(1)) }
+    var sel by remember { mutableStateOf(today) }
+    val lead = month.dayOfWeek.value - 1 // tuần bắt đầu Thứ Hai
+    val days = month.lengthOfMonth()
+    val cells = (lead + days + 6) / 7 * 7
+    var drag by remember { mutableFloatStateOf(0f) }
+    Column(Modifier.fillMaxSize()) {
+        PageHeader("Âm lịch Việt Nam", "Lịch âm", "曆", back = true)
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(onDragEnd = {
+                        if (kotlin.math.abs(drag) > 80f) month = month.plusMonths(if (drag < 0) 1 else -1)
+                        drag = 0f
+                    }) { _, d -> drag += d }
+                },
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton({ month = month.minusMonths(1) }) { Icon(Icons.Rounded.ChevronLeft, "Tháng trước") }
+                Text("Tháng ${month.monthValue}, ${month.year}", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge)
+                IconButton({ month = month.plusMonths(1) }) { Icon(Icons.Rounded.ChevronRight, "Tháng sau") }
+            }
+            if (month.year != today.year || month.month != today.month) TextButton(
+                { month = today.withDayOfMonth(1); sel = today }, Modifier.align(Alignment.CenterHorizontally),
+            ) { Text("Về hôm nay") }
+            Row(Modifier.padding(vertical = 6.dp)) {
+                listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN").forEachIndexed { i, w ->
+                    Text(w, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, color = if (i == 6) cs.error else cs.onSurfaceVariant)
+                }
+            }
+            for (r in 0 until cells / 7) Row {
+                for (c in 0 until 7) {
+                    val i = r * 7 + c
+                    if (i < lead || i >= lead + days) Spacer(Modifier.weight(1f).aspectRatio(.82f))
+                    else DayCell(month.withDayOfMonth(i - lead + 1), today, sel, Modifier.weight(1f)) { sel = it }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            val l = toLunar(sel)
+            val sp = special(l)
+            Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(solarLine(sel), style = MaterialTheme.typography.titleMedium)
+                if (sp != null) Text(sp, style = MaterialTheme.typography.labelLarge, color = cs.primary)
+                LunarRow("Âm lịch", "Ngày ${l.day} ${l.monthName.replaceFirst("Tháng", "tháng")}")
+                LunarRow("Năm", l.yearName)
+                LunarRow("Tháng", l.monthCanChi)
+                LunarRow("Ngày", l.dayCanChi)
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun LunarRow(k: String, v: String) = Row {
+    Text(k, Modifier.width(92.dp), style = MaterialTheme.typography.bodySmall)
+    Text(v, style = MaterialTheme.typography.bodyMedium)
+}
+
+@Composable
+private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Modifier, pick: (LocalDate) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val l = toLunar(d)
+    val isToday = d == today
+    val isSel = d == sel
+    val sunday = d.dayOfWeek.value == 7
+    val mark = l.day == 1 || l.day == 15
+    val lunarText = if (l.day == 1) "${l.day}/${l.month}${if (l.leap) "*" else ""}" else "${l.day}"
+    val fg = if (isToday) cs.onPrimary else if (sunday) cs.error else cs.onSurface
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.aspectRatio(.82f).padding(2.dp).clip(shape)
+            .background(if (isToday) cs.primary else if (isSel) cs.primary.copy(.12f) else androidx.compose.ui.graphics.Color.Transparent)
+            .bounceClick { pick(d) },
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("${d.dayOfMonth}", color = fg, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            lunarText, style = MaterialTheme.typography.labelSmall,
+            color = if (isToday) cs.onPrimary.copy(.85f) else if (mark) cs.primary else cs.onSurfaceVariant,
+            fontWeight = if (mark) FontWeight.Bold else null,
         )
     }
 }

@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
                                     Screen.EditProfile -> EditProfileScreen()
                                     Screen.Queue -> QueueScreen()
                                     Screen.Guide -> GuideScreen()
+                                    Screen.Lunar -> LunarScreen()
                                 }
                             }
                         }
