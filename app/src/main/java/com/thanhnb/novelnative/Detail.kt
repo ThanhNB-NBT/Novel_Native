@@ -118,6 +118,7 @@ fun DetailScreen(id: Int) {
                                 Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
                             }
                         }
+                        OfflineCard(n)
                     }
                     val bm = marks.res?.getOrNull().orEmpty()
                     if (bm.isNotEmpty()) {

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material3.*
@@ -42,7 +43,9 @@ import java.time.Instant
 fun LibraryTab() {
     val uid = Session.user?.id
     Column {
-        PageHeader("Theo dõi · Đang đọc", "Tủ truyện", "藏")
+        PageHeader("Theo dõi · Đang đọc", "Tủ truyện", "藏") {
+            IconButton({ Nav.push(Screen.Offline) }) { Icon(Icons.Rounded.DownloadDone, "Bản offline") }
+        }
         if (uid == null) return NeedLogin("Đăng nhập để theo dõi truyện và lưu chỗ đang đọc", Icons.AutoMirrored.Rounded.Login)
         val l = load("library", uid) { Api.library() }
         val scope = rememberCoroutineScope()

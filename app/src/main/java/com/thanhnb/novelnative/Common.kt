@@ -49,6 +49,7 @@ sealed interface Screen {
     data class More(val section: Section) : Screen
     data object Search : Screen
     data object Login : Screen
+    data object Offline : Screen
 }
 
 // ponytail: ngăn xếp màn hình bằng state, thêm navigation-compose khi cần deep link

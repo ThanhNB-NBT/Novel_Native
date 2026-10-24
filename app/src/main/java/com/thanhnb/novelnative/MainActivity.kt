@@ -61,6 +61,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        Offline.init(this)
         Session.load()
         Nav.tab = if (Session.user != null) 0 else 1 // chưa đăng nhập → mở Khám phá
         enableEdgeToEdge()
@@ -101,6 +102,7 @@ class MainActivity : ComponentActivity() {
                                     is Screen.More -> MoreScreen(s.section)
                                     Screen.Search -> SearchScreen()
                                     Screen.Login -> LoginScreen()
+                                    Screen.Offline -> OfflineScreen()
                                 }
                             }
                         }

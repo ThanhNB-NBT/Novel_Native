@@ -165,7 +165,9 @@ fun GlossaryScreen(novelId: Int) {
                         repeat(12) { // job vá chạy <2s nhưng có thể chờ hàng đợi: hỏi lại tới khi xong
                             delay(1500)
                             patch.reload()
-                            if (runCatching { Api.latestPatch(novelId) }.getOrNull()?.status.let { it == "done" || it == "failed" }) return@act
+                            val st = runCatching { Api.latestPatch(novelId) }.getOrNull()?.status
+                            if (st == "done" && Offline.has(novelId)) Offline.start(novelId) // kéo các chương vừa vá về bản offline
+                            if (st == "done" || st == "failed") return@act
                         }
                     }
                 }) { Text(if (withWrong == 0) "Vẫn vá" else "Vá $withWrong từ") }

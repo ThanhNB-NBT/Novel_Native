@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -228,7 +229,7 @@ object Api {
         }
     }
 
-    private fun novel(j: JSONObject) = Novel(
+    fun novel(j: JSONObject) = Novel(
         id = j.getInt("id"),
         title = j.str("title_vi") ?: j.str("title_zh").orEmpty(),
         author = j.str("author_vi") ?: j.str("author_zh").orEmpty(),
@@ -296,10 +297,17 @@ object Api {
 
     // ---------- Truyện + chương ----------
 
-    suspend fun novel(id: Int): Novel = novel(get("novels?select=*,sources(name,label)&id=eq.$id").getJSONObject(0))
+    // Lỗi mạng (IOException) → bản offline nếu có; lỗi server (ApiError) vẫn báo như cũ.
+    suspend fun novel(id: Int): Novel = novel(
+        try { get("novels?select=*,sources(name,label)&id=eq.$id").getJSONObject(0) } catch (e: IOException) { Offline.novelJson(id) ?: throw e },
+    )
 
     /** Mục lục đủ hết, kéo theo trang vượt trần 1000 dòng/query của PostgREST. */
-    suspend fun toc(novelId: Int): List<ChapterRef> {
+    suspend fun toc(novelId: Int): List<ChapterRef> = try { tocOnline(novelId) } catch (e: IOException) {
+        Offline.toc(novelId).ifEmpty { throw e }
+    }
+
+    private suspend fun tocOnline(novelId: Int): List<ChapterRef> {
         val all = mutableListOf<ChapterRef>()
         while (true) {
             val page = get(
@@ -314,9 +322,16 @@ object Api {
         }
     }
 
-    suspend fun chapter(novelId: Int, index: Int): Chapter? =
-        get("chapters?select=chapter_index,title_vi,content_vi,translation_status&novel_id=eq.$novelId&chapter_index=eq.$index&limit=1")
-            .objs().firstOrNull()?.let {
+    suspend fun chapter(novelId: Int, index: Int): Chapter? {
+        val row = try {
+            get("chapters?select=chapter_index,title_vi,content_vi,translation_status,updated_at&novel_id=eq.$novelId&chapter_index=eq.$index&limit=1")
+                .objs().firstOrNull()
+                // truyện đã tải: chương vừa đọc online (có thể đã sửa/vá) đè xuống bản offline
+                ?.also { if (it.optString("translation_status") == "done" && Offline.has(novelId)) Offline.save(novelId, listOf(it)) }
+        } catch (e: IOException) {
+            Offline.chapter(novelId, index) ?: throw e
+        }
+        return row?.let {
                 Chapter(
                     index = index,
                     title = it.str("title_vi")?.trimStart('#', ' ')?.trim()?.ifEmpty { null } ?: "Chương $index",
@@ -324,6 +339,7 @@ object Api {
                     paragraphs = it.str("content_vi").orEmpty().split('\n').map(String::trim).filter(String::isNotEmpty),
                 )
             }
+    }
 
     /** Mở đọc = tín hiệu đọc thật → crawler tải mục lục đầy đủ cho truyện "lười". No-op nếu đã có. */
     suspend fun requestToc(novelId: Int) = rpc("request_toc", "p_novel_id" to novelId)
@@ -435,11 +451,17 @@ object Api {
 
     suspend fun progress(novelId: Int): Int? {
         val u = uid() ?: return null
-        return get("reading_progress?select=chapter_index&novel_id=eq.$novelId&user_id=eq.$u&limit=1").objs().firstOrNull()?.getInt("chapter_index")
+        return try {
+            get("reading_progress?select=chapter_index&novel_id=eq.$novelId&user_id=eq.$u&limit=1").objs().firstOrNull()?.getInt("chapter_index")
+                ?.also { Prefs.sp.edit().putInt("last_$novelId", it).apply() }
+        } catch (e: IOException) {
+            Prefs.sp.getInt("last_$novelId", 0).takeIf { it > 0 } ?: throw e // đọc offline vẫn nhớ chương đang đọc
+        }
     }
 
     suspend fun saveProgress(novelId: Int, index: Int) {
         val u = uid() ?: return
+        Prefs.sp.edit().putInt("last_$novelId", index).apply()
         insert(
             "reading_progress",
             mapOf("user_id" to u, "novel_id" to novelId, "chapter_index" to index, "updated_at" to Instant.now().toString()),
