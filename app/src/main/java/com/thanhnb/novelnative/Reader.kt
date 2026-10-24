@@ -722,25 +722,11 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
             }
         }
 
-        // một hàng duy nhất: font có chân trước, không chân sau (không cần thanh chuyển loại)
+        // hai hàng có nhãn: font có chân / không chân (mỗi hàng tự cuộn tới font đang chọn)
         SheetLabel("Phông chữ")
-        // mở sheet là font đang chọn đã nằm trong tầm nhìn
-        androidx.compose.foundation.lazy.LazyRow(
-            state = rememberLazyListState(readerFonts.indexOfFirst { it.key == st.font }.coerceAtLeast(0)),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(readerFonts) { f ->
-                val on = st.font == f.key
-                Text(
-                    f.name,
-                    Modifier.height(36.dp).clip(RoundedCornerShape(18.dp))
-                        .background(if (on) cs.primary.copy(alpha = 0.10f) else Color.Transparent)
-                        .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(18.dp))
-                        .clickable { st.font = f.key }.wrapContentHeight().padding(horizontal = 14.dp),
-                    fontFamily = f.family, fontSize = 14.sp, color = if (on) cs.primary else cs.onSurface,
-                )
-            }
-        }
+        FontRow("Có chân", readerFonts.filter { it.serif }, st)
+        Spacer(Modifier.height(10.dp))
+        FontRow("Không chân", readerFonts.filter { !it.serif }, st)
 
         SheetLabel("Bố cục")
         SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f) { st.size = it }
@@ -753,6 +739,29 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
             Tile("Căn đều", Icons.Rounded.FormatAlignJustify, st.justify, Modifier.weight(1f)) { st.justify = it }
             Tile("Gạch thuật ngữ", Icons.Rounded.FormatUnderlined, st.gloss, Modifier.weight(1f)) { st.gloss = it }
             Tile("Phím âm lượng", Icons.AutoMirrored.Rounded.VolumeUp, st.volume, Modifier.weight(1f)) { st.volume = it }
+        }
+    }
+}
+
+/** Một hàng font có nhãn nhỏ phía trên; hàng tự cuộn để font đang chọn (nếu thuộc hàng này) hiện ra. */
+@Composable
+private fun FontRow(label: String, fonts: List<RFont>, st: Style) {
+    val cs = MaterialTheme.colorScheme
+    Text(label, Modifier.padding(start = 2.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+    androidx.compose.foundation.lazy.LazyRow(
+        state = rememberLazyListState(fonts.indexOfFirst { it.key == st.font }.coerceAtLeast(0)),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(fonts) { f ->
+            val on = st.font == f.key
+            Text(
+                f.name,
+                Modifier.height(36.dp).clip(RoundedCornerShape(18.dp))
+                    .background(if (on) cs.primary.copy(alpha = 0.10f) else Color.Transparent)
+                    .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(18.dp))
+                    .clickable { st.font = f.key }.wrapContentHeight().padding(horizontal = 14.dp),
+                fontFamily = f.family, fontSize = 14.sp, color = if (on) cs.primary else cs.onSurface,
+            )
         }
     }
 }
