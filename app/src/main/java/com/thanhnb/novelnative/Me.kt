@@ -195,32 +195,47 @@ fun AccountTab() {
             } else {
                 val prof = load("profile", u.id) { Api.profile() }.res?.getOrNull()
                 val stats = load("stats", u.id) { Api.readStats() }.res?.getOrNull()
-                ProfileCard(prof?.name ?: u.email.substringBefore('@'), u.email, prof?.avatar)
-                StatsCard(stats?.first ?: 0, stats?.second ?: 0, Api.liveStreak(prof))
-            }
-            LunarCard()
-
-            SectionLabel("Giao diện")
-            PaperCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(cs.onSurface.copy(.06f)).padding(4.dp)) {
-                        listOf("Hệ thống", "Sáng", "Tối").forEachIndexed { i, label ->
-                            val on = Prefs.themeMode == i
-                            Box(
-                                Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (on) cs.primary else Color.Transparent)
-                                    .bounceClick { Prefs.setTheme(i) }.padding(vertical = 10.dp),
-                                Alignment.Center,
-                            ) { Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+                // một thẻ duy nhất: hồ sơ · số liệu · lịch âm
+                PaperCard {
+                    Row(Modifier.bounceClick { Nav.push(Screen.EditProfile) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val nm = prof?.name ?: u.email.substringBefore('@')
+                        Avatar(prof?.avatar, nm, 52.dp)
+                        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                            Text(nm, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(u.email, Modifier.padding(top = 2.dp), style = monoStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                        IconButton(Session::signOut) { Icon(Icons.AutoMirrored.Rounded.Logout, "Đăng xuất", tint = cs.onSurfaceVariant) }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        accents.forEachIndexed { i, a -> Dot(a.name, a.accent, Prefs.accent == i, cs.primary) { Prefs.pickAccent(i) } }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        papers.forEachIndexed { i, p -> Dot(p.name, p.bg, Prefs.paper == i, cs.primary, ring = p.ink.copy(.25f)) { Prefs.pickPaper(i) } }
-                    }
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.5f))
+                    StatsCard(stats?.first ?: 0, stats?.second ?: 0, Api.liveStreak(prof))
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.5f))
+                    Box(Modifier.padding(16.dp, 12.dp)) { LunarCard() }
                 }
             }
+
+            SectionLabel("Giao diện")
+            SettingGroup(
+                { PrefRow("Chế độ") {
+                    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(cs.onSurface.copy(.07f)).padding(3.dp)) {
+                        listOf("Tự động", "Sáng", "Tối").forEachIndexed { i, label ->
+                            val on = Prefs.themeMode == i
+                            Box(Modifier.clip(RoundedCornerShape(9.dp)).background(if (on) cs.primary else Color.Transparent).bounceClick { Prefs.setTheme(i) }.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                                Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                } },
+                { PrefRow("Màu nhấn") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        accents.forEachIndexed { i, a -> Dot(a.accent, Prefs.accent == i, cs.primary) { Prefs.pickAccent(i) } }
+                    }
+                } },
+                { PrefRow("Màu nền") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        papers.forEachIndexed { i, p -> Dot(p.bg, Prefs.paper == i, cs.primary, ring = p.ink.copy(.25f)) { Prefs.pickPaper(i) } }
+                    }
+                } },
+            )
 
             if (u != null) {
                 SectionLabel("Thư viện")
@@ -253,20 +268,6 @@ fun AccountTab() {
     }
 }
 
-/** Hồ sơ: avatar + tên + email + đăng xuất, nằm thẳng trên nền, không khung. */
-@Composable
-private fun ProfileCard(name: String, email: String, avatar: String?) {
-    val cs = MaterialTheme.colorScheme
-    Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Avatar(avatar, name, 56.dp)
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(name, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(email, Modifier.padding(top = 2.dp), style = monoStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(Session::signOut) { Icon(Icons.AutoMirrored.Rounded.Logout, "Đăng xuất", tint = cs.onSurfaceVariant) }
-    }
-}
-
 @Composable
 fun SectionLabel(text: String) =
     Text(text, Modifier.padding(start = 8.dp, top = 26.dp, bottom = 10.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -295,13 +296,18 @@ fun SettingTile(icon: ImageVector, label: String, subtitle: String?, onClick: ()
     }
 }
 
-/** Chấm chọn màu: tròn đặc + tên; đang chọn thì có vòng viền ngoài. */
+/** Một dòng cài đặt: nhãn bên trái, bộ chọn bên phải. */
 @Composable
-private fun Dot(name: String, fill: Color, on: Boolean, sel: Color, ring: Color = Color.Transparent, onClick: () -> Unit) {
-    Column(Modifier.bounceClick(onClick = onClick).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(44.dp).border(2.dp, if (on) sel else Color.Transparent, CircleShape).padding(4.dp).background(fill, CircleShape).border(1.dp, ring, CircleShape))
-        Text(name, Modifier.padding(top = 4.dp), fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+private fun PrefRow(label: String, control: @Composable () -> Unit) =
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        control()
     }
+
+/** Chấm chọn màu nhỏ; đang chọn thì có vòng viền ngoài. */
+@Composable
+private fun Dot(fill: Color, on: Boolean, sel: Color, ring: Color = Color.Transparent, onClick: () -> Unit) {
+    Box(Modifier.size(30.dp).border(2.dp, if (on) sel else Color.Transparent, CircleShape).padding(3.dp).background(fill, CircleShape).border(1.dp, ring, CircleShape).bounceClick(onClick = onClick))
 }
 
 @Composable
