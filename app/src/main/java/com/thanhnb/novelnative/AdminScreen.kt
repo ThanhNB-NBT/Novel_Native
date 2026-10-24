@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -131,9 +133,29 @@ fun Pulse(beats: List<JSONObject>, name: String, label: String) {
         Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(shape).background(color.copy(.09f)).padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(16.dp).background(color.copy(.22f), CircleShape), Alignment.Center) { Box(Modifier.size(8.dp).background(color, CircleShape)) }
+        HeartDot(color, alive)
         Text(label, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.titleSmall)
         Text(text, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, color = if (alive) cs.onSurfaceVariant else cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
+    }
+}
+
+/** Chấm nhịp tim: còn sống thì đập hai nhịp (lub-dub) và phát vòng sóng lan ra rồi mờ; treo/tắt thì đỏ đứng yên. */
+@Composable
+private fun HeartDot(color: Color, alive: Boolean) {
+    val t = rememberInfiniteTransition(label = "heart")
+    val ring by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearOutSlowInEasing)), label = "ring")
+    val beat by t.animateFloat(
+        1f, 1f,
+        infiniteRepeatable(keyframes {
+            durationMillis = 1800
+            1f at 0; 1.35f at 120; 1f at 260; 1.22f at 380; 1f at 520; 1f at 1800
+        }),
+        label = "beat",
+    )
+    Box(Modifier.size(24.dp), Alignment.Center) {
+        if (alive) Box(Modifier.size(24.dp).graphicsLayer { scaleX = .45f + ring * .55f; scaleY = scaleX; alpha = (1f - ring) * .5f }.background(color, CircleShape))
+        Box(Modifier.size(16.dp).background(color.copy(.22f), CircleShape))
+        Box(Modifier.size(8.dp).graphicsLayer { if (alive) { scaleX = beat; scaleY = beat } }.background(color, CircleShape))
     }
 }
 
