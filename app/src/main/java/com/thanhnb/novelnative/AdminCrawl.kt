@@ -83,7 +83,7 @@ fun CrawlTab() {
     AdminPane(Loader(Result.success(Unit)) { pulse.reload(); beats.reload(); settings.reload(); sources.reload(); fresh.reload() }) {
         item {
             val p = pulse.res?.getOrNull()
-            fun v(k: String) = p?.get(k)?.let { fmtK(it) } ?: "—"
+            fun v(k: String) = p?.get(k)?.let { fmtK(it) } ?: "…"
             val failedCh = p?.get("failedChapters") ?: 0
             Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 StatRow(

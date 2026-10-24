@@ -109,7 +109,7 @@ fun NovelsTab() {
                     )
                     Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("Tất cả" to counts?.first, "Hiển thị" to counts?.second, "Đã ẩn" to counts?.third).forEachIndexed { i, (label, c) ->
-                            FilterChip(filter == i, { filter = i }, { Text("$label (${c?.let { fmtK(it) } ?: "…"})") })
+                            FilterChip(filter == i, { filter = i }, { Text(if (c == null) label else "$label (${fmtK(c)})") })
                         }
                     }
                 }

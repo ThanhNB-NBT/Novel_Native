@@ -81,7 +81,9 @@ fun ConfirmDialog(act: Act?, close: () -> Unit, after: () -> Unit = {}) {
 fun StatRow(vararg cells: Triple<String, String, Color?>, modifier: Modifier = Modifier) = Row(modifier.fillMaxWidth().padding(vertical = 8.dp)) {
     cells.forEach { (v, label, c) ->
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(v, style = monoStyle(22, c ?: MaterialTheme.colorScheme.onSurface), fontWeight = FontWeight.Bold)
+            // "…" = đang tải → khối nhấp nháy thay cho số
+            if (v == "…") Box(Modifier.padding(vertical = 4.dp).size(44.dp, 22.dp).shimmer(6.dp))
+            else Text(v, style = monoStyle(22, c ?: MaterialTheme.colorScheme.onSurface), fontWeight = FontWeight.Bold)
             Text(label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
         }
     }
