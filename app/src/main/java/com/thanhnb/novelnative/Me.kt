@@ -73,15 +73,10 @@ fun LibraryTab() {
         var confirm by remember { mutableStateOf<Novel?>(null) }
         Loaded(l) { novels ->
             PullToRefreshBox(false, l.reload) {
-                // chia nhóm theo trạng thái; mỗi truyện một dòng phẳng: bìa nhỏ, tên, chương/tổng, vạch tiến độ
-                val reading = novels.filter { it.curChapter != null }
-                val fresh = novels.filter { it.curChapter == null }
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = DockSpace)) {
+                // danh sách phẳng: bìa nhỏ, tên, chương/tổng, vạch tiến độ
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = DockSpace)) {
                     if (novels.isEmpty()) item { Empty("Tủ truyện trống — bấm Theo dõi ở trang truyện, hoặc đọc một chương là truyện tự vào đây.") }
-                    if (reading.isNotEmpty()) item { ShelfLabel("Đang đọc", reading.size) }
-                    items(reading, key = { it.id }) { n -> ShelfRow(n) { confirm = n } }
-                    if (fresh.isNotEmpty()) item { ShelfLabel("Chưa đọc", fresh.size) }
-                    items(fresh, key = { it.id }) { n -> ShelfRow(n) { confirm = n } }
+                    items(novels, key = { it.id }) { n -> ShelfRow(n) { confirm = n } }
                 }
             }
         }
@@ -355,13 +350,6 @@ fun LoginScreen() {
     }
 }
 
-
-@Composable
-private fun ShelfLabel(text: String, count: Int) =
-    Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        Text("$count", style = monoStyle(12))
-    }
 
 /** Một dòng trên kệ: chạm → trang truyện; ⋮ → đọc tiếp / thông tin / xoá. */
 @Composable
