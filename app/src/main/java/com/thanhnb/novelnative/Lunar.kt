@@ -31,6 +31,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.geometry.Offset
@@ -100,6 +101,19 @@ private fun sunLongitude(jdn: Int): Int {
     return floor(l / PI * 6).toInt()
 }
 
+/** Chỉ số nửa-cung (mỗi bước 15° kinh độ Mặt Trời, 0 = Xuân phân) tại 0h ngày [jdn] — dùng cho tiết khí. */
+internal fun sunTerm15(jdn: Int): Int {
+    val t = (jdn - 0.5 - TZ / 24 - 2451545.0) / 36525
+    val t2 = t * t
+    val m = 357.52910 + 35999.05030 * t - 0.0001559 * t2 - 0.00000048 * t * t2
+    val l0 = 280.46645 + 36000.76983 * t + 0.0003032 * t2
+    var dl = (1.914600 - 0.004817 * t - 0.000014 * t2) * sin(DR * m)
+    dl += (0.019993 - 0.000101 * t) * sin(DR * 2 * m) + 0.000290 * sin(DR * 3 * m)
+    var l = (l0 + dl) * DR
+    l -= PI * 2 * floor(l / (PI * 2))
+    return floor(l / PI * 12).toInt()
+}
+
 private fun lunarMonth11(yy: Int): Int {
     val off = jdFromDate(31, 12, yy) - 2415021
     val k = floor(off / 29.530588853).toInt()
@@ -167,6 +181,8 @@ fun special(l: LunarDate): String? = when {
 private const val SYNODIC = 29.53
 private val MOON_LIT = Color(0xFFFFE2A0)
 private val FULL_DOT = Color(0xFFE5A91A)
+private val GOOD_GREEN = Color(0xFF1F9D63)
+private val TERM_TEAL = Color(0xFF14A3A3)
 
 /** Tên pha trăng theo ngày âm (1 = trăng non, 15 = trăng tròn). */
 private fun moonName(d: Int) = when (d) {
@@ -222,7 +238,7 @@ fun LunarCard() {
     val cs = MaterialTheme.colorScheme
     val now = LocalDate.now()
     val l = toLunar(now)
-    val sp = special(l)
+    val ev = events(now, l)
     Row(Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Lunar) }, verticalAlignment = Alignment.CenterVertically) {
         DateTile(now, Modifier.size(64.dp))
         Column(Modifier.weight(1f).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -230,8 +246,8 @@ fun LunarCard() {
                 "${l.day} ${l.monthName.replaceFirst("Tháng", "tháng")} âm lịch",
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Text("Năm ${l.yearName} · ngày ${l.dayCanChi}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (sp != null) EventPill(sp)
+            Text("Năm ${l.yearName} · ngày ${l.dayCanChi}${if (isGoodDay(l)) " · hoàng đạo" else ""}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            ev.firstOrNull()?.let { EventPill(it.name) }
         }
         MoonPhase(l.day, 40.dp)
     }
@@ -331,35 +347,134 @@ fun LunarScreen() {
                 }
             }
 
-            DayDetail(sel)
+            Legend()
+            DayDetail(sel, today)
             Spacer(Modifier.height(32.dp))
         }
     }
 }
 
-/** Chi tiết ngày đang chọn: ngày âm to + trăng, ba ô Can Chi (năm / tháng / ngày). */
+/** Chi tiết ngày đang chọn: ngày âm + trăng, dịp lễ, Can Chi + nạp âm, tiết khí, giờ hoàng đạo. */
 @Composable
-private fun DayDetail(d: LocalDate) {
+private fun DayDetail(d: LocalDate, today: LocalDate) {
     val cs = MaterialTheme.colorScheme
     val l = toLunar(d)
-    val sp = special(l)
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-                Text(
-                    "Ngày ${l.day} ${l.monthName.replaceFirst("Tháng", "tháng")}", style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold, color = cs.onSurface,
-                )
-                Text("${moonName(l.day)} · năm ${l.yearName}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                if (sp != null) EventPill(sp)
+    val ev = events(d, l)
+    val good = isGoodDay(l)
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                    Text(
+                        "Ngày ${l.day} ${l.monthName.replaceFirst("Tháng", "tháng")}", style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold, color = cs.onSurface,
+                    )
+                    Text("${moonName(l.day)} · năm ${l.yearName}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+                MoonPhase(l.day, 64.dp)
             }
-            MoonPhase(l.day, 64.dp)
+            // hoàng đạo / hắc đạo + các dịp lễ
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Tag(if (good) "Ngày hoàng đạo" else "Ngày hắc đạo", if (good) GOOD_GREEN else cs.onSurfaceVariant, solid = good)
+                ev.forEach { Tag(it.name, if (it.lunar) cs.primary else FULL_DOT) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                CanChiTile("Năm", l.yearName, Modifier.weight(1f))
+                CanChiTile("Tháng", l.monthCanChi, Modifier.weight(1f))
+                CanChiTile("Ngày", l.dayCanChi, Modifier.weight(1f))
+            }
+            NapAmRow(l)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            CanChiTile("Năm", l.yearName, Modifier.weight(1f))
-            CanChiTile("Tháng", l.monthCanChi, Modifier.weight(1f))
-            CanChiTile("Ngày", l.dayCanChi, Modifier.weight(1f))
+        TermCard(d)
+        HoursCard(l, isToday = d == today)
+    }
+}
+
+@Composable
+private fun Tag(text: String, color: Color, solid: Boolean = false) {
+    Text(
+        text, Modifier.clip(RoundedCornerShape(50)).background(if (solid) color else color.copy(alpha = .12f)).padding(horizontal = 12.dp, vertical = 5.dp),
+        style = MaterialTheme.typography.labelMedium, color = if (solid) Color.White else color, fontWeight = FontWeight.SemiBold, maxLines = 1,
+    )
+}
+
+/** Màu theo ngũ hành của nạp âm. */
+private fun elementColor(e: String) = when (e) {
+    "kim" -> Color(0xFFB8941F)
+    "mộc" -> Color(0xFF2E9D5B)
+    "thủy" -> Color(0xFF2F7BE0)
+    "hỏa" -> Color(0xFFE5532D)
+    else -> Color(0xFF9A6B3F) // thổ
+}
+
+@Composable
+private fun NapAmRow(l: LunarDate) {
+    val cs = MaterialTheme.colorScheme
+    val e = napAmElement(l)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).background(elementColor(e), CircleShape))
+        Text("Nạp âm", Modifier.padding(start = 10.dp).width(64.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        Text(napAm(l).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text("Hành ${e.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelMedium, color = elementColor(e), fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Tiết khí: tiết đang diễn ra, thanh tiến độ tới tiết kế tiếp (số ngày còn lại). */
+@Composable
+private fun TermCard(d: LocalDate) {
+    val cs = MaterialTheme.colorScheme
+    val t = remember(d) { solarTerm(d) }
+    val daysIn = java.time.temporal.ChronoUnit.DAYS.between(t.start, d).toInt()
+    val left = java.time.temporal.ChronoUnit.DAYS.between(d, t.next).toInt()
+    fun fmt(x: LocalDate) = "%02d/%02d".format(x.dayOfMonth, x.monthValue)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Eyebrow("Tiết khí")
+                Text(t.name, Modifier.padding(top = 2.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    if (daysIn == 0) "Bắt đầu từ hôm nay (${fmt(t.start)})" else "Từ ${fmt(t.start)} · đã qua $daysIn ngày",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(t.nextName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.primary)
+                Text("${fmt(t.next)} · còn $left ngày", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(cs.primary.copy(alpha = .12f))) {
+            Box(Modifier.fillMaxWidth(t.progress(d).coerceAtLeast(.04f)).fillMaxHeight().clip(RoundedCornerShape(50)).background(cs.primary))
+        }
+    }
+}
+
+/** 12 canh giờ: giờ hoàng đạo tô nhấn, giờ hiện tại (nếu xem hôm nay) có viền. */
+@Composable
+private fun HoursCard(l: LunarDate, isToday: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    val good = remember(l.jd) { goodHours(l) }
+    val nowIdx = if (isToday) ((java.time.LocalTime.now().hour + 1) / 2) % 12 else -1
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Eyebrow("Giờ hoàng đạo", Modifier.weight(1f))
+            Text("${good.size} giờ tốt", style = MaterialTheme.typography.labelMedium, color = GOOD_GREEN, fontWeight = FontWeight.SemiBold)
+        }
+        for (row in 0 until 2) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (c in 0 until 6) {
+                val i = row * 6 + c
+                val g = i in good
+                val shape = RoundedCornerShape(14.dp)
+                Column(
+                    Modifier.weight(1f).clip(shape).background(if (g) GOOD_GREEN.copy(alpha = .14f) else Color.Transparent)
+                        .border(if (i == nowIdx) 1.8.dp else 1.dp, if (i == nowIdx) cs.primary else if (g) GOOD_GREEN.copy(alpha = .35f) else cs.outlineVariant.copy(alpha = .6f), shape)
+                        .padding(vertical = 9.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(HOURS[i].first, style = MaterialTheme.typography.titleSmall, fontWeight = if (g) FontWeight.ExtraBold else FontWeight.Medium, color = if (g) GOOD_GREEN else cs.onSurfaceVariant)
+                    Text(HOURS[i].second, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                }
+            }
         }
     }
 }
@@ -377,6 +492,20 @@ private fun CanChiTile(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
+private fun Legend() {
+    val cs = MaterialTheme.colorScheme
+    @Composable fun item(mark: @Composable () -> Unit, text: String) = Row(verticalAlignment = Alignment.CenterVertically) {
+        mark(); Text(text, Modifier.padding(start = 5.dp), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        item({ Box(Modifier.size(6.dp).border(1.2.dp, cs.primary, CircleShape)) }, "Mùng 1")
+        item({ Box(Modifier.size(6.dp).background(FULL_DOT, CircleShape)) }, "Rằm")
+        item({ Box(Modifier.size(6.dp).background(TERM_TEAL, CircleShape)) }, "Tiết khí")
+        item({ Box(Modifier.size(6.dp).background(GOOD_GREEN, CircleShape)) }, "Hoàng đạo")
+    }
+}
+
+@Composable
 private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Modifier, pick: (LocalDate) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val l = toLunar(d)
@@ -384,30 +513,38 @@ private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Mo
     val isSel = d == sel
     val sunday = d.dayOfWeek.value == 7
     val mark = l.day == 1 || l.day == 15
+    val term = remember(d) { termStartingOn(d) != null }
+    val good = isGoodDay(l)
+    val holiday = remember(d) { events(d, l).any { !(it.name == "Mùng 1" || it.name == "Ngày Rằm") } }
     val lunarText = if (l.day == 1) "${l.day}/${l.month}${if (l.leap) "*" else ""}" else "${l.day}"
-    val fg = if (isToday) cs.onPrimary else if (sunday) cs.error else cs.onSurface
+    val fg = if (isToday) cs.onPrimary else if (sunday || holiday) cs.error else cs.onSurface
     val shape = RoundedCornerShape(16.dp)
-    Column(
+    Box(
         modifier.aspectRatio(.82f).padding(2.dp).clip(shape)
             .background(if (isToday) cs.primary else if (isSel) cs.primary.copy(.12f) else Color.Transparent)
             .then(if (isSel && !isToday) Modifier.border(1.5.dp, cs.primary, shape) else Modifier)
             .bounceClick { pick(d) },
-        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+        contentAlignment = Alignment.Center,
     ) {
-        Text("${d.dayOfMonth}", color = fg, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // mùng 1 = vòng rỗng (trăng non), rằm = chấm đặc (trăng tròn)
-            if (mark) Box(
-                Modifier.padding(end = 3.dp).size(5.dp).then(
-                    if (l.day == 15) Modifier.background(if (isToday) cs.onPrimary else FULL_DOT, CircleShape)
-                    else Modifier.border(1.2.dp, if (isToday) cs.onPrimary else cs.primary, CircleShape),
-                ),
-            )
-            Text(
-                lunarText, style = MaterialTheme.typography.labelSmall,
-                color = if (isToday) cs.onPrimary.copy(.85f) else if (mark) cs.primary else cs.onSurfaceVariant,
-                fontWeight = if (mark) FontWeight.Bold else null,
-            )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("${d.dayOfMonth}", color = fg, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // mùng 1 = vòng rỗng (trăng non), rằm = chấm đặc (trăng tròn)
+                if (mark) Box(
+                    Modifier.padding(end = 3.dp).size(5.dp).then(
+                        if (l.day == 15) Modifier.background(if (isToday) cs.onPrimary else FULL_DOT, CircleShape)
+                        else Modifier.border(1.2.dp, if (isToday) cs.onPrimary else cs.primary, CircleShape),
+                    ),
+                )
+                Text(
+                    lunarText, style = MaterialTheme.typography.labelSmall,
+                    color = if (isToday) cs.onPrimary.copy(.85f) else if (mark) cs.primary else cs.onSurfaceVariant,
+                    fontWeight = if (mark) FontWeight.Bold else null,
+                )
+            }
         }
+        // góc trên phải: tiết khí; góc dưới: dải xanh mảnh cho ngày hoàng đạo
+        if (term) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(6.dp).background(if (isToday) cs.onPrimary else TERM_TEAL, CircleShape))
+        if (good) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).width(14.dp).height(2.5.dp).background(if (isToday) cs.onPrimary.copy(.8f) else GOOD_GREEN, RoundedCornerShape(50)))
     }
 }
