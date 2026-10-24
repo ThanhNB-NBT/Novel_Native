@@ -722,11 +722,14 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
             }
         }
 
-        // hai hàng có nhãn: font có chân / không chân (mỗi hàng tự cuộn tới font đang chọn)
-        SheetLabel("Phông chữ")
-        FontRow("Có chân", readerFonts.filter { it.serif }, st)
-        Spacer(Modifier.height(10.dp))
-        FontRow("Không chân", readerFonts.filter { !it.serif }, st)
+        // thanh chọn loại cùng rộng với thanh "Màu nền"; hàng font bên dưới lọc theo loại
+        val serif = st.rfont.serif
+        SheetLabel("Phông chữ") {
+            Seg(listOf("Có chân", "Không chân"), if (serif) 0 else 1, Modifier.width(216.dp)) {
+                if ((it == 0) != serif) st.font = readerFonts.first { f -> f.serif == (it == 0) }.key
+            }
+        }
+        FontRow(readerFonts.filter { it.serif == serif }, st)
 
         SheetLabel("Bố cục")
         SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f) { st.size = it }
@@ -743,13 +746,12 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
     }
 }
 
-/** Một hàng font có nhãn nhỏ phía trên; hàng tự cuộn để font đang chọn (nếu thuộc hàng này) hiện ra. */
+/** Hàng font vuốt ngang; mở sheet hoặc đổi loại thì cuộn tới font đang chọn. */
 @Composable
-private fun FontRow(label: String, fonts: List<RFont>, st: Style) {
+private fun FontRow(fonts: List<RFont>, st: Style) {
     val cs = MaterialTheme.colorScheme
-    Text(label, Modifier.padding(start = 2.dp, bottom = 6.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
     androidx.compose.foundation.lazy.LazyRow(
-        state = rememberLazyListState(fonts.indexOfFirst { it.key == st.font }.coerceAtLeast(0)),
+        state = androidx.compose.runtime.key(fonts.first().serif) { rememberLazyListState(fonts.indexOfFirst { it.key == st.font }.coerceAtLeast(0)) },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(fonts) { f ->
