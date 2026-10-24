@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.automirrored.rounded.Logout
@@ -42,12 +43,15 @@ import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -71,12 +75,27 @@ fun LibraryTab() {
         val l = load("library", uid) { Api.library() }
         val scope = rememberCoroutineScope()
         var confirm by remember { mutableStateOf<Novel?>(null) }
+        var grid by rememberSaveable { mutableStateOf(true) }
         Loaded(l) { novels ->
+            val hero = novels.firstOrNull { it.curChapter != null }
+            val shown = novels.filter { it.id != hero?.id }
             PullToRefreshBox(false, l.reload) {
-                // danh sách phẳng: bìa nhỏ, tên, chương/tổng, vạch tiến độ
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = DockSpace)) {
-                    if (novels.isEmpty()) item { Empty("Tủ truyện trống — bấm Theo dõi ở trang truyện, hoặc đọc một chương là truyện tự vào đây.") }
-                    items(novels, key = { it.id }) { n -> ShelfRow(n) { confirm = n } }
+                if (novels.isEmpty()) LazyColumn(Modifier.fillMaxSize()) { item { Empty("Tủ truyện trống — bấm Theo dõi ở trang truyện, hoặc đọc một chương là truyện tự vào đây.") } }
+                else LazyVerticalGrid(
+                    GridCells.Fixed(if (grid) 3 else 1), Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = DockSpace),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 20.dp else 4.dp),
+                ) {
+                    if (hero != null) item(span = { GridItemSpan(maxLineSpan) }) { ContinueCard(hero) }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("${novels.size} truyện", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            IconButton({ grid = !grid }, Modifier.size(36.dp)) {
+                                Icon(if (grid) Icons.Rounded.ViewList else Icons.Rounded.GridView, if (grid) "Dạng danh sách" else "Dạng lưới", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    items(shown, key = { it.id }) { n -> if (grid) ShelfTile(n) { confirm = n } else ShelfRow(n) { confirm = n } }
                 }
             }
         }
@@ -190,6 +209,8 @@ fun AccountTab() {
             }
 
             SectionLabel("Giao diện")
+            var colorSheet by rememberSaveable { mutableStateOf(false) }
+            if (colorSheet) ColorSheet { colorSheet = false }
             SettingGroup(
                 { PrefRow("Chế độ") {
                     Row(Modifier.clip(RoundedCornerShape(12.dp)).background(cs.onSurface.copy(.07f)).padding(3.dp)) {
@@ -201,16 +222,18 @@ fun AccountTab() {
                         }
                     }
                 } },
-                { PrefRow("Màu nhấn") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        accents.forEachIndexed { i, a -> Dot(a.accent, Prefs.accent == i, cs.primary) { Prefs.pickAccent(i) } }
+                {
+                    Row(Modifier.fillMaxWidth().clickable { colorSheet = true }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Bảng màu", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        Box(Modifier.size(18.dp).background(accents.getOrElse(Prefs.accent) { accents[0] }.accent, CircleShape))
+                        Box(Modifier.padding(start = 6.dp).size(18.dp).background(papers.getOrElse(Prefs.paper) { papers[0] }.bg, CircleShape).border(1.dp, cs.outline, CircleShape))
+                        Text(
+                            presets.firstOrNull { it.second == Prefs.accent && it.third == Prefs.paper }?.first ?: "Tuỳ chỉnh",
+                            Modifier.padding(start = 10.dp), color = cs.onSurfaceVariant, fontSize = 13.sp,
+                        )
+                        Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
                     }
-                } },
-                { PrefRow("Màu nền") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        papers.forEachIndexed { i, p -> Dot(p.bg, Prefs.paper == i, cs.primary, ring = p.ink.copy(.25f)) { Prefs.pickPaper(i) } }
-                    }
-                } },
+                },
                 inset = 16.dp,
             )
 
@@ -285,6 +308,62 @@ private fun PrefRow(label: String, control: @Composable () -> Unit) =
         control()
     }
 
+/** Bảng chọn màu đầy đủ: bộ màu hệ điều hành ở trên, màu nhấn và màu nền lẻ ở dưới. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun ColorSheet(dismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    ModalBottomSheet(dismiss) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            accentGroups.forEach { (group, names) ->
+                Text(group, style = MaterialTheme.typography.titleMedium)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    names.forEach { name ->
+                        val i = accents.indexOfFirst { it.name == name }
+                        if (i < 0) return@forEach
+                        val a = accents[i]
+                        val on = Prefs.accent == i
+                        Column(
+                            Modifier.width(104.dp).clip(RoundedCornerShape(16.dp)).background(if (on) cs.surface else cs.onSurface.copy(.04f))
+                                .border(if (on) 2.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, RoundedCornerShape(16.dp))
+                                .bounceClick { Prefs.pickAccent(i) }.padding(vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+                                (listOf(a.accent) + a.extra).forEach { Box(Modifier.size(20.dp).background(it, CircleShape).border(1.5.dp, cs.surface, CircleShape)) }
+                            }
+                            Text(a.name.removePrefix("$group ").removePrefix("iOS ").ifEmpty { a.name }, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1)
+                        }
+                    }
+                }
+            }
+            Text("Bộ màu hệ điều hành", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                presets.forEach { (name, ai, pi) ->
+                    val on = Prefs.accent == ai && Prefs.paper == pi
+                    Row(
+                        Modifier.clip(CircleShape).background(if (on) cs.primary.copy(.14f) else cs.onSurface.copy(.06f))
+                            .border(1.5.dp, if (on) cs.primary else Color.Transparent, CircleShape)
+                            .bounceClick { Prefs.pickAccent(ai); Prefs.pickPaper(pi) }.padding(start = 8.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(18.dp).background(accents[ai].accent, CircleShape).border(2.dp, papers[pi].bg, CircleShape))
+                        Text(name, Modifier.padding(start = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            Text("Màu nhấn", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                accents.forEachIndexed { i, a -> Dot(a.accent, Prefs.accent == i, cs.primary) { Prefs.pickAccent(i) } }
+            }
+            Text("Màu nền", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.titleMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                papers.forEachIndexed { i, p -> Dot(p.bg, Prefs.paper == i, cs.primary, ring = p.ink.copy(.25f)) { Prefs.pickPaper(i) } }
+            }
+        }
+    }
+}
+
 /** Chấm chọn màu nhỏ; đang chọn thì có vòng viền ngoài. */
 @Composable
 private fun Dot(fill: Color, on: Boolean, sel: Color, ring: Color = Color.Transparent, onClick: () -> Unit) {
@@ -351,6 +430,76 @@ fun LoginScreen() {
 }
 
 
+private fun pct(n: Novel) = ((n.curChapter ?: 0) * 100 / n.chaptersSource.coerceAtLeast(1)).coerceIn(0, 100)
+
+@Composable
+private fun ShelfMenu(show: Boolean, dismiss: () -> Unit, n: Novel, remove: () -> Unit) {
+    val cur = n.curChapter
+    DropdownMenu(show, dismiss) {
+        DropdownMenuItem({ Text(if (cur == null) "Đọc từ chương 1" else "Đọc tiếp chương $cur") }, { dismiss(); Nav.push(Screen.Read(n.id, n.title, cur ?: 1)) })
+        DropdownMenuItem({ Text("Thông tin truyện") }, { dismiss(); Nav.push(Screen.Detail(n.id)) })
+        DropdownMenuItem({ Text("Xoá khỏi tủ") }, { dismiss(); remove() })
+    }
+}
+
+/** Thẻ lớn "Đọc tiếp" cho truyện vừa đọc dở gần nhất. */
+@Composable
+private fun ContinueCard(n: Novel) {
+    val cs = MaterialTheme.colorScheme
+    val cur = n.curChapter ?: 1
+    val dark = cs.background.luminance() < .5f
+    // màn sáng: khối màu nhấn đậm + chữ trắng để nổi như màn tối; màn tối: thẻ giấy tối
+    val fg = if (dark) cs.onSurface else Color.White
+    val sub = if (dark) cs.onSurfaceVariant else Color.White.copy(.82f)
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp).shadow(if (dark) 0.dp else 10.dp, RoundedCornerShape(22.dp), ambientColor = cs.primary.copy(.5f), spotColor = cs.secondary.copy(.55f))
+            .clip(RoundedCornerShape(22.dp))
+            .then(if (dark) Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(22.dp)) else Modifier)
+            .background(if (dark) Brush.linearGradient(listOf(cs.surface, cs.surface)) else Brush.linearGradient(listOf(cs.primary, androidx.compose.ui.graphics.lerp(cs.primary, Color.Black, .42f))))
+            .bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Cover(n.cover, 84.dp, 118.dp, label = n.title)
+        Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("TIẾP TỤC ĐỌC", style = MaterialTheme.typography.labelSmall, color = cs.tertiary, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
+            Text(n.title, style = MaterialTheme.typography.titleMedium, color = fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("Chương $cur/${n.chaptersSource}" + if (pct(n) > 0) " · ${pct(n)}%" else "", style = monoStyle(12, sub))
+            LinearProgressIndicator(
+                { (cur.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(.03f, 1f) },
+                Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
+                color = cs.tertiary, trackColor = if (dark) cs.onSurface.copy(.1f) else Color.White.copy(.28f), gapSize = 0.dp, drawStopIndicator = {},
+            )
+        }
+        Box(
+            Modifier.padding(start = 8.dp).size(52.dp).clip(CircleShape).background(if (dark) cs.primary else Color.White)
+                .bounceClick { Nav.push(Screen.Read(n.id, n.title, cur)) },
+            Alignment.Center,
+        ) { Icon(Icons.Rounded.PlayArrow, "Đọc tiếp", Modifier.size(30.dp), if (dark) cs.onPrimary else cs.primary) }
+    }
+}
+
+/** Ô bìa trong lưới 3 cột: huy hiệu %, vạch tiến độ đè chân bìa; chạm → trang truyện, giữ → menu. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ShelfTile(n: Novel, remove: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var menu by remember { mutableStateOf(false) }
+    Column(Modifier.combinedClickable(onClick = { Nav.push(Screen.Detail(n.id)) }, onLongClick = { menu = true })) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val w = maxWidth
+            Cover(n.cover, w, w * 1.45f, label = n.title)
+            ShelfMenu(menu, { menu = false }, n, remove)
+        }
+        if (n.curChapter != null) LinearProgressIndicator(
+            { (n.curChapter.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(.03f, 1f) },
+            Modifier.padding(top = 8.dp).fillMaxWidth().height(3.dp).clip(CircleShape),
+            color = cs.secondary, trackColor = cs.onSurface.copy(.1f), gapSize = 0.dp, drawStopIndicator = {},
+        ) else Spacer(Modifier.height(11.dp))
+        Text(n.title, Modifier.padding(top = 6.dp), fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
+        Text(if (n.curChapter != null) "Ch. ${n.curChapter}" + if (pct(n) > 0) " · ${pct(n)}%" else "" else "${n.chaptersSource} chương", Modifier.padding(top = 2.dp), style = monoStyle(11))
+    }
+}
+
 /** Một dòng trên kệ: chạm → trang truyện; ⋮ → đọc tiếp / thông tin / xoá. */
 @Composable
 private fun ShelfRow(n: Novel, remove: () -> Unit) {
@@ -358,7 +507,7 @@ private fun ShelfRow(n: Novel, remove: () -> Unit) {
     val cur = n.curChapter
     var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(start = 20.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+        Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Cover(n.cover, 48.dp, 67.dp, label = n.title, flat = true)
@@ -375,11 +524,7 @@ private fun ShelfRow(n: Novel, remove: () -> Unit) {
         }
         Box {
             IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = cs.onSurfaceVariant) }
-            DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem({ Text(if (cur == null) "Đọc từ chương 1" else "Đọc tiếp chương $cur") }, { menu = false; Nav.push(Screen.Read(n.id, n.title, cur ?: 1)) })
-                DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
-                DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; remove() })
-            }
+            ShelfMenu(menu, { menu = false }, n, remove)
         }
     }
 }

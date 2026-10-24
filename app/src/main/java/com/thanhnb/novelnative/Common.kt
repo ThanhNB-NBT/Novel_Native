@@ -34,8 +34,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -133,24 +136,45 @@ fun Bar(title: String, actions: @Composable RowScope.() -> Unit = {}) = TopAppBa
  * nút lùi + tên 22sp, bỏ nhãn phụ để nhường chỗ cho nội dung.
  */
 @Composable
-fun PageHeader(eyebrow: String, title: String, seal: String, back: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) =
-    Row(
-        Modifier.statusBarsPadding().padding(start = if (back) 4.dp else 20.dp, top = if (back) 8.dp else 24.dp, end = 8.dp, bottom = if (back) 4.dp else 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+fun PageHeader(eyebrow: String, title: String, seal: String, back: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) {
+    val cs = MaterialTheme.colorScheme
+    val dark = cs.background.luminance() < .5f
+    // tab chính: nền chuyển sắc theo màu nhấn + chữ Hán chìm bên phải; trang con giữ gọn một dòng
+    Box(
+        Modifier.fillMaxWidth().clipToBounds()
+            .then(if (back) Modifier else Modifier.background(Brush.linearGradient(listOf(cs.primary.copy(if (dark) .16f else .20f), cs.secondary.copy(if (dark) .03f else .10f), Color.Transparent), start = Offset.Zero, end = Offset(900f, 700f)))),
     ) {
-        if (back) IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại") }
-        Column(Modifier.weight(1f)) {
-            if (!back && eyebrow.isNotEmpty()) Text(eyebrow, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontFamily = Jakarta, fontWeight = if (back) FontWeight.Bold else FontWeight.ExtraBold,
-                    fontSize = if (back) 22.sp else 32.sp, letterSpacing = if (back) (-0.4).sp else (-0.8).sp,
-                ),
-            )
+        // tan dần về màu nền ở đáy, không để lại mép cắt
+        if (!back) Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to Color.Transparent, 1f to cs.background)))
+        if (!back && seal.isNotEmpty()) Text(
+            seal, Modifier.align(Alignment.BottomEnd).offset(x = 14.dp, y = 10.dp),
+            color = if (dark) cs.primary.copy(.07f) else cs.secondary.copy(.14f), fontSize = 104.sp, fontWeight = FontWeight.Bold, lineHeight = 104.sp,
+        )
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().padding(start = if (back) 4.dp else 20.dp, top = if (back) 8.dp else 16.dp, end = if (back) 8.dp else 16.dp, bottom = if (back) 4.dp else 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (back) IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại") }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (!back && eyebrow.isNotEmpty()) Row(
+                    Modifier.clip(CircleShape).background(cs.primary.copy(.12f)).padding(start = 8.dp, end = 11.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(6.dp).background(cs.secondary, CircleShape))
+                    Text(eyebrow, Modifier.padding(start = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = cs.primary, maxLines = 1)
+                }
+                Text(
+                    title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontFamily = Jakarta, fontWeight = if (back) FontWeight.Bold else FontWeight.ExtraBold,
+                        fontSize = if (back) 22.sp else 34.sp, letterSpacing = if (back) (-0.4).sp else (-0.9).sp,
+                    ),
+                )
+            }
+            if (back) actions() else Row(Modifier.clip(CircleShape).background(cs.surface.copy(.85f)), verticalAlignment = Alignment.CenterVertically, content = actions)
         }
-        actions()
     }
+}
 
 /** Dấu triện son, hơi lệch như đóng tay. */
 @Composable
@@ -196,7 +220,7 @@ fun Cover(url: String?, w: Dp, h: Dp, modifier: Modifier = Modifier, label: Stri
     val shape = RoundedCornerShape(8.dp)
     val dark = cs.background.luminance() < .5f
     Box(
-        modifier.size(w, h).then(if (flat) Modifier else Modifier.shadow(4.dp, shape, ambientColor = Color.Black.copy(.3f), spotColor = Color.Black.copy(.3f)))
+        modifier.size(w, h).then(if (flat) Modifier else Modifier.shadow(if (dark) 4.dp else 9.dp, shape, ambientColor = Color.Black.copy(if (dark) .3f else .45f), spotColor = Color.Black.copy(if (dark) .3f else .45f)))
             .clip(shape).border(1.dp, cs.outlineVariant.copy(alpha = .7f), shape),
         Alignment.Center,
     ) {

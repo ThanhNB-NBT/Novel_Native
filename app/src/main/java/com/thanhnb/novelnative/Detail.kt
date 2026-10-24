@@ -27,12 +27,16 @@ import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -91,14 +95,19 @@ fun DetailScreen(id: Int) {
                     Brush.verticalGradient(listOf((amb ?: Color.Transparent).copy(alpha = if (dark) .16f else .2f), Color.Transparent), endY = 2200f),
                 ),
             ) {
-                Header(n)
-                TabRow(tab, containerColor = Color.Transparent, contentColor = cs.primary, divider = { HorizontalDivider(color = cs.outlineVariant) }) {
+                Header(n, amb?.copy(alpha = (if (dark) .16f else .2f) * .65f)?.compositeOver(cs.background) ?: cs.background)
+                // nội dung hai tab là pager: vuốt ngang theo tay, chạm tab thì lò xo trượt; gạch chân chạy theo currentPage
+                val pager = rememberPagerState(tab) { 2 }
+                LaunchedEffect(tab) { if (pager.targetPage != tab) pager.animateScrollToPage(tab, animationSpec = spring(dampingRatio = .9f, stiffness = 300f)) }
+                LaunchedEffect(pager) { snapshotFlow { pager.targetPage }.collect { tab = it } }
+                TabRow(pager.currentPage, containerColor = Color.Transparent, contentColor = cs.primary, divider = { HorizontalDivider(color = cs.outlineVariant) }) {
                     listOf("Giới thiệu", "Danh sách chương").forEachIndexed { i, t ->
                         Tab(tab == i, { tab = i }, text = { Text(t, style = MaterialTheme.typography.titleMedium, color = if (tab == i) cs.primary else cs.onSurfaceVariant) })
                     }
                 }
                 val bottom = PaddingValues(bottom = 96.dp)
-                if (tab == 0) LazyColumn(Modifier.weight(1f), contentPadding = bottom) {
+                HorizontalPager(pager, Modifier.weight(1f), key = { it }) { page ->
+                if (page == 0) LazyColumn(Modifier.fillMaxSize(), contentPadding = bottom) {
                     item {
                         if (n.genres.isNotEmpty()) FlowRow(Modifier.padding(20.dp, 16.dp, 20.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             n.genres.forEach {
@@ -157,7 +166,7 @@ fun DetailScreen(id: Int) {
                             }
                         }
                     }
-                } else LazyColumn(Modifier.weight(1f), contentPadding = bottom) {
+                } else LazyColumn(Modifier.fillMaxSize(), contentPadding = bottom) {
                     item {
                         Row(Modifier.padding(20.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (selecting) {
@@ -215,6 +224,7 @@ fun DetailScreen(id: Int) {
                         }
                         HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.6f))
                     }
+                }
                 }
             }
             // hai nút nổi ở đáy như bản Flutter
@@ -324,13 +334,13 @@ private fun TranslateDialog(translated: Int, source: Int, dismiss: () -> Unit, s
 /** Đầu trang: bìa phóng to + mờ, phủ tối pha màu nhấn, tan vào nền giấy; bìa nét + tên chữ trắng. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Header(n: Novel) {
+private fun Header(n: Novel, tail: Color) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.clipToBounds()) {
         AsyncImage(Api.thumb(n.cover, 400), null, Modifier.matchParentSize().blur(10.dp), contentScale = ContentScale.Crop)
         Box(
             Modifier.matchParentSize().background(
-                Brush.verticalGradient(0f to Color.Black.copy(.45f), .55f to lerp(Color.Black, cs.primary, .35f).copy(.55f), 1f to cs.background),
+                Brush.verticalGradient(0f to Color.Black.copy(.45f), .55f to lerp(Color.Black, cs.primary, .35f).copy(.55f), 1f to tail),
             ),
         )
         Column(Modifier.statusBarsPadding()) {

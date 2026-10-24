@@ -11,6 +11,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +37,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -99,21 +106,31 @@ private fun HeroCarousel(items: List<Novel>) {
     val cs = MaterialTheme.colorScheme
     val bg = cs.background
     Column {
-        HorizontalPager(pager, Modifier.fillMaxWidth().height(400.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())) { page ->
+        HorizontalPager(
+            pager, Modifier.fillMaxWidth().height(400.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
+            flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = spring(dampingRatio = .8f, stiffness = Spring.StiffnessLow)),
+        ) { page ->
             val n = items[page]
             val delta = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
-            Box(Modifier.fillMaxSize().bounceClick { open(n) }) {
-                // giảm bão hoà để bìa rực (hồng, cam) không nhuộm cả trang
+            Box(Modifier.fillMaxSize().clipToBounds().bounceClick { open(n) }) {
+                // giảm bão hoà để bìa rực (hồng, cam) không nhuộm cả trang; đáy mờ dần thành trong suốt → luôn liền với nền trang
+                Box(
+                    Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+                        drawContent()
+                        drawRect(Brush.verticalGradient(0f to Color.Black, .62f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+                    },
+                ) {
                 AsyncImage(
-                    Api.thumb(n.cover, 300), null, Modifier.fillMaxSize().blur(16.dp), contentScale = ContentScale.Crop,
+                    Api.thumb(n.cover, 300), null, Modifier.fillMaxSize().graphicsLayer { scaleX = 1.3f; scaleY = 1.3f; translationX = delta * size.width * .12f }.blur(16.dp), contentScale = ContentScale.Crop,
                     colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(.4f) }),
                 )
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to bg.copy(.78f), 0.3f to bg.copy(.25f), 0.72f to bg.copy(.86f), 1f to bg)))
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to bg.copy(.78f), 0.3f to bg.copy(.25f), 0.62f to bg.copy(.8f), 1f to bg.copy(.8f))))
+                }
                 Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 78.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Cover(
                         n.cover, 132.dp, 185.dp, label = n.title, flat = true,
                         modifier = Modifier
-                            .graphicsLayer { translationX = delta * 70.dp.toPx(); val s = 1 - .12f * delta.absoluteValue; scaleX = s; scaleY = s }
+                            .graphicsLayer { translationX = delta * 90.dp.toPx(); val s = 1 - .16f * delta.absoluteValue; scaleX = s; scaleY = s; rotationY = delta * -28f; cameraDistance = 14f * density; alpha = 1f - .4f * delta.absoluteValue }
                             .shadow(24.dp, RoundedCornerShape(10.dp), ambientColor = cs.primary, spotColor = cs.primary),
                     )
                     Spacer(Modifier.weight(1f))
@@ -139,9 +156,10 @@ private fun HeroCarousel(items: List<Novel>) {
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.align(Alignment.CenterHorizontally), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // chấm chạy liên tục theo vị trí vuốt (không nhảy bậc): chấm gần trang hiện tại dãn dài và đổi màu dần
             repeat(items.size) { i ->
-                val on = i == pager.currentPage
-                Box(Modifier.height(6.dp).width(if (on) 22.dp else 6.dp).clip(CircleShape).background(if (on) cs.primary else cs.outlineVariant))
+                val near = (1f - ((pager.currentPage + pager.currentPageOffsetFraction) - i).absoluteValue).coerceIn(0f, 1f)
+                Box(Modifier.height(6.dp).width((6 + 16 * near).dp).clip(CircleShape).background(androidx.compose.ui.graphics.lerp(cs.outlineVariant, cs.primary, near)))
             }
         }
     }

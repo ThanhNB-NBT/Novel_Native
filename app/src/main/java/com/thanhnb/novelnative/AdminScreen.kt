@@ -1,5 +1,6 @@
 package com.thanhnb.novelnative
 
+import androidx.compose.ui.graphics.luminance
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -48,8 +49,8 @@ fun ago(iso: String?): String {
 /** 12345 → 12.345 */
 fun fmtK(n: Number): String = "%,d".format(n.toLong()).replace(',', '.')
 
-/** Màu "sống" (nhịp tim, nguồn bật) — tertiary của theme là xanh lá. */
-val ColorScheme.live get() = tertiary
+/** Màu "sống" (nhịp tim, nguồn bật) — cố định xanh lá, không theo bộ màu (tertiary giờ có thể là vàng). */
+val ColorScheme.live get() = if (background.luminance() < .5f) androidx.compose.ui.graphics.Color(0xFF3DBE76) else androidx.compose.ui.graphics.Color(0xFF27864D)
 
 /** Việc ghi dữ liệu thật: luôn qua hộp thoại xác nhận trước khi [run]. [run] trả câu báo thành công. */
 class Act(val title: String, val text: String, val yes: String, val danger: Boolean = false, val run: suspend () -> String)

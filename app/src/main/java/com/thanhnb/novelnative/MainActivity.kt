@@ -56,6 +56,9 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -159,24 +162,26 @@ private fun Tabs() {
     val glass = rememberHazeState()
     Box(Modifier.fillMaxSize()) {
         // Nội dung tràn xuống dưới dock; mỗi tab tự chừa DockSpace ở cuối danh sách. hazeSource = nguồn để dock kính làm mờ.
-        AnimatedContent(
-            Nav.tab,
-            Modifier.fillMaxSize().hazeSource(glass),
-            transitionSpec = {
-                val dir = if (targetState > initialState) 1 else -1
-                (fadeIn(tween(220, delayMillis = 60)) + slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { dir * it / 10 }) togetherWith
-                    (fadeOut(tween(120)) + slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -dir * it / 10 })
-            },
-            label = "tab",
+        // Vuốt ngang đổi tab theo ngón tay; chạm dock thì lò xo trượt tới tab đó. Nav.tab là nguồn chung của dock.
+        val pager = rememberPagerState(Nav.tab) { tabs.size }
+        LaunchedEffect(Nav.tab) { if (pager.targetPage != Nav.tab) pager.animateScrollToPage(Nav.tab, animationSpec = spring(dampingRatio = .9f, stiffness = 300f)) }
+        LaunchedEffect(pager) { snapshotFlow { pager.targetPage }.collect { Nav.tab = it } }
+        HorizontalPager(
+            pager, Modifier.fillMaxSize().hazeSource(glass), key = { it },
+            flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = spring(dampingRatio = .85f, stiffness = 320f)),
         ) { tab ->
-            holder.SaveableStateProvider("tab$tab") {
+            Box(Modifier.fillMaxSize().graphicsLayer {
+                // trang đang rời đi mờ + co nhẹ: cảm giác chiều sâu thay vì hai tấm phẳng trượt qua nhau
+                val d = ((pager.currentPage - tab) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f).let { kotlin.math.abs(it) }
+                alpha = 1f - .35f * d; val s = 1f - .04f * d; scaleX = s; scaleY = s
+            }) { holder.SaveableStateProvider("tab$tab") {
                 when (tab) {
                     0 -> LibraryTab()
                     1 -> ExploreTab()
                     2 -> NotifTab()
                     else -> AccountTab()
                 }
-            }
+            } }
         }
         val bg = MaterialTheme.colorScheme.background
         // mờ dần nội dung ở đầu: chữ không chồng lên đồng hồ
