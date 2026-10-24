@@ -337,25 +337,12 @@ private fun Header(n: Novel) {
                     Text(n.author, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(.85f))
                 }
             }
-            FlowRow(Modifier.padding(20.dp, 16.dp, 20.dp, 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                HeroChip(Icons.AutoMirrored.Rounded.MenuBook, "${n.chaptersSource} chương")
-                HeroChip(Icons.Rounded.Translate, "${n.chaptersTranslated} đã dịch")
-                HeroChip(if (n.status == "completed") Icons.Rounded.CheckCircle else Icons.Rounded.EditNote, Api.statusLabel(n.status))
-                if (n.source.isNotEmpty()) HeroChip(Icons.Rounded.Public, n.source)
-            }
+            Text(
+                listOf("${n.chaptersSource} chương", "${n.chaptersTranslated} đã dịch", Api.statusLabel(n.status), n.source).filter(String::isNotEmpty).joinToString(" · "),
+                Modifier.padding(20.dp, 16.dp), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(.9f),
+            )
         }
     }
-}
-
-@Composable
-private fun HeroChip(icon: ImageVector, label: String) = Row(
-    Modifier.background(Color.White.copy(.14f), RoundedCornerShape(10.dp)).border(1.dp, Color.White.copy(.18f), RoundedCornerShape(10.dp))
-        .padding(horizontal = 10.dp, vertical = 6.dp),
-    verticalAlignment = Alignment.CenterVertically,
-) {
-    Icon(icon, null, Modifier.size(14.dp), Color.White.copy(.85f))
-    Spacer(Modifier.width(6.dp))
-    Text(label, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
 }
 
 @Composable
