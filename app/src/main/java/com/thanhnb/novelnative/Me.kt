@@ -65,7 +65,7 @@ fun LibraryTab() {
                         val cur = n.curChapter
                         val total = n.chaptersSource.coerceAtLeast(1)
                         // danh sách phẳng, không khung: bìa + thông tin, tiến độ nằm ngay trong dòng
-                        Column(Modifier.bounceClick { cur?.let { Nav.push(Screen.Read(n.id, n.title, it)) } ?: Nav.push(Screen.Detail(n.id)) }.padding(start = 20.dp, top = 10.dp, bottom = 10.dp)) {
+                        Column(Modifier.bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(start = 20.dp, top = 10.dp, bottom = 10.dp)) {
                         Row {
                             Cover(n.cover, 76.dp, 103.dp, label = n.title)
                             Column(Modifier.weight(1f).heightIn(min = 103.dp).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -92,11 +92,17 @@ fun LibraryTab() {
                                 } else Text("Đang theo dõi · ${n.chaptersSource} chương", style = monoStyle(12, MaterialTheme.colorScheme.primary))
                             }
                             var menu by remember { mutableStateOf(false) }
-                            Box {
-                                IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                DropdownMenu(menu, { menu = false }) {
-                                    DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
-                                    DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
+                            // cột phải: menu ⋮ phía trên, nút Đọc tiếp phía dưới (một chạm vào thẳng chương đang dở)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box {
+                                    IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Tuỳ chọn", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    DropdownMenu(menu, { menu = false }) {
+                                        DropdownMenuItem({ Text("Thông tin truyện") }, { menu = false; Nav.push(Screen.Detail(n.id)) })
+                                        DropdownMenuItem({ Text("Xoá khỏi tủ") }, { menu = false; confirm = n })
+                                    }
+                                }
+                                FilledTonalIconButton({ Nav.push(Screen.Read(n.id, n.title, cur ?: 1)) }) {
+                                    Icon(Icons.AutoMirrored.Rounded.MenuBook, if (cur == null) "Đọc từ chương 1" else "Đọc tiếp chương $cur")
                                 }
                             }
                         }

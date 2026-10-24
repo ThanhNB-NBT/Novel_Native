@@ -128,19 +128,25 @@ fun Bar(title: String, actions: @Composable RowScope.() -> Unit = {}) = TopAppBa
     actions = actions,
 )
 
-/** Tiêu đề trang kiểu Flutter: nhãn phụ in hoa giãn chữ màu son + tên trang chữ có chân + dấu triện. */
+/**
+ * Tiêu đề trang. Tab chính: nhãn phụ nhỏ + tên trang lớn. Trang con (back = true): gọn một dòng,
+ * nút lùi + tên 22sp, bỏ nhãn phụ để nhường chỗ cho nội dung.
+ */
 @Composable
 fun PageHeader(eyebrow: String, title: String, seal: String, back: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) =
     Row(
-        Modifier.statusBarsPadding().padding(start = if (back) 4.dp else 20.dp, top = 24.dp, end = 8.dp, bottom = 12.dp),
+        Modifier.statusBarsPadding().padding(start = if (back) 4.dp else 20.dp, top = if (back) 8.dp else 24.dp, end = 8.dp, bottom = if (back) 4.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (back) IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại") }
         Column(Modifier.weight(1f)) {
-            if (eyebrow.isNotEmpty()) Text(eyebrow, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!back && eyebrow.isNotEmpty()) Text(eyebrow, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = Jakarta, fontWeight = FontWeight.ExtraBold, fontSize = 32.sp, letterSpacing = (-0.8).sp),
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontFamily = Jakarta, fontWeight = if (back) FontWeight.Bold else FontWeight.ExtraBold,
+                    fontSize = if (back) 22.sp else 32.sp, letterSpacing = if (back) (-0.4).sp else (-0.8).sp,
+                ),
             )
         }
         actions()
