@@ -22,6 +22,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -211,15 +213,7 @@ fun AdminNovelScreen(id: Int) {
     val cs = MaterialTheme.colorScheme
     val n = novel.res?.getOrNull()
     Column(Modifier.fillMaxSize()) {
-        PageHeader("Quản trị truyện", n.novelTitle(id), "管", back = true) {
-            IconButton({ askRange = true }, enabled = n != null) { Icon(Icons.Rounded.Translate, "Yêu cầu dịch") }
-            IconButton({
-                act = Act("Dịch lại tên + mô tả?", "Xếp job dịch lại tên, mô tả, thể loại theo prompt hiện tại (đè lên tên cũ).", "Dịch lại") { AdminApi.requestMeta(id); "Đã xếp dịch lại tên — vài giây nữa kéo làm mới" }
-            }) { Icon(Icons.Rounded.Title, "Dịch lại tên + mô tả") }
-            IconButton({
-                act = Act("Huỷ hàng đợi truyện này?", "Huỷ toàn bộ chương ĐANG CHỜ dịch của truyện (chương đang dịch chạy nốt).", "Huỷ hàng đợi", true) { AdminApi.cancelNovelQueue(id); "Đã huỷ các chương đang chờ dịch" }
-            }) { Icon(Icons.Rounded.PlaylistRemove, "Huỷ hàng đợi") }
-        }
+        PageHeader("Quản trị truyện", n.novelTitle(id), "管", back = true)
         PullToRefreshBox(false, { rev++; novel.reload() }, Modifier.weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = 32.dp)) {
                 if (n != null) item {
@@ -261,6 +255,16 @@ fun AdminNovelScreen(id: Int) {
                 if (pg.loading) item { Spin() }
             }
         }
+        // thao tác của truyện: ba ô có nhãn chữ ở đáy, thay cho ba biểu tượng trần trên thanh tiêu đề
+        Row(Modifier.fillMaxWidth().background(cs.card).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile(Icons.Rounded.Translate, "Yêu cầu dịch", cs.primary, n != null, Modifier.weight(1f)) { askRange = true }
+            ActionTile(Icons.Rounded.Title, "Dịch lại tên", cs.tertiary, true, Modifier.weight(1f)) {
+                act = Act("Dịch lại tên + mô tả?", "Xếp job dịch lại tên, mô tả, thể loại theo prompt hiện tại (đè lên tên cũ).", "Dịch lại") { AdminApi.requestMeta(id); "Đã xếp dịch lại tên — vài giây nữa kéo làm mới" }
+            }
+            ActionTile(Icons.Rounded.PlaylistRemove, "Huỷ hàng đợi", cs.error, true, Modifier.weight(1f)) {
+                act = Act("Huỷ hàng đợi truyện này?", "Huỷ toàn bộ chương ĐANG CHỜ dịch của truyện (chương đang dịch chạy nốt).", "Huỷ hàng đợi", true) { AdminApi.cancelNovelQueue(id); "Đã huỷ các chương đang chờ dịch" }
+            }
+        }
     }
     ConfirmDialog(act, { act = null }) { rev++; novel.reload() }
     if (askRange && n != null) RangeDialog(n.optInt("chapter_count_source"), n.optInt("chapter_count_translated"), { askRange = false }) { from, to ->
@@ -268,6 +272,19 @@ fun AdminNovelScreen(id: Int) {
         act = Act("Yêu cầu dịch chương $from–$to?", "Xếp job dịch các chương CHƯA dịch hoặc lỗi trong khoảng $from–$to của \"${n.novelTitle(id)}\" (chương đã dịch giữ nguyên).", "Dịch") {
             val c = AdminApi.requestRange(id, from, to); if (c > 0) "Đã xếp $c chương vào hàng đợi" else "Không có chương nào cần xếp (đã dịch/đang chờ hết)"
         }
+    }
+}
+
+/** Ô thao tác: biểu tượng trên, nhãn dưới, nền nhạt theo màu của việc (đỏ cho thao tác phá, cam/xanh cho còn lại). */
+@Composable
+private fun ActionTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.alpha(if (enabled) 1f else .4f).clip(shape).background(tint.copy(.12f)).then(if (enabled) Modifier.bounceClick(onClick = onClick) else Modifier).padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(icon, null, Modifier.size(22.dp), tint)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
