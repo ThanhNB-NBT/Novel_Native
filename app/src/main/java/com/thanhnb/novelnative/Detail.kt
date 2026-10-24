@@ -27,6 +27,10 @@ import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.animation.core.spring
@@ -100,11 +104,7 @@ fun DetailScreen(id: Int) {
                 val pager = rememberPagerState(tab) { 2 }
                 LaunchedEffect(tab) { if (pager.targetPage != tab) pager.animateScrollToPage(tab, animationSpec = spring(dampingRatio = .9f, stiffness = 300f)) }
                 LaunchedEffect(pager) { snapshotFlow { pager.targetPage }.collect { tab = it } }
-                TabRow(pager.currentPage, containerColor = Color.Transparent, contentColor = cs.primary, divider = { HorizontalDivider(color = cs.outlineVariant) }) {
-                    listOf("Giới thiệu", "Danh sách chương").forEachIndexed { i, t ->
-                        Tab(tab == i, { tab = i }, text = { Text(t, style = MaterialTheme.typography.titleMedium, color = if (tab == i) cs.primary else cs.onSurfaceVariant) })
-                    }
-                }
+                SegTabs(listOf("Giới thiệu", "Danh sách chương"), pager.currentPage + pager.currentPageOffsetFraction) { tab = it }
                 val bottom = PaddingValues(bottom = 96.dp)
                 HorizontalPager(pager, Modifier.weight(1f), key = { it }) { page ->
                 if (page == 0) LazyColumn(Modifier.fillMaxSize(), contentPadding = bottom) {
@@ -340,7 +340,7 @@ private fun Header(n: Novel, tail: Color) {
         AsyncImage(Api.thumb(n.cover, 400), null, Modifier.matchParentSize().blur(10.dp), contentScale = ContentScale.Crop)
         Box(
             Modifier.matchParentSize().background(
-                Brush.verticalGradient(0f to Color.Black.copy(.45f), .55f to lerp(Color.Black, cs.primary, .35f).copy(.55f), 1f to tail),
+                Brush.verticalGradient(0f to Color.Black.copy(.45f), .55f to lerp(Color.Black, cs.primary, .35f).copy(.55f), .86f to lerp(Color.Black, cs.primary, .35f).copy(.5f), 1f to tail),
             ),
         )
         Column(Modifier.statusBarsPadding()) {
@@ -353,10 +353,44 @@ private fun Header(n: Novel, tail: Color) {
                     Text(n.author, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(.85f))
                 }
             }
-            Text(
-                listOf("${n.chaptersSource} chương", "${n.chaptersTranslated} đã dịch", Api.statusLabel(n.status), n.source).filter(String::isNotEmpty).joinToString(" · "),
-                Modifier.padding(20.dp, 16.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // thông tin dạng viên thuốc kính mờ + vạch tiến độ dịch, thay cho một dòng chữ xám
+            Row(Modifier.padding(20.dp, 18.dp, 20.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("${n.chaptersSource} chương", Api.statusLabel(n.status), n.source).filter(String::isNotEmpty).forEach {
+                    Text(it, Modifier.clip(CircleShape).background(Color.White.copy(.16f)).padding(horizontal = 11.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium, color = Color.White, maxLines = 1)
+                }
+            }
+            val frac = if (n.chaptersSource > 0) (n.chaptersTranslated.toFloat() / n.chaptersSource).coerceIn(0f, 1f) else 0f
+            Column(Modifier.padding(20.dp, 12.dp, 20.dp, 18.dp)) {
+                Row {
+                    Text("Đã dịch", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.8f))
+                    Text("${n.chaptersTranslated}/${n.chaptersSource}", style = monoStyle(12, Color.White), fontWeight = FontWeight.Bold)
+                }
+                LinearProgressIndicator({ frac }, Modifier.padding(top = 5.dp).fillMaxWidth().height(5.dp).clip(CircleShape), color = cs.tertiary, trackColor = Color.White.copy(.22f), gapSize = 0.dp, drawStopIndicator = {})
+            }
+        }
+    }
+}
+
+/** Thanh tab dạng viên thuốc: viên nhấn trượt liên tục theo [pos] (vị trí pager, có phần lẻ khi đang vuốt). */
+@Composable
+private fun SegTabs(labels: List<String>, pos: Float, select: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val outer = RoundedCornerShape(18.dp)
+    val inner = RoundedCornerShape(14.dp)
+    BoxWithConstraints(Modifier.padding(20.dp, 14.dp).fillMaxWidth().height(48.dp).clip(outer).background(cs.onSurface.copy(.07f)).padding(4.dp)) {
+        val w = maxWidth / labels.size
+        Box(
+            Modifier.offset { androidx.compose.ui.unit.IntOffset((pos * w.toPx()).toInt(), 0) }.width(w).fillMaxHeight()
+                .shadow(4.dp, inner, ambientColor = cs.primary, spotColor = cs.primary).clip(inner).background(cs.primary),
+        )
+        Row(Modifier.fillMaxSize()) {
+            labels.forEachIndexed { i, t ->
+                val near = (1f - kotlin.math.abs(pos - i)).coerceIn(0f, 1f)
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().clip(inner).clickable(remember { MutableInteractionSource() }, null) { select(i) },
+                    Alignment.Center,
+                ) { Text(t, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = lerp(cs.onSurfaceVariant, cs.onPrimary, near)) }
+            }
         }
     }
 }
