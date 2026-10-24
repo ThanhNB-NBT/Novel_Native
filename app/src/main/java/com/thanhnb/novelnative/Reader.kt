@@ -33,12 +33,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.FormatAlignJustify
+import androidx.compose.material.icons.rounded.FormatUnderlined
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material3.*
@@ -704,63 +708,75 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
         }
 
         SheetLabel("Màu nền", if (dark) "nền tối" else "nền sáng") {
-            Seg(listOf("Tự động", "Sáng", "Tối"), st.mode, Modifier.width(170.dp)) { st.mode = it }
+            Seg(listOf("Tự động", "Sáng", "Tối"), st.mode, Modifier.width(216.dp)) { st.mode = it }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             readerColors.forEachIndexed { i, rc ->
                 val on = i == (if (dark) st.dark else st.light)
                 Box(
-                    Modifier.size(34.dp).clip(CircleShape).background(rc.bg)
+                    Modifier.size(38.dp).clip(CircleShape).background(rc.bg)
                         .border(if (on) 2.4.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, CircleShape)
                         .clickable { if (dark) st.dark = i else st.light = i },
                     Alignment.Center,
-                ) { Text("A", color = rc.fg, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                ) { Text("A", color = rc.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
             }
         }
 
-        val serif = st.rfont.serif
-        SheetLabel("Phông chữ") {
-            Seg(listOf("Có chân", "Không chân"), if (serif) 0 else 1, Modifier.width(190.dp)) {
-                if ((it == 0) != serif) st.font = readerFonts.first { f -> f.serif == (it == 0) }.key
-            }
-        }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            readerFonts.filter { it.serif == serif }.forEach { f ->
+        // một hàng duy nhất: font có chân trước, không chân sau (không cần thanh chuyển loại)
+        SheetLabel("Phông chữ")
+        // mở sheet là font đang chọn đã nằm trong tầm nhìn
+        androidx.compose.foundation.lazy.LazyRow(
+            state = rememberLazyListState(readerFonts.indexOfFirst { it.key == st.font }.coerceAtLeast(0)),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(readerFonts) { f ->
                 val on = st.font == f.key
                 Text(
                     f.name,
-                    Modifier.height(34.dp).clip(RoundedCornerShape(17.dp))
-                        .background(if (on) cs.primary.copy(alpha = 0.10f) else cs.background)
-                        .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(17.dp))
+                    Modifier.height(36.dp).clip(RoundedCornerShape(18.dp))
+                        .background(if (on) cs.primary.copy(alpha = 0.10f) else Color.Transparent)
+                        .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, RoundedCornerShape(18.dp))
                         .clickable { st.font = f.key }.wrapContentHeight().padding(horizontal = 14.dp),
-                    fontFamily = f.family, fontSize = 13.sp, color = if (on) cs.primary else cs.onSurface,
+                    fontFamily = f.family, fontSize = 14.sp, color = if (on) cs.primary else cs.onSurface,
                 )
             }
         }
 
+        SheetLabel("Bố cục")
+        SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f) { st.size = it }
+        SliderRow("Giãn dòng", "%.1f×".format(st.lh), st.lh, 1.3f..2.2f) { st.lh = (it * 10).roundToInt() / 10f }
+        SliderRow("Viền 2 bên", "${st.margin.roundToInt()}", st.margin, 8f..48f) { st.margin = it }
+        if (!st.page) SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, startAuto) { st.speed = it }
+
         Spacer(Modifier.height(10.dp))
-        Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cs.background).border(1.dp, cs.outlineVariant, RoundedCornerShape(14.dp))
-                .padding(start = 14.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
-        ) {
-            SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f) { st.size = it }
-            SliderRow("Giãn dòng", "%.1f×".format(st.lh), st.lh, 1.3f..2.2f) { st.lh = (it * 10).roundToInt() / 10f }
-            SliderRow("Viền 2 bên", "${st.margin.roundToInt()}", st.margin, 8f..48f) { st.margin = it }
-            if (!st.page) SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, startAuto) { st.speed = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Tile("Căn đều", Icons.Rounded.FormatAlignJustify, st.justify, Modifier.weight(1f)) { st.justify = it }
+            Tile("Gạch thuật ngữ", Icons.Rounded.FormatUnderlined, st.gloss, Modifier.weight(1f)) { st.gloss = it }
+            Tile("Phím âm lượng", Icons.AutoMirrored.Rounded.VolumeUp, st.volume, Modifier.weight(1f)) { st.volume = it }
         }
-        Spacer(Modifier.height(4.dp))
-        @OptIn(ExperimentalLayoutApi::class)
-        FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Opt("Căn đều", st.justify) { st.justify = it }
-            Opt("Gạch chân thuật ngữ", st.gloss) { st.gloss = it }
-            Opt("Phím âm lượng lật trang", st.volume) { st.volume = it }
-        }
+    }
+}
+
+/** Ô bật/tắt: icon + nhãn ngắn, ba ô rộng bằng nhau; bật = nền nhấn nhạt + viền nhấn. */
+@Composable
+private fun Tile(label: String, icon: ImageVector, on: Boolean, modifier: Modifier, set: (Boolean) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier.height(62.dp).clip(shape).background(if (on) cs.primary.copy(alpha = 0.10f) else Color.Transparent)
+            .border(if (on) 1.4.dp else 1.dp, if (on) cs.primary.copy(alpha = 0.65f) else cs.outlineVariant, shape)
+            .clickable { set(!on) },
+        Arrangement.Center, Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, Modifier.size(22.dp), tint = if (on) cs.primary else cs.onSurfaceVariant)
+        Spacer(Modifier.height(3.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1, color = if (on) cs.primary else cs.onSurfaceVariant, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium)
     }
 }
 
 @Composable
 private fun SheetLabel(text: String, hint: String? = null, end: @Composable () -> Unit = {}) =
-    Row(Modifier.padding(start = 2.dp, top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(start = 2.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp, color = MaterialTheme.colorScheme.primary)
         hint?.let { Text(it, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, maxLines = 1) }
         Spacer(Modifier.weight(1f))
@@ -804,7 +820,7 @@ internal fun SliderRow(
     Text(value, Modifier.width(40.dp), textAlign = TextAlign.End, style = monoStyle(13, cs.onSurface))
     if (play != null) Box(Modifier.padding(start = 4.dp).size(30.dp).clip(CircleShape).background(cs.primary).clickable(onClick = play), Alignment.Center) {
         Icon(Icons.Rounded.PlayArrow, "Bắt đầu tự cuộn", Modifier.size(20.dp), tint = cs.onPrimary)
-    } else Spacer(Modifier.width(34.dp))
+    }
 }
 
 @Composable
