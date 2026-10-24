@@ -13,7 +13,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
-import java.net.HttpURLConnection
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URL
 import java.net.URLEncoder
 import java.text.Normalizer
@@ -99,9 +100,6 @@ object Prefs {
     fun percent(novel: Int, ch: Int) = sp.getFloat("rp_${novel}_$ch", 0f)
     fun setPercent(novel: Int, ch: Int, p: Float) = sp.edit().putFloat("rp_${novel}_$ch", p.coerceIn(0f, 1f)).apply()
 
-    var autoAhead: Boolean
-        get() = sp.getBoolean("auto_translate_ahead", true)
-        set(v) = sp.edit().putBoolean("auto_translate_ahead", v).apply()
 
     var dismissed: Set<String>
         get() = sp.getStringSet("notify_dismissed", emptySet())!!
@@ -173,32 +171,33 @@ object Api {
         "chapter_count_translated,genres,last_chapter_at,source_rank,source_id,sources(name,label)"
     private const val VISIBLE = "hidden=eq.false&is_canonical=eq.true"
 
+    /** Một client cho cả app: HTTP/2 ghép nhiều truy vấn trên một kết nối TLS, pool giữ kết nối nóng giữa các màn. */
+    private val http = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .connectionPool(okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES))
+        .build()
+    private val JSON = "application/json".toMediaType()
+
     suspend fun raw(method: String, path: String, body: Any? = null, prefer: String? = null, auth: Boolean = true, retry: Boolean = true, headerOut: MutableMap<String, String>? = null): String =
         withContext(Dispatchers.IO) {
             if (auth) Session.refresh()
-            val conn = URL("${BuildConfig.SUPABASE_URL}/$path").openConnection() as HttpURLConnection
-            conn.requestMethod = method
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 30_000
-            conn.setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY)
-            conn.setRequestProperty("Authorization", "Bearer ${(if (auth) Session.token else null) ?: BuildConfig.SUPABASE_ANON_KEY}")
-            prefer?.let { conn.setRequestProperty("Prefer", it) }
-            try {
-                if (body != null) {
-                    conn.doOutput = true
-                    conn.setRequestProperty("Content-Type", "application/json")
-                    conn.outputStream.use { it.write(body.toString().toByteArray()) }
-                }
-                val code = conn.responseCode
+            val req = okhttp3.Request.Builder().url("${BuildConfig.SUPABASE_URL}/$path")
+                .method(method, if (method == "GET" || method == "HEAD") null else (body?.toString() ?: "").toRequestBody(JSON))
+                .header("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                .header("Authorization", "Bearer ${(if (auth) Session.token else null) ?: BuildConfig.SUPABASE_ANON_KEY}")
+                .apply { prefer?.let { header("Prefer", it) } }
+                .build()
+            http.newCall(req).execute().use { resp ->
+                val code = resp.code
                 if (code == 401 && auth && retry && Session.token != null) {
                     Session.refresh(force = true)
                     return@withContext raw(method, path, body, prefer, auth, retry = false)
                 }
-                if (code !in 200..299) throw ApiError(code, conn.errorStream?.bufferedReader()?.readText().orEmpty())
-                headerOut?.put("range", conn.getHeaderField("Content-Range").orEmpty())
-                conn.inputStream.bufferedReader().readText()
-            } finally {
-                conn.disconnect()
+                val text = resp.body?.string().orEmpty()
+                if (code !in 200..299) throw ApiError(code, text)
+                headerOut?.put("range", resp.header("Content-Range").orEmpty())
+                text
             }
         }
 
@@ -355,6 +354,15 @@ object Api {
     suspend fun requestToc(novelId: Int) = rpc("request_toc", "p_novel_id" to novelId)
     suspend fun requestTranslation(novelId: Int, upTo: Int, priority: Int = 5) =
         rpc("request_translation", "p_novel_id" to novelId, "p_up_to" to upTo, "p_priority" to priority)
+    private var aheadAt = 0L
+    private var aheadN = 15
+    /** Số chương dịch sẵn do admin đặt (RPC translate_ahead, mig 138). Nhớ 10 phút; server chưa có RPC → 15 như bản cũ. */
+    suspend fun aheadCount(): Int {
+        if (System.currentTimeMillis() - aheadAt < 600_000) return aheadN
+        runCatching { rpc("translate_ahead").trim().toInt() }.onSuccess { aheadN = it }
+        aheadAt = System.currentTimeMillis()
+        return aheadN
+    }
     suspend fun retranslateAll(novelId: Int) = rpc("retranslate_all", "p_novel_id" to novelId)
     /** Cờ profiles.is_admin — server (mig 126) chỉ cho admin dịch lại chương đã dịch. */
     suspend fun isAdmin(): Boolean {

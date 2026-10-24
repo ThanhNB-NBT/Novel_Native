@@ -5,6 +5,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +42,7 @@ fun parseGeminiModels(raw: String): List<GeminiModel> = raw.split(',').mapNotNul
 // Knob của translator (note bắt đầu 'DỊCH'); tên ngắn + thứ tự theo đường đi một request. Knob mới chưa có ở đây thì hiện note.
 private val transLabels = linkedMapOf(
     "default_engine" to "Engine cho truyện MỚI",
+    "translate_ahead" to "Số chương dịch sẵn khi người đọc mở chương",
     "gemini_models" to "Model Gemini · thứ tự ưu tiên",
     "gemini_metadata_models" to "Model Gemini cho tên + mô tả truyện",
     "llm_model" to "Model NVIDIA dự phòng",
@@ -52,14 +57,20 @@ private val transLabels = linkedMapOf(
 private fun JSONObject.isTrans() = (s("note") ?: "").startsWith("DỊCH")
 private fun JSONObject.settingTitle() = transLabels[optString("key")] ?: (s("note") ?: optString("key")).replace(Regex("^(DỊCH|CRAWL) · "), "")
 
-/** Đầu mục bấm để thu gọn/mở. */
+/** Đầu mục bấm để thu gọn/mở: thẻ bo tròn, mũi tên xoay, số tóm tắt dạng viên thuốc. */
 @Composable
 internal fun Fold(title: String, open: Boolean, trailing: String? = null, toggle: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth().bounceClick(onClick = toggle).padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Eyebrow(title, Modifier.weight(1f))
-        if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 6.dp))
-        Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = cs.onSurfaceVariant)
+    val rot by androidx.compose.animation.core.animateFloatAsState(if (open) 180f else 0f, androidx.compose.animation.core.spring(dampingRatio = .8f, stiffness = 400f), label = "fold")
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp).clip(shape).background(if (open) cs.primary.copy(.09f) else cs.card)
+            .bounceClick(onClick = toggle).padding(start = 16.dp, end = 10.dp, top = 13.dp, bottom = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = if (open) cs.primary else cs.onSurface)
+        if (trailing != null) Text(trailing, Modifier.clip(CircleShape).background(cs.onSurface.copy(.07f)).padding(horizontal = 9.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium)
+        Icon(Icons.Rounded.ExpandMore, null, Modifier.padding(start = 4.dp).graphicsLayer { rotationZ = rot }, tint = cs.onSurfaceVariant)
     }
 }
 
@@ -90,9 +101,9 @@ fun CrawlTab() {
                     Triple(v("novels24h"), "truyện mới 24h", cs.primary), Triple(v("chapters24h"), "chương về 24h", null),
                     Triple(v("done24h"), "dịch xong 24h", cs.live), Triple(v("failedChapters"), "chương lỗi", if (failedCh > 0) cs.error else null),
                 )
-                Text(
-                    "${v("done1h")} chương/giờ · chờ dịch ${v("queued")} · chưa dịch giới thiệu ${v("metaPending")} · job lỗi ${v("failedJobs")} · đang theo dõi ${v("tracked")} truyện",
-                    style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(bottom = 8.dp),
+                MetaChips(
+                    "${v("done1h")}" to "chương/giờ", "${v("queued")}" to "chờ dịch", "${v("metaPending")}" to "chưa dịch giới thiệu",
+                    "${v("failedJobs")}" to "job lỗi", "${v("tracked")}" to "truyện theo dõi",
                 )
                 val b = beats.res?.getOrNull().orEmpty()
                 Pulse(b, "crawler", "Crawler")

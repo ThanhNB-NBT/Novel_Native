@@ -204,7 +204,7 @@ fun ReaderScreen(s: Screen.Read) {
     LaunchedEffect(s.novelId, s.index) {
         runCatching { Api.requestToc(s.novelId) }
         if (Session.user != null) {
-            if (Prefs.autoAhead) runCatching { Api.requestTranslation(s.novelId, s.index + 15) }
+            Api.aheadCount().let { n -> if (n > 0) runCatching { Api.requestTranslation(s.novelId, s.index + n) } }
             runCatching { Api.saveProgress(s.novelId, s.index) }
         }
     }

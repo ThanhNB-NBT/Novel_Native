@@ -2,7 +2,12 @@ package com.thanhnb.novelnative
 
 import androidx.compose.ui.graphics.luminance
 import android.widget.Toast
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -77,20 +82,38 @@ fun ConfirmDialog(act: Act?, close: () -> Unit, after: () -> Unit = {}) {
     )
 }
 
-/** Hàng số liệu: số lớn mono + nhãn nhỏ, không khung. */
+/** Hàng ô số liệu: mỗi ô là một thẻ bo tròn, số lớn mono (có màu khi cần chú ý) + nhãn nhỏ. */
 @Composable
-fun StatRow(vararg cells: Triple<String, String, Color?>, modifier: Modifier = Modifier) = Row(modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+fun StatRow(vararg cells: Triple<String, String, Color?>, modifier: Modifier = Modifier) = Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val cs = MaterialTheme.colorScheme
     cells.forEach { (v, label, c) ->
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+        val shape = RoundedCornerShape(16.dp)
+        Column(
+            Modifier.weight(1f).fillMaxHeight().clip(shape).background(if (c != null) c.copy(.10f) else cs.card).border(.6.dp, (c ?: cs.outlineVariant).copy(.35f), shape).padding(vertical = 12.dp, horizontal = 2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             // "…" = đang tải → khối nhấp nháy thay cho số
-            if (v == "…") Box(Modifier.padding(vertical = 4.dp).size(44.dp, 22.dp).shimmer(6.dp))
-            else Text(v, style = monoStyle(22, c ?: MaterialTheme.colorScheme.onSurface), fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+            if (v == "…") Box(Modifier.padding(vertical = 4.dp).size(40.dp, 22.dp).shimmer(6.dp))
+            else Text(v, style = monoStyle(22, c ?: cs.onSurface), fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(label, Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, maxLines = 2)
         }
     }
 }
 
-/** Một dòng nhịp tim worker: chấm màu + "hoạt động 12s trước". Im quá 3 phút = coi như treo/tắt. */
+/** Dải viên thuốc "giá trị · nhãn" thay cho một dòng chữ dài ngăn bằng dấu chấm. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MetaChips(vararg items: Pair<String, String>, modifier: Modifier = Modifier) = FlowRow(modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val cs = MaterialTheme.colorScheme
+    items.forEach { (v, label) ->
+        Row(Modifier.clip(CircleShape).background(cs.onSurface.copy(.06f)).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(v, style = monoStyle(12, cs.onSurface), fontWeight = FontWeight.Bold)
+            Text(label, Modifier.padding(start = 5.dp), style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+/** Một dòng nhịp tim worker: thẻ nhỏ, chấm màu có quầng + "hoạt động 12s trước". Im quá 3 phút = coi như treo/tắt. */
 @Composable
 fun Pulse(beats: List<JSONObject>, name: String, label: String) {
     val cs = MaterialTheme.colorScheme
@@ -99,13 +122,18 @@ fun Pulse(beats: List<JSONObject>, name: String, label: String) {
     val alive = age != null && age < 180
     val color = if (alive) cs.live else cs.error
     val text = when {
-        row == null -> "$label: chưa từng chạy"
-        alive -> "$label: hoạt động ${ago(row.s("at"))} trước" + (row.s("note")?.let { " — $it" } ?: "")
-        else -> "$label: KHÔNG phản hồi (${ago(row.s("at"))}) — kiểm tra Docker"
+        row == null -> "chưa từng chạy"
+        alive -> "hoạt động ${ago(row.s("at"))} trước" + (row.s("note")?.let { " — $it" } ?: "")
+        else -> "KHÔNG phản hồi (${ago(row.s("at"))}) — kiểm tra Docker"
     }
-    Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(color, CircleShape))
-        Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(shape).background(color.copy(.09f)).padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(16.dp).background(color.copy(.22f), CircleShape), Alignment.Center) { Box(Modifier.size(8.dp).background(color, CircleShape)) }
+        Text(label, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.titleSmall)
+        Text(text, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, color = if (alive) cs.onSurfaceVariant else cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
     }
 }
 

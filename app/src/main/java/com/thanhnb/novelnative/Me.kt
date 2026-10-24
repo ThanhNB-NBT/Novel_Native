@@ -252,15 +252,7 @@ fun AccountTab() {
             }
 
             SectionLabel("Ứng dụng")
-            var ahead by remember { mutableStateOf(Prefs.autoAhead) }
             SettingGroup(
-                {
-                    SettingTile(
-                        Icons.AutoMirrored.Rounded.MenuBook, "Tự dịch trước 15 chương", "Mở chương nào thì xếp dịch sẵn 15 chương kế tiếp",
-                        onClick = { ahead = !ahead; Prefs.autoAhead = ahead },
-                        trailing = { Switch(ahead, { ahead = it; Prefs.autoAhead = it }) },
-                    )
-                },
                 { SettingTile(Icons.Rounded.Lightbulb, "Hướng dẫn sử dụng", "Mẹo đọc, lưu và yêu cầu dịch", { Nav.push(Screen.Guide) }) },
                 { UpdateTile() },
             )
