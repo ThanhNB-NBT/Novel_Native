@@ -15,8 +15,10 @@
     <!-- cleartext: endpoint dev là http://10.0.2.2:8000 qua ssh tunnel -->
     <application
         android:label="Gác Truyện Native"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:usesCleartextTraffic="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.NovelNative">
         <activity
             android:name=".MainActivity"
             android:exported="true">

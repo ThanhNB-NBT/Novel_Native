@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- windowBackground = nền khởi động (Android < 12); Compose phủ lên ngay khi khung hình đầu tiên sẵn sàng -->
+    <style name="Theme.NovelNative" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_bg</item>
+    </style>
+</resources>

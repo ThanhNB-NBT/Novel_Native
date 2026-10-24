@@ -95,49 +95,52 @@ class MainActivity : ComponentActivity() {
                 val key = "${stack.lastIndex}:${stack.last()}"
                 BackHandler(stack.size > 1) { holder.removeState(key); Nav.pop() }
                 AutoUpdatePrompt()
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    // Đẩy màn mới vào từ phải (màn cũ lùi nhẹ + mờ), lùi lại thì ngược chiều; đổi chương (cùng độ sâu) không hiệu ứng
-                    AnimatedContent(
-                        stack,
-                        transitionSpec = {
-                            val push = targetState.size - initialState.size
-                            val ease = spring<IntOffset>(dampingRatio = .86f, stiffness = 380f)
-                            when {
-                                push > 0 -> (slideInHorizontally(ease) { it } + fadeIn(tween(220))) togetherWith
-                                    (slideOutHorizontally(ease) { -it / 4 } + fadeOut(tween(220, delayMillis = 60)))
-                                push < 0 -> (slideInHorizontally(ease) { -it / 4 } + fadeIn(tween(220))) togetherWith
-                                    (slideOutHorizontally(ease) { it } + fadeOut(tween(200)))
-                                else -> EnterTransition.None togetherWith ExitTransition.None
-                            }.apply { targetContentZIndex = if (push >= 0) 1f else 0f }
-                        },
-                        label = "page",
-                    ) { st ->
-                        val k = "${st.lastIndex}:${st.last()}"
-                        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                            holder.SaveableStateProvider(k) {
-                                when (val s = st.last()) {
-                                    Screen.Tabs -> Tabs()
-                                    is Screen.Detail -> DetailScreen(s.id)
-                                    is Screen.Read -> ReaderScreen(s)
-                                    is Screen.Glossary -> GlossaryScreen(s.novelId)
-                                    is Screen.More -> MoreScreen(s.section)
-                                    Screen.Search -> SearchScreen()
-                                    Screen.Login -> LoginScreen()
-                                    Screen.Offline -> OfflineScreen()
-                                    Screen.EditProfile -> EditProfileScreen()
-                                    Screen.Queue -> QueueScreen()
-                                    Screen.Guide -> GuideScreen()
-                                    Screen.Changelog -> ChangelogScreen()
-                                    Screen.Lunar -> LunarScreen()
-                                    Screen.Admin -> AdminScreen()
-                                    Screen.AdminLlm -> LlmScreen()
-                                    Screen.AdminVps -> VpsScreen()
-                                    Screen.AdminErrors -> ErrorsScreen()
-                                    is Screen.AdminNovel -> AdminNovelScreen(s.id)
+                Box(Modifier.fillMaxSize()) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        // Đẩy màn mới vào từ phải (màn cũ lùi nhẹ + mờ), lùi lại thì ngược chiều; đổi chương (cùng độ sâu) không hiệu ứng
+                        AnimatedContent(
+                            stack,
+                            transitionSpec = {
+                                val push = targetState.size - initialState.size
+                                val ease = spring<IntOffset>(dampingRatio = .86f, stiffness = 380f)
+                                when {
+                                    push > 0 -> (slideInHorizontally(ease) { it } + fadeIn(tween(220))) togetherWith
+                                        (slideOutHorizontally(ease) { -it / 4 } + fadeOut(tween(220, delayMillis = 60)))
+                                    push < 0 -> (slideInHorizontally(ease) { -it / 4 } + fadeIn(tween(220))) togetherWith
+                                        (slideOutHorizontally(ease) { it } + fadeOut(tween(200)))
+                                    else -> EnterTransition.None togetherWith ExitTransition.None
+                                }.apply { targetContentZIndex = if (push >= 0) 1f else 0f }
+                            },
+                            label = "page",
+                        ) { st ->
+                            val k = "${st.lastIndex}:${st.last()}"
+                            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                                holder.SaveableStateProvider(k) {
+                                    when (val s = st.last()) {
+                                        Screen.Tabs -> Tabs()
+                                        is Screen.Detail -> DetailScreen(s.id)
+                                        is Screen.Read -> ReaderScreen(s)
+                                        is Screen.Glossary -> GlossaryScreen(s.novelId)
+                                        is Screen.More -> MoreScreen(s.section)
+                                        Screen.Search -> SearchScreen()
+                                        Screen.Login -> LoginScreen()
+                                        Screen.Offline -> OfflineScreen()
+                                        Screen.EditProfile -> EditProfileScreen()
+                                        Screen.Queue -> QueueScreen()
+                                        Screen.Guide -> GuideScreen()
+                                        Screen.Changelog -> ChangelogScreen()
+                                        Screen.Lunar -> LunarScreen()
+                                        Screen.Admin -> AdminScreen()
+                                        Screen.AdminLlm -> LlmScreen()
+                                        Screen.AdminVps -> VpsScreen()
+                                        Screen.AdminErrors -> ErrorsScreen()
+                                        is Screen.AdminNovel -> AdminNovelScreen(s.id)
+                                    }
                                 }
                             }
                         }
                     }
+                    SplashOverlay() // phủ trên cùng, chỉ lần mở app đầu tiên của tiến trình
                 }
             }
         }
