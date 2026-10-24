@@ -345,6 +345,12 @@ object Api {
     suspend fun requestToc(novelId: Int) = rpc("request_toc", "p_novel_id" to novelId)
     suspend fun requestTranslation(novelId: Int, upTo: Int, priority: Int = 5) =
         rpc("request_translation", "p_novel_id" to novelId, "p_up_to" to upTo, "p_priority" to priority)
+    suspend fun retranslateAll(novelId: Int) = rpc("retranslate_all", "p_novel_id" to novelId)
+    /** Cờ profiles.is_admin — server (mig 126) chỉ cho admin dịch lại chương đã dịch. */
+    suspend fun isAdmin(): Boolean {
+        val u = uid() ?: return false
+        return runCatching { get("profiles?select=is_admin&id=eq.$u").objs().firstOrNull()?.optBoolean("is_admin") == true }.getOrDefault(false)
+    }
     suspend fun retranslate(novelId: Int, index: Int) = rpc("retranslate_chapter", "p_novel_id" to novelId, "p_index" to index)
     // ---------- Sửa bản dịch (RPC SECURITY DEFINER, cùng Flutter data/chapters.dart) ----------
 

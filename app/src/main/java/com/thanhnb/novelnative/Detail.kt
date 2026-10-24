@@ -11,7 +11,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.rounded.DoneAll
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
@@ -52,6 +55,11 @@ fun DetailScreen(id: Int) {
     val progress = load("progress", id, uid) { Api.progress(id) }
     val inLib = load("inlib", id, uid) { Api.inLibrary(id) }
     val marks = load("marks", id, uid) { Api.bookmarks(id) }
+    val admin = load("admin", uid) { Api.isAdmin() }.res?.getOrNull() == true
+    var selecting by remember { mutableStateOf(false) }
+    var sel by remember { mutableStateOf(emptySet<Int>()) }
+    var askTr by remember { mutableStateOf(false) }
+    var askRe by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var tab by remember { mutableIntStateOf(0) }
     var desc by remember { mutableStateOf(false) }
@@ -145,11 +153,27 @@ fun DetailScreen(id: Int) {
                 } else LazyColumn(Modifier.weight(1f), contentPadding = bottom) {
                     item {
                         Row(Modifier.padding(20.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("${chapters.size} chương", Modifier.weight(1f), style = monoStyle(13))
-                            TextButton({ asc = !asc }) {
-                                Icon(Icons.AutoMirrored.Rounded.Sort, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (asc) "Cũ → mới" else "Mới → cũ")
+                            if (selecting) {
+                                Text("Đã chọn ${sel.size}", Modifier.weight(1f), style = monoStyle(13, cs.primary))
+                                IconButton({ sel = chapters.filter { it.done }.map { it.index }.toSet() }) { Icon(Icons.Rounded.DoneAll, "Chọn hết chương đã dịch") }
+                                TextButton({ selecting = false }) { Text("Huỷ") }
+                                Button({ askRe = true }, enabled = sel.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Dịch lại (${sel.size})") }
+                            } else {
+                                Text("${chapters.size} chương", Modifier.weight(1f), style = monoStyle(13))
+                                TextButton({ if (uid == null) Nav.push(Screen.Login) else askTr = true }) {
+                                    Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null, Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Dịch")
+                                }
+                                if (admin) IconButton({
+                                    selecting = true
+                                    sel = setOfNotNull(cur?.takeIf { c -> chapters.any { it.index == c && it.done } })
+                                }) { Icon(Icons.Rounded.RestartAlt, "Dịch lại — chọn chương") }
+                                TextButton({ asc = !asc }) {
+                                    Icon(Icons.AutoMirrored.Rounded.Sort, null, Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(if (asc) "Cũ → mới" else "Mới → cũ")
+                                }
                             }
                         }
                         when {
@@ -166,7 +190,13 @@ fun DetailScreen(id: Int) {
                     }
                     items(if (asc) chapters else chapters.asReversed(), key = { it.index }) { c ->
                         val reading = c.index == cur
-                        Row(Modifier.fillMaxWidth().clickable { read(c.index) }.padding(20.dp, 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable { if (!selecting) read(c.index) else if (c.done) sel = if (c.index in sel) sel - c.index else sel + c.index }
+                                .padding(20.dp, 13.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (selecting) Checkbox(c.index in sel, null, Modifier.padding(end = 12.dp).size(20.dp), enabled = c.done)
                             Text("${c.index}", Modifier.width(44.dp), style = monoStyle(12, if (reading) cs.primary else cs.onSurfaceVariant))
                             Text(
                                 c.title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -216,11 +246,72 @@ fun DetailScreen(id: Int) {
                     }
                 }
             }
+            if (askTr) TranslateDialog(n.chaptersTranslated, n.chaptersSource, { askTr = false }) { to ->
+                askTr = false
+                scope.launch {
+                    runCatching { Api.requestTranslation(n.id, to, priority = 50) }
+                        .onSuccess { msg = "Đã xếp chương vào hàng đợi dịch (tới chương $to)" }
+                        .onFailure { msg = friendly(it) }
+                    nl.reload(); toc.reload()
+                }
+            }
+            if (askRe) AlertDialog(
+                { askRe = false },
+                confirmButton = {
+                    TextButton({
+                        askRe = false
+                        val picked = sel.sorted()
+                        val all = chapters.count { it.done }
+                        selecting = false
+                        scope.launch {
+                            // chọn trọn bộ chương đã dịch → một lần gọi retranslate_all
+                            runCatching { if (picked.size == all) Api.retranslateAll(n.id) else picked.forEach { Api.retranslate(n.id, it) } }
+                                .onSuccess { msg = "Đã xếp ${picked.size} chương để dịch lại" }
+                                .onFailure { msg = friendly(it) }
+                            toc.reload()
+                        }
+                    }) { Text("Dịch lại") }
+                },
+                dismissButton = { TextButton({ askRe = false }) { Text("Huỷ") } },
+                title = { Text("Dịch lại ${sel.size} chương?") },
+                text = { Text("Bản cũ vẫn đọc được cho tới khi bản mới thay thế.") },
+            )
         }
         msg?.let { m ->
             Snackbar(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp, 0.dp, 16.dp, 72.dp)) { Text(m) }
         }
     }
+}
+
+/** "Yêu cầu dịch": chọn dịch thêm 50/100/200 chương, tới hết, hoặc tới một chương cụ thể. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TranslateDialog(translated: Int, source: Int, dismiss: () -> Unit, submit: (Int) -> Unit) {
+    var custom by remember { mutableStateOf("") }
+    fun go(to: Int) { if (to > translated) submit(to.coerceAtMost(source)) }
+    AlertDialog(
+        dismiss,
+        title = { Text("Yêu cầu dịch") },
+        text = {
+            Column {
+                Text("Đã dịch $translated/$source chương. Chọn dịch tới đâu:", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(12.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (translated < source) {
+                        listOf(50, 100, 200).forEach { AssistChip({ go(translated + it) }, { Text("+$it chương") }) }
+                        AssistChip({ go(source) }, { Text("Đến hết") })
+                    }
+                }
+                OutlinedTextField(
+                    custom, { custom = it.filter(Char::isDigit).take(6) }, Modifier.fillMaxWidth().padding(top = 12.dp),
+                    label = { Text("Hoặc dịch tới chương…") }, singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                )
+            }
+        },
+        confirmButton = { TextButton({ custom.toIntOrNull()?.let(::go) }) { Text("Dịch") } },
+        dismissButton = { TextButton(dismiss) { Text("Đóng") } },
+    )
 }
 
 /** Đầu trang: bìa phóng to + mờ, phủ tối pha màu nhấn, tan vào nền giấy; bìa nét + tên chữ trắng. */

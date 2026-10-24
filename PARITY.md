@@ -15,7 +15,7 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 3. ~~Thuật ngữ truyện~~ xong (Glossary.kt, vào từ trang chi tiết): duyệt/bỏ gợi ý LLM, thêm/sửa/xoá, chọn nhiều để xoá, vá chương cũ + thanh tiến trình, báo cáo dịch sai. Chưa có: tra Hán-Việt, văn phong dịch + quét lỗi (admin), cập nhật bản offline sau vá
 4. ~~Nghe truyện (TTS)~~ xong (Tts.kt): menu ⋮ → Nghe truyện, thanh điều khiển đáy, chọn giọng + tốc độ, đọc nền (foreground service), highlight + cuộn theo đoạn, tự sang chương sau. Có cả highlight ở chế độ lật trang + hẹn giờ tắt (15–60 phút / hết chương)
 5. ~~Đọc offline~~ xong (Offline.kt): thẻ Đọc offline ở trang chi tiết (tải nền theo lô, chỉ kéo chương thiếu/đã đổi theo updated_at), màn Bản offline (Tủ truyện → icon), mất mạng thì truyện/mục lục/chương/tiến độ tự rơi về bản trên máy; chương đọc online và chương vừa vá thuật ngữ tự cập nhật xuống bản offline
-6. Chi tiết: chọn nhiều chương để dịch lại, nút Dịch, mã truyện — novel_detail.dart
+6. ~~Chi tiết: chọn nhiều chương để dịch lại, nút Dịch, mã truyện~~ xong (Detail.kt): nút Dịch → hộp thoại +50/+100/+200/đến hết/tới chương N; chế độ chọn nhiều chương + Dịch lại (chỉ admin, chọn trọn bộ → retranslate_all). Chưa có: báo thông báo khi chương dịch lại xong (notify_mine)
 7. Hồ sơ: tên hiển thị, ảnh đại diện, chuỗi ngày đọc — data/profile.dart, account/edit_profile.dart, settings.dart
 8. Hàng đợi dịch — screens/library/queue.dart, data/queue.dart
 9. Hướng dẫn, Có gì mới — account/guide.dart, whats_new.dart (~~kiểm tra cập nhật~~ xong: Update.kt + release.yml, cần đặt secrets cho repo)
