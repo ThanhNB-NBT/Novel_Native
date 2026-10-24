@@ -52,6 +52,7 @@ sealed interface Screen {
     data object Offline : Screen
     data object EditProfile : Screen
     data object Queue : Screen
+    data object Guide : Screen
 }
 
 // ponytail: ngăn xếp màn hình bằng state, thêm navigation-compose khi cần deep link
@@ -117,20 +118,16 @@ fun Bar(title: String, actions: @Composable RowScope.() -> Unit = {}) = TopAppBa
 @Composable
 fun PageHeader(eyebrow: String, title: String, seal: String, back: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) =
     Row(
-        Modifier.statusBarsPadding().padding(start = if (back) 4.dp else 20.dp, top = 16.dp, end = 8.dp, bottom = 10.dp),
+        Modifier.statusBarsPadding().padding(start = if (back) 4.dp else 20.dp, top = 24.dp, end = 8.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (back) IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại") }
         Column(Modifier.weight(1f)) {
-            if (eyebrow.isNotEmpty()) {
-                Text(eyebrow.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, letterSpacing = 3.sp)
-                Spacer(Modifier.height(2.dp))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.width(10.dp))
-                Seal(seal, 22.dp)
-            }
+            if (eyebrow.isNotEmpty()) Text(eyebrow, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = Jakarta, fontWeight = FontWeight.ExtraBold, fontSize = 32.sp, letterSpacing = (-0.8).sp),
+            )
         }
         actions()
     }
@@ -235,9 +232,11 @@ fun NovelRow(n: Novel, sub: String? = null, onClick: () -> Unit = { Nav.push(Scr
 fun PaperCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val cs = MaterialTheme.colorScheme
     val colors = CardDefaults.cardColors(containerColor = cs.card)
-    val border = BorderStroke(1.dp, cs.outlineVariant)
-    if (onClick != null) Card(onClick, modifier, shape = RoundedCornerShape(18.dp), colors = colors, border = border, content = content)
-    else Card(modifier, shape = RoundedCornerShape(18.dp), colors = colors, border = border, content = content)
+    // thẻ không viền, bo lớn, bóng rất nhẹ — nền thẻ sáng hơn nền trang là đủ tách lớp
+    val shape = RoundedCornerShape(24.dp)
+    val elev = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    if (onClick != null) Card(onClick, modifier, shape = shape, colors = colors, elevation = elev, content = content)
+    else Card(modifier, shape = shape, colors = colors, elevation = elev, content = content)
 }
 
 /** Nhãn mục nhỏ in hoa giãn chữ màu son ("GIAO DIỆN", "ỨNG DỤNG"). */

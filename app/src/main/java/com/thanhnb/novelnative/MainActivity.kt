@@ -6,6 +6,13 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -105,6 +112,7 @@ class MainActivity : ComponentActivity() {
                                     Screen.Offline -> OfflineScreen()
                                     Screen.EditProfile -> EditProfileScreen()
                                     Screen.Queue -> QueueScreen()
+                                    Screen.Guide -> GuideScreen()
                                 }
                             }
                         }
@@ -163,56 +171,58 @@ private fun Tabs() {
 }
 
 /**
- * Dock kính lỏng: không khung viền, nền sau bị làm mờ (Haze) + nhuộm màu nhấn, một vệt sáng chéo,
- * viên "thấu kính" trượt theo lò xo tới tab đang chọn.
+ * Dock kính mờ: viên thuốc nổi, nền làm mờ (Haze) + vệt sáng mảnh ở viền. Tab đang chọn nở ra thành viên nhấn
+ * có kèm tên (độ rộng chạy theo lò xo, các tab khác co lại chỉ còn icon); chạm thì ô nhún nhẹ.
  */
 @Composable
 private fun Dock(unread: Int, glass: HazeState, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val dark = cs.background.luminance() < .5f
-    val shape = RoundedCornerShape(34.dp)
-    val sheen = Color.White
-    BoxWithConstraints(
-        modifier.navigationBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 10.dp).fillMaxWidth().height(70.dp)
-            .shadow(22.dp, shape, ambientColor = cs.primary.copy(.25f), spotColor = Color.Black.copy(.3f))
+    val shape = RoundedCornerShape(32.dp)
+    Row(
+        modifier.navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 10.dp).fillMaxWidth().height(64.dp)
+            .shadow(20.dp, shape, ambientColor = cs.primary.copy(.16f), spotColor = Color.Black.copy(.22f))
             .clip(shape)
             .hazeEffect(glass) {
-                blurRadius = 28.dp
+                blurRadius = 30.dp
                 noiseFactor = 0f
                 backgroundColor = cs.background
-                tints = listOf(HazeTint(cs.primary.copy(alpha = if (dark) .16f else .10f)))
+                tints = listOf(HazeTint(cs.background.copy(alpha = if (dark) .5f else .6f)))
             }
-            .background(Brush.linearGradient(listOf(sheen.copy(if (dark) .16f else .50f), sheen.copy(.04f), cs.primary.copy(if (dark) .10f else .07f)))),
+            .background(Brush.verticalGradient(listOf(Color.White.copy(if (dark) .12f else .42f), Color.White.copy(if (dark) .03f else .10f))))
+            .border(.6.dp, Color.White.copy(if (dark) .14f else .6f), shape)
+            .padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        val pad = 6.dp
-        val cell = (maxWidth - pad * 2) / tabs.size
-        val x by animateDpAsState(pad + cell * Nav.tab, spring(dampingRatio = .68f, stiffness = 340f), label = "lens")
-        // thấu kính: sáng hơn nền dock, ngả màu nhấn, cạnh trên có vệt phản sáng
-        Box(
-            Modifier.offset(x = x).padding(vertical = pad).width(cell).fillMaxHeight()
-                .clip(RoundedCornerShape(28.dp))
-                .background(Brush.verticalGradient(listOf(sheen.copy(if (dark) .26f else .70f), cs.primary.copy(if (dark) .22f else .16f))))
-                .drawBehind {
-                    drawLine(
-                        Brush.horizontalGradient(listOf(Color.Transparent, sheen.copy(.9f), Color.Transparent)),
-                        Offset(size.width * .18f, 1.5.dp.toPx()), Offset(size.width * .82f, 1.5.dp.toPx()), 1.5.dp.toPx(),
-                    )
-                },
-        )
-        Row(Modifier.fillMaxSize().padding(horizontal = pad)) {
-            tabs.forEachIndexed { i, t ->
-                val sel = Nav.tab == i
-                val color by animateColorAsState(if (sel) cs.primary else cs.onSurfaceVariant, label = "tabColor")
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().clickable(remember { MutableInteractionSource() }, null) { Nav.tab = i },
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-                ) {
-                    BadgedBox({ if (i == 2 && unread > 0 && !sel) Badge { Text("$unread") } }) {
-                        Icon(if (sel) t.on else t.off, t.label, Modifier.size(25.dp), color)
-                    }
-                    Spacer(Modifier.height(2.dp))
-                    Text(t.label, color = color, fontSize = 11.5.sp, fontFamily = Jakarta, fontWeight = if (sel) FontWeight.Bold else FontWeight.SemiBold)
-                }
+        tabs.forEachIndexed { i, t -> DockItem(t, Nav.tab == i, if (i == 2) unread else 0) { Nav.tab = i } }
+    }
+}
+
+@Composable
+private fun RowScope.DockItem(t: TabItem, sel: Boolean, badge: Int, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val dark = cs.background.luminance() < .5f
+    val w by animateFloatAsState(if (sel) 2.15f else 1f, spring(dampingRatio = .78f, stiffness = 260f), label = "w")
+    val fill by animateFloatAsState(if (sel) 1f else 0f, tween(280), label = "fill")
+    val color by animateColorAsState(if (sel) cs.primary else cs.onSurfaceVariant, tween(220), label = "c")
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) .9f else 1f, spring(.55f, 520f), label = "s")
+    Box(
+        Modifier.weight(w).fillMaxHeight().graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(26.dp))
+            .background(cs.primary.copy(alpha = (if (dark) .26f else .15f) * fill))
+            .clickable(src, null, onClick = onClick),
+        Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BadgedBox({ if (badge > 0 && !sel) Badge { Text("$badge") } }) { Icon(if (sel) t.on else t.off, t.label, Modifier.size(25.dp), color) }
+            AnimatedVisibility(
+                sel,
+                enter = fadeIn(tween(220, 80)) + expandHorizontally(spring(.8f, 300f)),
+                exit = fadeOut(tween(120)) + shrinkHorizontally(spring(.9f, 400f)),
+            ) {
+                Text(t.label, Modifier.padding(start = 7.dp), color = color, fontSize = 13.5.sp, fontFamily = Jakarta, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
         }
     }

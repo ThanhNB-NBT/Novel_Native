@@ -41,29 +41,37 @@ fun Avatar(emoji: String?, name: String, size: Dp) {
     }
 }
 
-/** Số liệu đọc: truyện đang đọc · tổng chương đã tiến · chuỗi ngày đọc liên tiếp (vàng khi còn chuỗi). */
+/** Số liệu đọc: chuỗi ngày (vàng khi còn chuỗi) | đang đọc | chương đã đọc, ngăn bằng vạch mảnh. */
 @Composable
 fun StatsCard(novels: Int, chapters: Int, streak: Int) {
     val cs = MaterialTheme.colorScheme
     val hot = streak > 0
+    val gold = cs.secondary
     PaperCard {
-        Row(Modifier.fillMaxWidth().padding(vertical = 14.dp)) {
-            Stat("$novels", "truyện đang đọc", cs.onSurface, Modifier.weight(1f))
-            Stat("$chapters", "chương đã đọc", cs.onSurface, Modifier.weight(1f))
-            Stat("$streak", if (hot) "ngày liên tiếp" else "chưa có chuỗi", if (hot) cs.secondary else cs.onSurfaceVariant, Modifier.weight(1f), fire = hot)
+        Row(
+            Modifier.fillMaxWidth().background(if (hot) gold.copy(.08f) else androidx.compose.ui.graphics.Color.Transparent).padding(vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Stat("$streak", "NGÀY LIÊN TIẾP", if (hot) gold else cs.onSurface, Modifier.weight(1f), fire = true, fireColor = if (hot) gold else cs.onSurfaceVariant)
+            Box(Modifier.width(1.dp).height(30.dp).background(cs.outlineVariant.copy(.7f)))
+            Stat("$novels", "ĐANG ĐỌC", cs.onSurface, Modifier.weight(1f))
+            Box(Modifier.width(1.dp).height(30.dp).background(cs.outlineVariant.copy(.7f)))
+            Stat("$chapters", "CHƯƠNG ĐÃ ĐỌC", cs.onSurface, Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun Stat(value: String, label: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier, fire: Boolean = false) =
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (fire) Icon(Icons.Rounded.LocalFireDepartment, null, Modifier.size(20.dp), color)
-            Text(value, style = monoStyle(22, color), fontWeight = FontWeight.Bold)
-        }
-        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+private fun Stat(
+    value: String, label: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier,
+    fire: Boolean = false, fireColor: androidx.compose.ui.graphics.Color = color,
+) = Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (fire) Icon(Icons.Rounded.LocalFireDepartment, null, Modifier.size(20.dp), fireColor)
+        Text(value, style = monoStyle(22, color), fontWeight = FontWeight.Bold)
     }
+    Text(label, Modifier.padding(top = 3.dp), style = MaterialTheme.typography.labelSmall, letterSpacing = 0.8.sp, fontSize = 10.5.sp, maxLines = 1)
+}
 
 /** Sửa hồ sơ: tên hiển thị + ảnh đại diện (bấm lại ảnh đang chọn để bỏ). */
 @Composable

@@ -8,6 +8,8 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 - Màn đọc: chờ dịch (poll), tự dịch trước 15 chương, lưu tiến độ + % cuộn, cỡ chữ/giãn dòng/lề/màu/căn đều, mục lục, báo lỗi chương
 - Tủ truyện, Thông báo (pull 7 ngày, xoá), Tôi (giao diện, tự dịch trước), Đăng nhập email
 
+## Giao diện 24/10: thử phong cách ColorOS (thẻ không viền bo 24dp, tiêu đề lớn bỏ triện, dock kính mờ nở theo tab). Muốn bỏ: git revert commit "giao diện ColorOS".
+
 ## Còn thiếu — theo thứ tự nên làm
 1. ~~Màn đọc nâng cao — lật trang, font chữ, phím âm lượng, tự cuộn, vuốt quá mép đổi chương, gạch chân thuật ngữ, 14 font Sans + 4 Serif, 15 màu nền sáng/tối riêng, sheet có khung xem trước~~ (xong)
    - còn: ~12 font Sans tải từ Google Fonts (native chỉ có 6 font đóng gói + Roboto hệ thống), quà tu tiên cuối chương (bỏ)
@@ -18,7 +20,7 @@ Mục tiêu: giống bản Flutter, TRỪ Tu Tiên (screens/cultivation/*, culti
 6. ~~Chi tiết: chọn nhiều chương để dịch lại, nút Dịch, mã truyện~~ xong (Detail.kt): nút Dịch → hộp thoại +50/+100/+200/đến hết/tới chương N; chế độ chọn nhiều chương + Dịch lại (chỉ admin, chọn trọn bộ → retranslate_all). Chưa có: báo thông báo khi chương dịch lại xong (notify_mine)
 7. ~~Hồ sơ~~ xong (Profile.kt): tab Tôi hiện avatar + tên + số truyện đang đọc / chương đã đọc / chuỗi ngày; chạm thẻ → Sửa hồ sơ (tên hiển thị + 30 ảnh emoji). Bỏ: biểu tượng tab Tu Tiên
 8. ~~Hàng đợi dịch~~ xong (Queue.kt, vào từ tab Tôi): tóm tắt (chương/giờ, đang dịch, đang chờ), gom theo truyện, chạm xem từng chương, mục Vừa dịch xong + Xoá, tự làm mới 15 giây
-9. Hướng dẫn, Có gì mới — account/guide.dart, whats_new.dart (~~kiểm tra cập nhật~~ xong: Update.kt + release.yml, cần đặt secrets cho repo)
-10. Lịch âm — account/lunar_calendar.dart, lunar.dart
+9. Hướng dẫn xong (Guide.kt, 8 mục bấm mở rộng); Có gì mới chưa có — (~~kiểm tra cập nhật~~ xong: Update.kt + release.yml, cần đặt secrets cho repo)
+10. Lịch âm: thẻ hôm nay xong (Lunar.kt, tab Tôi); còn lịch tháng — account/lunar_calendar.dart
 11. Quản trị (admin) — screens/admin/*, data/admin.dart (lớn nhất ngoài Tu Tiên)
 12. Giao diện: ~~theme.dart, header + triện, dock nổi, trang chủ 5 kiểu mục, chi tiết bìa mờ, màu nhấn/nền~~ (xong 0.2.0); còn skeleton, ink_transition, ambient (màu theo bìa)

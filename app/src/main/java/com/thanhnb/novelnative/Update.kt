@@ -162,22 +162,16 @@ fun AutoUpdatePrompt() {
 
 /** Thẻ "Phiên bản" ở tab Tôi: kiểm chủ động, kể cả version đã bấm "Để sau". */
 @Composable
-fun UpdateCard() {
+fun UpdateTile() {
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>(null) }
     var checking by remember { mutableStateOf(false) }
     var release by remember { mutableStateOf<Release?>(null) }
-    PaperCard {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).background(cs.primaryContainer, RoundedCornerShape(12.dp)), Alignment.Center) {
-                Icon(Icons.Rounded.SystemUpdate, null, tint = cs.primary)
-            }
-            Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                Text("Phiên bản ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
-                Text(status ?: "Bản mới tự báo khi mở app", style = MaterialTheme.typography.labelMedium)
-            }
-            OutlinedButton({
+    SettingTile(
+        Icons.Rounded.SystemUpdate, "Kiểm tra cập nhật", status ?: "Phiên bản ${BuildConfig.VERSION_NAME} · tìm bản mới nhất",
+        onClick = {
+            if (!checking) {
                 checking = true
                 scope.launch {
                     try {
@@ -191,10 +185,9 @@ fun UpdateCard() {
                         checking = false
                     }
                 }
-            }, enabled = !checking, border = androidx.compose.foundation.BorderStroke(1.dp, cs.outlineVariant)) {
-                Text(if (checking) "Đang kiểm…" else "Kiểm tra")
             }
-        }
-    }
+        },
+        trailing = if (checking) ({ CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }) else null,
+    )
     release?.let { UpdateDialog(it) { release = null } }
 }

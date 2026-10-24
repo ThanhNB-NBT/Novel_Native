@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Login
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
@@ -28,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -193,82 +197,117 @@ fun AccountTab() {
             } else {
                 val prof = load("profile", u.id) { Api.profile() }.res?.getOrNull()
                 val stats = load("stats", u.id) { Api.readStats() }.res?.getOrNull()
-                val name = prof?.name ?: u.email.substringBefore('@')
-                PaperCard(onClick = { Nav.push(Screen.EditProfile) }) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(prof?.avatar, name, 56.dp)
-                        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                            Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(u.email, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("Sửa hồ sơ", Modifier.padding(top = 2.dp), style = MaterialTheme.typography.labelMedium, color = cs.primary, fontWeight = FontWeight.SemiBold)
-                        }
-                        OutlinedButton(Session::signOut, border = androidx.compose.foundation.BorderStroke(1.dp, cs.outlineVariant)) { Text("Đăng xuất") }
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
+                ProfileCard(prof?.name ?: u.email.substringBefore('@'), u.email, prof?.avatar)
+                Spacer(Modifier.height(12.dp))
                 StatsCard(stats?.first ?: 0, stats?.second ?: 0, Api.liveStreak(prof))
             }
+            Spacer(Modifier.height(12.dp))
+            LunarCard()
 
-            Eyebrow("Giao diện", Modifier.padding(start = 4.dp, top = 28.dp, bottom = 10.dp))
-            // segmented: viên nhấn đặc trên thẻ giấy
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(cs.card).border(1.dp, cs.outlineVariant, RoundedCornerShape(20.dp)).padding(6.dp)) {
+            SectionLabel("Giao diện")
+            // thanh chọn: nền thẻ không viền, viên nhấn đặc
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(cs.card).padding(5.dp)) {
                 listOf("Hệ thống", "Sáng", "Tối").forEachIndexed { i, label ->
                     val on = Prefs.themeMode == i
                     Box(
-                        Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(if (on) cs.primary else Color.Transparent)
+                        Modifier.weight(1f).clip(RoundedCornerShape(17.dp)).background(if (on) cs.primary else Color.Transparent)
                             .clickable { Prefs.setTheme(i) }.padding(vertical = 12.dp),
                         Alignment.Center,
-                    ) { Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 16.sp) }
+                    ) { Text(label, color = if (on) cs.onPrimary else cs.onSurfaceVariant, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
                 }
             }
-
-            Text("Màu nhấn", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            Text("Màu nhấn", Modifier.padding(start = 6.dp, top = 18.dp, bottom = 8.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 accents.forEachIndexed { i, a ->
                     Swatch(a.name, listOf(a.accent, a.seal, a.soft), cs.card, Prefs.accent == i, Modifier.weight(1f)) { Prefs.pickAccent(i) }
                 }
             }
-            Text("Nền", Modifier.padding(start = 4.dp, top = 22.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant)
+            Text("Nền", Modifier.padding(start = 6.dp, top = 18.dp, bottom = 8.dp), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 papers.forEachIndexed { i, p ->
                     Swatch(p.name, listOf(p.surfaceAlt, p.inkSoft, p.ink), p.bg, Prefs.paper == i, Modifier.weight(1f), ink = p.ink) { Prefs.pickPaper(i) }
                 }
             }
 
-            Eyebrow("Ứng dụng", Modifier.padding(start = 4.dp, top = 28.dp, bottom = 10.dp))
-            PaperCard {
-                var ahead by remember { mutableStateOf(Prefs.autoAhead) }
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).background(cs.primaryContainer, RoundedCornerShape(12.dp)), Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = cs.primary)
-                    }
-                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                        Text("Tự dịch trước 15 chương", style = MaterialTheme.typography.titleMedium)
-                        Text("Mở chương nào thì xếp dịch sẵn 15 chương kế tiếp", style = MaterialTheme.typography.labelMedium)
-                    }
-                    Switch(ahead, { ahead = it; Prefs.autoAhead = it })
-                }
+            if (u != null) {
+                SectionLabel("Thư viện")
+                SettingGroup(
+                    { SettingTile(Icons.Rounded.DownloadDone, "Bản offline", "Truyện đã tải để đọc không cần mạng", { Nav.push(Screen.Offline) }) },
+                    { SettingTile(Icons.Rounded.HourglassBottom, "Hàng đợi dịch", "Chương đang chờ và đang dịch", { Nav.push(Screen.Queue) }) },
+                )
+                SectionLabel("Tài khoản")
+                SettingGroup({ SettingTile(Icons.Rounded.PersonOutline, "Sửa thông tin", "Tên hiển thị và ảnh đại diện", { Nav.push(Screen.EditProfile) }) })
             }
-            Spacer(Modifier.height(10.dp))
-            PaperCard(onClick = { Nav.push(Screen.Queue) }) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(44.dp).background(cs.primaryContainer, RoundedCornerShape(12.dp)), Alignment.Center) {
-                        Icon(Icons.Rounded.HourglassBottom, null, tint = cs.primary)
-                    }
-                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                        Text("Hàng đợi dịch", style = MaterialTheme.typography.titleMedium)
-                        Text("Chương nào đang dịch, đang chờ, vừa xong", style = MaterialTheme.typography.labelMedium)
-                    }
-                    Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            UpdateCard()
+
+            SectionLabel("Ứng dụng")
+            var ahead by remember { mutableStateOf(Prefs.autoAhead) }
+            SettingGroup(
+                {
+                    SettingTile(
+                        Icons.AutoMirrored.Rounded.MenuBook, "Tự dịch trước 15 chương", "Mở chương nào thì xếp dịch sẵn 15 chương kế tiếp",
+                        onClick = { ahead = !ahead; Prefs.autoAhead = ahead },
+                        trailing = { Switch(ahead, { ahead = it; Prefs.autoAhead = it }) },
+                    )
+                },
+                { SettingTile(Icons.Rounded.Lightbulb, "Hướng dẫn sử dụng", "Mẹo đọc, lưu và yêu cầu dịch", { Nav.push(Screen.Guide) }) },
+                { UpdateTile() },
+            )
             Text(
                 "Gác Truyện native · ${BuildConfig.VERSION_NAME}", Modifier.fillMaxWidth().padding(top = 20.dp, bottom = DockSpace),
                 textAlign = TextAlign.Center, style = monoStyle(),
             )
         }
+    }
+}
+
+/** Thẻ hồ sơ: avatar + tên + email + nút đăng xuất; hình quyển sách mờ làm nền. */
+@Composable
+private fun ProfileCard(name: String, email: String, avatar: String?) {
+    val cs = MaterialTheme.colorScheme
+    PaperCard {
+        Box {
+            // matchParentSize + clip: hình trang trí tràn ra ngoài thẻ mà không làm thẻ cao thêm
+            Box(Modifier.matchParentSize().clipToBounds()) {
+                Icon(Icons.Rounded.AutoStories, null, Modifier.align(Alignment.TopEnd).offset(24.dp, (-38).dp).requiredSize(150.dp), cs.primary.copy(.07f))
+            }
+            Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Avatar(avatar, name, 60.dp)
+                Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                    Text("THƯ CÁC CỦA BẠN", style = MaterialTheme.typography.labelSmall, color = cs.primary, letterSpacing = 1.2.sp)
+                    Text(name, Modifier.padding(top = 3.dp), style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(email, Modifier.padding(top = 2.dp), style = monoStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                IconButton(Session::signOut) { Icon(Icons.AutoMirrored.Rounded.Logout, "Đăng xuất", tint = cs.primary) }
+            }
+        }
+    }
+}
+
+@Composable
+fun SectionLabel(text: String) =
+    Text(text, Modifier.padding(start = 8.dp, top = 26.dp, bottom = 10.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+/** Nhóm dòng cài đặt trong một thẻ, ngăn bằng vạch mảnh thụt vào. */
+@Composable
+fun SettingGroup(vararg tiles: @Composable () -> Unit) = PaperCard {
+    tiles.forEachIndexed { i, t ->
+        if (i > 0) HorizontalDivider(Modifier.padding(start = 66.dp, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(.5f))
+        t()
+    }
+}
+
+@Composable
+fun SettingTile(icon: ImageVector, label: String, subtitle: String?, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(cs.primary.copy(.12f)), Alignment.Center) {
+            Icon(icon, null, Modifier.size(20.dp), cs.primary)
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(label, style = MaterialTheme.typography.titleMedium)
+            subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+        if (trailing != null) trailing() else Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
     }
 }
 
@@ -278,7 +317,7 @@ private fun Swatch(name: String, dots: List<Color>, bg: Color, on: Boolean, modi
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(18.dp)
     Column(
-        modifier.clip(shape).background(bg).border(if (on) 2.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, shape)
+        modifier.clip(shape).background(bg).then(if (on) Modifier.border(2.dp, cs.primary, shape) else Modifier)
             .clickable(onClick = onClick).padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
