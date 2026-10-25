@@ -197,6 +197,7 @@ fun CultivationScreen(tab: Boolean = false) {
     var info by remember { mutableStateOf<String?>(null) }
     var picked by remember { mutableStateOf<JSONObject?>(null) }
     var recycleAll by remember { mutableStateOf(false) }
+    var craft by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<String?>(null) }
     var fx by remember { mutableStateOf<Pair<String, JSONObject>?>(null) }
     var speed by remember { mutableStateOf(false) }
@@ -288,6 +289,7 @@ fun CultivationScreen(tab: Boolean = false) {
                         Box(pad) {
                             SectionTitle("Túi đồ · ${bag.size}") {
                                 TextButton({ sheet = "suutam" }) { Text("Sưu tầm") }
+                                TextButton({ craft = true }) { Text("Luyện đan") }
                                 TextButton({ recycleAll = true }) { Text("Luyện hóa") }
                             }
                         }
@@ -355,6 +357,7 @@ fun CultivationScreen(tab: Boolean = false) {
             },
         )
     }
+    if (craft) CraftDialog({ craft = false }) { m -> craft = false; info = m; refresh() }
     if (recycleAll) RecycleAllDialog({ recycleAll = false }) { m -> recycleAll = false; info = m; refresh() }
     info?.let { m ->
         AlertDialog({ info = null }, containerColor = cs.card, text = { Text(m) }, confirmButton = { TextButton({ info = null }) { Text("OK") } })

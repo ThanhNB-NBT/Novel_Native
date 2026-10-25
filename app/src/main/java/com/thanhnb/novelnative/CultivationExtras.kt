@@ -304,6 +304,47 @@ private fun HaloPicker(st: JSONObject, done: () -> Unit) {
     }
 }
 
+/** Lò Luyện Đan: 5 bản dư cùng phẩm → 1 đan dược/linh thạch phẩm kế — cult_craft (141). Server chọn món. */
+@Composable
+internal fun CraftDialog(dismiss: () -> Unit, done: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var g by remember { mutableIntStateOf(1) }
+    var kind by remember { mutableStateOf("danduoc") }
+    var busy by remember { mutableStateOf(false) }
+    AlertDialog(
+        dismiss, containerColor = MaterialTheme.colorScheme.card,
+        title = { Text("Lò Luyện Đan") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Dồn 5 bản dư cùng phẩm (giữ lại 1 bản mỗi món) thành 1 vật phẩm phẩm kế tiếp. Món ra ngẫu nhiên.")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GradeNames.take(4).forEachIndexed { i, n -> FilterChip(g == i + 1, { g = i + 1 }, { Text("$n → ${GradeNames[i + 1]}") }) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(kind == "danduoc", { kind = "danduoc" }, { Text("Đan dược") })
+                    FilterChip(kind == "linhthach", { kind = "linhthach" }, { Text("Linh thạch") })
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                {
+                    busy = true
+                    scope.launch {
+                        val m = try {
+                            val it = JSONObject(Api.rpc("cult_craft", "p_grade" to g, "p_kind" to kind)).getJSONObject("item")
+                            "Luyện thành công: ${it.optString("name")} (phẩm ${GradeNames.getOrElse(it.optInt("grade") - 1) { "?" }})"
+                        } catch (e: CancellationException) { throw e } catch (e: Exception) { friendly(e) }
+                        done(m)
+                    }
+                },
+                enabled = !busy,
+            ) { Text("Luyện") }
+        },
+        dismissButton = { TextButton(dismiss) { Text("Huỷ") } },
+    )
+}
+
 /** Luyện hóa MỌI bản dư (giữ 1) của các món phẩm ≤ [gradeMax] — cult_recycle_all (124). */
 @Composable
 internal fun RecycleAllDialog(dismiss: () -> Unit, done: (String) -> Unit) {
