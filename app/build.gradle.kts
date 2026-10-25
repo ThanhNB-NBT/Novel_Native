@@ -96,5 +96,4 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-compose:3.1.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.1.0")
     implementation(files(sherpaAar))
-    implementation("org.apache.commons:commons-compress:1.28.0") // giải nén gói giọng .tar.bz2
 }

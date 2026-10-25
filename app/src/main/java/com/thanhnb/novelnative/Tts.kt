@@ -94,7 +94,7 @@ object TtsPlayer {
         .map { VoiceInfo(it.name, it.quality, it.isNetworkConnectionRequired) }
 
     fun pick(name: String) {
-        if (name != OfflineVoice.ID) tts?.voices?.firstOrNull { it.name == name }?.let { tts?.voice = it }
+        if (!OfflineVoice.isOffline(name)) tts?.voices?.firstOrNull { it.name == name }?.let { tts?.voice = it }
         voice = name
         Prefs.sp.edit().putString("tts_voice", name).apply()
     }
@@ -103,10 +103,10 @@ object TtsPlayer {
     fun preview(name: String) {
         if (playing) pause()
         pick(name)
-        if (name == OfflineVoice.ID) {
+        if (OfflineVoice.isOffline(name)) {
             val c = ctx ?: return
             job?.cancel()
-            job = scope.launch { OfflineVoice.say(c, PREVIEW, rate) }
+            job = scope.launch { OfflineVoice.say(c, name, PREVIEW, rate) }
             return
         }
         tts?.setSpeechRate(rate)
@@ -119,13 +119,13 @@ object TtsPlayer {
         rate = Prefs.sp.getFloat("tts_rate", 1f)
         OfflineVoice.check(c)
         val saved = Prefs.sp.getString("tts_voice", null)
-        if (OfflineVoice.ready && saved == OfflineVoice.ID) { voice = OfflineVoice.ID; return null }
+        if (OfflineVoice.ready(saved)) { voice = saved; return null }
         if (tts == null) {
             val ok = CompletableDeferred<Boolean>()
             val t = TextToSpeech(ctx) { ok.complete(it == TextToSpeech.SUCCESS) }
             if (!ok.await()) {
                 t.shutdown()
-                if (OfflineVoice.ready) { voice = OfflineVoice.ID; return null }
+                OfflineVoice.firstReady()?.let { voice = it; return null }
                 return "Máy không có công cụ đọc văn bản — hãy tải Giọng Gác Truyện (offline) ở nút Giọng đọc"
             }
             t.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
@@ -142,7 +142,7 @@ object TtsPlayer {
         val v = t.voices?.firstOrNull { it.name == saved && it.locale.language == "vi" }
         if (v != null) { t.voice = v; voice = v.name; return null }
         if (t.setLanguage(Locale("vi", "VN")) < TextToSpeech.LANG_AVAILABLE) {
-            if (OfflineVoice.ready) { voice = OfflineVoice.ID; return null }
+            OfflineVoice.firstReady()?.let { voice = it; return null }
             return "Máy chưa có giọng tiếng Việt — hãy tải Giọng Gác Truyện (offline) ở nút Giọng đọc"
         }
         voice = t.voice?.name
@@ -222,12 +222,12 @@ object TtsPlayer {
             for (i in startAt until paras.size) {
                 at = i
                 paraAt = i - lead
-                val offline = voice == OfflineVoice.ID
+                val offline = OfflineVoice.isOffline(voice)
                 val max = if (offline) 300 else 3000 // offline sinh xong cả khối mới phát → khối ngắn cho đỡ chờ
                 val cs = chunks(paras[i], max)
                 for ((k, chunk) in cs.withIndex()) {
                     if (offline) (cs.getOrNull(k + 1) ?: paras.getOrNull(i + 1)?.let { chunks(it, max).first() })
-                        ?.let { OfflineVoice.prefetch(ctx!!, it, rate) }
+                        ?.let { OfflineVoice.prefetch(ctx!!, voice!!, it, rate) }
                     if (!say(chunk)) { stop(); return } // engine lỗi → tắt gọn thay vì kẹt im
                 }
             }
@@ -239,7 +239,7 @@ object TtsPlayer {
     }
 
     private suspend fun say(text: String): Boolean {
-        if (voice == OfflineVoice.ID) return OfflineVoice.say(ctx ?: return false, text, rate)
+        voice?.takeIf(OfflineVoice::isOffline)?.let { return OfflineVoice.say(ctx ?: return false, it, text, rate) }
         val t = tts ?: return false
         t.setSpeechRate(rate)
         val d = CompletableDeferred<Boolean>()
@@ -260,6 +260,16 @@ object TtsPlayer {
             rest = rest.drop(cut + 1)
         }
         return out + rest
+    }
+
+    /** Xoá gói giọng; đang đọc bằng gói đó thì dừng, bỏ chọn giọng (lần đọc sau tự chọn lại). */
+    suspend fun dropPack(c: Context, p: OfflineVoice.Pack) {
+        if (voice?.let { it == "offline:${p.id}" || it.startsWith("offline:${p.id}:") } == true) {
+            stop()
+            voice = null
+            Prefs.sp.edit().remove("tts_voice").apply()
+        }
+        OfflineVoice.delete(c, p)
     }
 
     private const val PREVIEW = "Bạn đang nghe thử giọng đọc tiếng Việt của Gác Truyện."
@@ -337,26 +347,8 @@ fun TtsSheet() {
                 Opt(l, TtsPlayer.sleepSel == v) { TtsPlayer.sleep(v) }
             }
         }
-        Row(Modifier.fillMaxWidth().clickable(enabled = OfflineVoice.ready) { TtsPlayer.pick(OfflineVoice.ID) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(TtsPlayer.voice == OfflineVoice.ID, { TtsPlayer.pick(OfflineVoice.ID) }, enabled = OfflineVoice.ready)
-            Column(Modifier.weight(1f)) {
-                Text("Giọng Gác Truyện", style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                Text(
-                    when {
-                        OfflineVoice.ready -> "Offline · đọc được ở mọi nơi"
-                        OfflineVoice.progress >= 0 -> "Đang tải… ${(OfflineVoice.progress * 100).toInt()}%"
-                        else -> OfflineVoice.error ?: "Tải một lần ~20 MB, sau đó không cần mạng"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (OfflineVoice.error != null && !OfflineVoice.ready) cs.error else Color.Unspecified,
-                )
-            }
-            when {
-                OfflineVoice.ready -> IconButton({ TtsPlayer.preview(OfflineVoice.ID) }) { Icon(Icons.Rounded.PlayCircleOutline, "Nghe thử", tint = cs.primary) }
-                OfflineVoice.progress >= 0 -> CircularProgressIndicator({ OfflineVoice.progress }, Modifier.size(24.dp))
-                else -> IconButton({ OfflineVoice.download(ctx) { TtsPlayer.pick(OfflineVoice.ID) } }) { Icon(Icons.Rounded.Download, "Tải giọng offline", tint = cs.primary) }
-            }
-        }
+        OfflineVoice.packs.forEach { p -> OfflinePack(p) }
+        OfflineVoice.error?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.error) }
         if (voices.isEmpty()) Text(
             "Máy chưa có giọng tiếng Việt riêng — dùng Giọng Gác Truyện ở trên.",
             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
@@ -371,4 +363,49 @@ fun TtsSheet() {
             }
         }
     }
+}
+
+/** Một gói giọng offline: đầu mục có nút tải / xoá; tải xong liệt kê từng người đọc để chọn + nghe thử. */
+@Composable
+private fun OfflinePack(p: OfflineVoice.Pack) {
+    val cs = MaterialTheme.colorScheme
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val has = p.id in OfflineVoice.installed
+    var confirm by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(p.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                when {
+                    OfflineVoice.downloading == p.id -> "Đang tải… ${(OfflineVoice.progress * 100).toInt()}%"
+                    has -> "Offline · ~${p.sizeMb} MB trên máy"
+                    else -> "Tải một lần ~${p.sizeMb} MB, sau đó không cần mạng"
+                },
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+            )
+        }
+        when {
+            OfflineVoice.downloading == p.id -> CircularProgressIndicator({ OfflineVoice.progress }, Modifier.size(24.dp))
+            has -> IconButton({ confirm = true }) { Icon(Icons.Rounded.DeleteOutline, "Xoá ${p.title}", tint = cs.onSurfaceVariant) }
+            else -> IconButton({ OfflineVoice.download(ctx, p) { TtsPlayer.pick(OfflineVoice.idOf(p, 0)) } }, enabled = OfflineVoice.downloading == null) {
+                Icon(Icons.Rounded.Download, "Tải ${p.title}", tint = cs.primary)
+            }
+        }
+    }
+    if (has) p.voices.forEach { (sid, name) ->
+        val id = OfflineVoice.idOf(p, sid)
+        Row(Modifier.fillMaxWidth().clickable { TtsPlayer.pick(id) }.padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            RadioButton(TtsPlayer.voice == id, { TtsPlayer.pick(id) })
+            Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            IconButton({ TtsPlayer.preview(id) }) { Icon(Icons.Rounded.PlayCircleOutline, "Nghe thử $name", tint = cs.primary) }
+        }
+    }
+    if (confirm) AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Xoá ${p.title}?") },
+        text = { Text("Giải phóng ~${p.sizeMb} MB. Cần nghe lại thì tải lại.") },
+        confirmButton = { TextButton({ confirm = false; scope.launch { TtsPlayer.dropPack(ctx, p) } }) { Text("Xoá") } },
+        dismissButton = { TextButton({ confirm = false }) { Text("Huỷ") } },
+    )
 }
