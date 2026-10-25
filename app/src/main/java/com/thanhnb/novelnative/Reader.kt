@@ -200,6 +200,8 @@ fun ReaderScreen(s: Screen.Read) {
     LaunchedEffect(msg) { delay(if (offerPatch) 6000 else 2500); msg = null; offerPatch = false }
     val patchScope = rememberCoroutineScope()
     val go = { i: Int -> if (i >= 1) Nav.replace(s.copy(index = i)) }
+    val claims = load("gift_claims", s.novelId) { Gift.claimed(s.novelId) }
+    var claimedNow by remember(s.novelId) { mutableStateOf(emptySet<Int>()) } // vừa nhận trong phiên, che độ trễ của lần tải lại
 
     // Giữ màn hình sáng khi đang đọc
     val view = LocalView.current
@@ -326,7 +328,10 @@ fun ReaderScreen(s: Screen.Read) {
                 Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
                     CompositionLocalProvider(LocalContentColor provides fg.copy(alpha = 0.55f)) {
                         IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", Modifier.size(20.dp)) }
-                        Text("Chương ${s.index}", Modifier.weight(1f), fontFamily = Jakarta, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Chương ${s.index}", fontFamily = Jakarta, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Orb(modifier = Modifier.padding(start = 6.dp).size(30.dp))
+                        }
                         Text("${(pct * 100).roundToInt()}%", Modifier.padding(end = 4.dp), style = monoStyle(11, fg.copy(alpha = 0.45f)))
                         val toggleTts = {
                             if (TtsPlayer.active) TtsPlayer.stop()
@@ -351,7 +356,7 @@ fun ReaderScreen(s: Screen.Read) {
                                     val i = if (st.page) (pct * paras.size).toInt() else list.firstVisibleItemIndex - 1
                                     scope.launch {
                                         runCatching { Api.addBookmark(s.novelId, s.index, pct, paras.getOrNull(i.coerceIn(0, (paras.size - 1).coerceAtLeast(0)))?.take(120)) }
-                                            .onSuccess { msg = "Đã thêm dấu trang" }.onFailure { msg = friendly(it) }
+                                            .onSuccess { msg = "Đã thêm dấu trang"; Mascot.react(OrbMood.Love) }.onFailure { msg = friendly(it); Mascot.react(OrbMood.Sad) }
                                     }
                                 })
                                 DropdownMenuItem({ Text("Mục lục") }, { menu = false; sheet = 1 })
@@ -386,8 +391,15 @@ fun ReaderScreen(s: Screen.Read) {
                             scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
                         }) { Text("Dịch lại chương") }
                     }
-                    st.page -> PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, hl, { p, off -> hitAt = off; editing = p }) {}
-                    else -> ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go) { p, off -> hitAt = off; editing = p }
+                    else -> {
+                        // cơ duyên ngẫu nhiên theo (user, truyện, chương); đã nhận rồi thì ẩn nút
+                        val after = Gift.after(Session.user?.id, s.novelId, c.index, c.paragraphs.size)
+                        val giftUi: (@Composable () -> Unit)? = if (after < 0 || c.index in (claims.res?.getOrNull().orEmpty() + claimedNow)) null else ({
+                            GiftButton(s.novelId, c.index, fg) { claimedNow = claimedNow + c.index; claims.reload() }
+                        })
+                        if (st.page) PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, go, hl, { p, off -> hitAt = off; editing = p }, giftUi) {}
+                        else ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go, giftUi?.let { after to it }) { p, off -> hitAt = off; editing = p }
+                    }
                 }
             }
         }
@@ -439,7 +451,7 @@ fun ReaderScreen(s: Screen.Read) {
 
 /** Cuộn dọc. Cuộn hết rồi kéo tiếp quá mép → đổi chương (đo khoảng vượt mép lúc nhấc tay). */
 @Composable
-private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, hl: Int, go: (Int) -> Unit, onEdit: (String, Int) -> Unit) {
+private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, hl: Int, go: (Int) -> Unit, gift: Pair<Int, @Composable () -> Unit>?, onEdit: (String, Int) -> Unit) {
     val haptic = LocalHapticFeedback.current
     val limit = with(LocalDensity.current) { 72.dp.toPx() }
     var over by remember { mutableFloatStateOf(0f) } // >0 kéo quá đáy · <0 kéo quá đỉnh
@@ -478,6 +490,8 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
                         .padding(st.margin.dp, (st.size * 0.45f).dp),
                     onTextLayout = { lay = it }, style = body,
                 )
+                // quà nằm NGAY DƯỚI đoạn của nó, cùng một item để chỉ số đoạn (tiến độ, TTS) không lệch
+                if (gift != null && gift.first == i) gift.second()
             }
             item {
                 Column(Modifier.fillMaxWidth().padding(st.margin.dp, 28.dp, st.margin.dp, 80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -514,7 +528,7 @@ private fun ScrollChapter(c: Chapter, st: Style, body: TextStyle, title: TextSty
 @Composable
 private fun PagedChapter(
     c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets,
-    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, hl: Int, onEdit: (String, Int) -> Unit, tap: () -> Unit,
+    turn: PageTurn, startPct: () -> Float, onPct: (Float) -> Unit, go: (Int) -> Unit, hl: Int, onEdit: (String, Int) -> Unit, gift: (@Composable () -> Unit)?, tap: () -> Unit,
 ) = BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(insets)) {
     val m = rememberTextMeasurer()
     val d = LocalDensity.current
@@ -560,6 +574,7 @@ private fun PagedChapter(
             i == total - 1 -> PageEdge(true, fg)
             i == total - 2 -> Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
                 Text("Hết chương ${c.index}", color = fg.copy(alpha = 0.5f), fontSize = 13.sp, fontFamily = Jakarta)
+                gift?.invoke() // lật trang: quà nằm ở trang cuối chương, không chen vào trang chữ
                 Spacer(Modifier.height(10.dp))
                 Text("vuốt tiếp để sang chương sau →", color = fg.copy(alpha = 0.4f), fontSize = 12.sp, fontFamily = Jakarta)
             }

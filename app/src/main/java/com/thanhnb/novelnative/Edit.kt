@@ -46,6 +46,14 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, hit: Int = -1
     val span = if (zh != null && wrong.isNotEmpty()) HanViet.zhSpanFor(wrong, zh) else null
     val uri = androidx.compose.ui.platform.LocalUriHandler.current
     val paraOk = !untouched && tf.text.isNotBlank()
+    // gợi ý bản đúng từ thuật ngữ truyện — chỉ khi vùng chọn trông như tên riêng, tránh lôi cả rổ thuật ngữ ra
+    val terms by produceState(emptyList<Term>(), novelId) { value = runCatching { Api.terms(novelId) }.getOrDefault(emptyList()) }
+    val termHits = if (wrong.isEmpty() || !looksLikeName(wrong)) emptyList() else {
+        val low = wrong.lowercase()
+        fun hit(x: String?) = !x.isNullOrBlank() && x.lowercase().let { it.contains(low) || low.contains(it) }
+        terms.filter { it.approved && it.correct.isNotBlank() && it.correct != wrong && (hit(it.correct) || hit(it.wrong) || (!it.zh.isNullOrBlank() && wrong.contains(it.zh))) }
+            .map { it.correct }.distinct().take(6)
+    }
 
     fun run(msg: (Boolean) -> String, job: suspend () -> Boolean) {
         if (Session.user == null) { err = "Đăng nhập để sửa bản dịch"; return }
@@ -109,6 +117,10 @@ fun EditSheet(novelId: Int, index: Int, para: String, zh: String?, hit: Int = -1
             if (span != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("$span →", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 HanViet.candidates(span).forEach { c -> Chip(c) { correct = c } }
+            }
+            if (termHits.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Thuật ngữ →", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                termHits.forEach { c -> Chip(c) { correct = c } }
             }
             if (aiBusy) Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)

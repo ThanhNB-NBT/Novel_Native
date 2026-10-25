@@ -23,6 +23,14 @@ val endpointConfigUrl = System.getenv("ENDPOINT_CONFIG_URL") ?: env["ENDPOINT_CO
 val endpointAllowedHosts = System.getenv("ENDPOINT_ALLOWED_HOSTS") ?: env["ENDPOINT_ALLOWED_HOSTS"].orEmpty()
 // Ký phát hành: CI giải keystore từ secret ra file rồi đặt ANDROID_KEYSTORE_FILE/ANDROID_KEYSTORE_PASSWORD (alias "upload")
 val keystoreFile: String? = System.getenv("ANDROID_KEYSTORE_FILE")
+// Giọng Việt offline (OfflineVoice.kt): sherpa-onnx không có trên Maven → tải AAR một lần vào app/libs (đã gitignore).
+// Ghim 1.13.8: bản 2.0 bỏ espeak-ng, giọng Piper tiếng Việt không còn tự phát âm.
+val sherpaAar = file("libs/sherpa-onnx-static-link-onnxruntime-1.13.8.aar")
+if (!sherpaAar.exists()) {
+    sherpaAar.parentFile.mkdirs()
+    uri("https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/${sherpaAar.name}").toURL().openStream()
+        .use { i -> sherpaAar.outputStream().use { i.copyTo(it) } }
+}
 
 android {
     namespace = "com.thanhnb.novelnative"
@@ -54,7 +62,8 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") } // bỏ x86 (chỉ máy ảo) → APK nhẹ ~25 MB
             // Máy dev: ký debug để thử bản R8; CI phát hành: keystore thật (cập nhật cài đè cần cùng chữ ký)
             signingConfig = signingConfigs.getByName(if (keystoreFile != null) "upload" else "debug")
         }
@@ -64,6 +73,9 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Nén .so trong APK (mặc định để nguyên ~40 MB); đổi lại cài xong giải nén ra đĩa
+    packaging { jniLibs.useLegacyPackaging = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -83,4 +95,6 @@ dependencies {
     implementation("dev.chrisbanes.haze:haze:1.7.1") // làm mờ nền sau dock kính
     implementation("io.coil-kt.coil3:coil-compose:3.1.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.1.0")
+    implementation(files(sherpaAar))
+    implementation("org.apache.commons:commons-compress:1.28.0") // giải nén gói giọng .tar.bz2
 }

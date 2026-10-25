@@ -445,14 +445,16 @@ private fun ContinueCard(n: Novel) {
     val cs = MaterialTheme.colorScheme
     val cur = n.curChapter ?: 1
     val dark = cs.background.luminance() < .5f
-    // màn sáng: khối màu nhấn đậm + chữ trắng để nổi như màn tối; màn tối: thẻ giấy tối
-    val fg = if (dark) cs.onSurface else Color.White
-    val sub = if (dark) cs.onSurfaceVariant else Color.White.copy(.82f)
+    // khối màu nhấn + chữ trắng ở cả hai chế độ; màn tối pha đen sâu hơn để không chói
+    val fg = Color.White
+    val sub = Color.White.copy(.82f)
     Row(
         Modifier.fillMaxWidth().padding(bottom = 8.dp).shadow(if (dark) 0.dp else 10.dp, RoundedCornerShape(22.dp), ambientColor = cs.primary.copy(.5f), spotColor = cs.secondary.copy(.55f))
             .clip(RoundedCornerShape(22.dp))
-            .then(if (dark) Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(22.dp)) else Modifier)
-            .background(if (dark) Brush.linearGradient(listOf(cs.surface, cs.surface)) else Brush.linearGradient(listOf(cs.primary, androidx.compose.ui.graphics.lerp(cs.primary, Color.Black, .42f))))
+            .background(Brush.linearGradient(listOf(
+                androidx.compose.ui.graphics.lerp(cs.primary, Color.Black, if (dark) .55f else 0f),
+                androidx.compose.ui.graphics.lerp(cs.primary, Color.Black, if (dark) .8f else .42f),
+            )))
             .bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -464,14 +466,14 @@ private fun ContinueCard(n: Novel) {
             LinearProgressIndicator(
                 { (cur.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(.03f, 1f) },
                 Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
-                color = cs.tertiary, trackColor = if (dark) cs.onSurface.copy(.1f) else Color.White.copy(.28f), gapSize = 0.dp, drawStopIndicator = {},
+                color = cs.tertiary, trackColor = Color.White.copy(.28f), gapSize = 0.dp, drawStopIndicator = {},
             )
         }
         Box(
-            Modifier.padding(start = 8.dp).size(52.dp).clip(CircleShape).background(if (dark) cs.primary else Color.White)
+            Modifier.padding(start = 8.dp).size(52.dp).clip(CircleShape).background(Color.White)
                 .bounceClick { Nav.push(Screen.Read(n.id, n.title, cur)) },
             Alignment.Center,
-        ) { Icon(Icons.Rounded.PlayArrow, "Đọc tiếp", Modifier.size(30.dp), if (dark) cs.onPrimary else cs.primary) }
+        ) { Icon(Icons.Rounded.PlayArrow, "Đọc tiếp", Modifier.size(30.dp), cs.primary) }
     }
 }
 

@@ -63,6 +63,7 @@ sealed interface Screen {
     data object Offline : Screen
     data object EditProfile : Screen
     data object Queue : Screen
+    data object Cultivation : Screen
     data object Guide : Screen
     data object Changelog : Screen
     data object Lunar : Screen
@@ -127,26 +128,31 @@ fun <T> Loaded(l: Loader<T>, topInset: Boolean = false, loading: @Composable () 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Bar(title: String, actions: @Composable RowScope.() -> Unit = {}) = TopAppBar(
-    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = Jakarta, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.4).sp) },
+    title = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = Jakarta, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.4).sp)
+            Orb(modifier = Modifier.padding(start = 6.dp).size(32.dp))
+        }
+    },
     navigationIcon = { IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại") } },
     actions = actions,
 )
 
 /**
  * Tiêu đề trang. Tab chính: nhãn phụ nhỏ + tên trang lớn. Trang con (back = true): gọn một dòng,
- * nút lùi + tên 22sp, bỏ nhãn phụ để nhường chỗ cho nội dung.
+ * nút lùi + tên 22sp, bỏ nhãn phụ để nhường chỗ cho nội dung. plain = bỏ nền chuyển sắc (màn có nền tranh riêng như Tu Tiên).
  */
 @Composable
-fun PageHeader(eyebrow: String, title: String, seal: String, back: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) {
+fun PageHeader(eyebrow: String, title: String, seal: String, back: Boolean = false, plain: Boolean = false, actions: @Composable RowScope.() -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     val dark = cs.background.luminance() < .5f
     // tab chính: nền chuyển sắc theo màu nhấn + chữ Hán chìm bên phải; trang con giữ gọn một dòng
     Box(
         Modifier.fillMaxWidth().clipToBounds()
-            .then(if (back) Modifier else Modifier.background(Brush.linearGradient(listOf(cs.primary.copy(if (dark) .16f else .20f), cs.secondary.copy(if (dark) .03f else .10f), Color.Transparent), start = Offset.Zero, end = Offset(900f, 700f)))),
+            .then(if (back || plain) Modifier else Modifier.background(Brush.linearGradient(listOf(cs.primary.copy(if (dark) .16f else .20f), cs.secondary.copy(if (dark) .03f else .10f), Color.Transparent), start = Offset.Zero, end = Offset(900f, 700f)))),
     ) {
         // tan dần về màu nền ở đáy, không để lại mép cắt
-        if (!back) Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to Color.Transparent, 1f to cs.background)))
+        if (!back && !plain) Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Transparent, .45f to Color.Transparent, 1f to cs.background)))
         if (!back && seal.isNotEmpty()) Text(
             seal, Modifier.align(Alignment.BottomEnd).offset(x = 14.dp, y = 10.dp),
             color = if (dark) cs.primary.copy(.07f) else cs.secondary.copy(.14f), fontSize = 104.sp, fontWeight = FontWeight.Bold, lineHeight = 104.sp,
@@ -164,13 +170,16 @@ fun PageHeader(eyebrow: String, title: String, seal: String, back: Boolean = fal
                     Box(Modifier.size(6.dp).background(cs.secondary, CircleShape))
                     Text(eyebrow, Modifier.padding(start = 6.dp), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = cs.primary, maxLines = 1)
                 }
-                Text(
-                    title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontFamily = Jakarta, fontWeight = if (back) FontWeight.Bold else FontWeight.ExtraBold,
-                        fontSize = if (back) 22.sp else 34.sp, letterSpacing = if (back) (-0.4).sp else (-0.9).sp,
-                    ),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontFamily = Jakarta, fontWeight = if (back) FontWeight.Bold else FontWeight.ExtraBold,
+                            fontSize = if (back) 22.sp else 34.sp, letterSpacing = if (back) (-0.4).sp else (-0.9).sp,
+                        ),
+                    )
+                    Orb(modifier = Modifier.padding(start = 6.dp).size(if (back) 34.dp else 46.dp))
+                }
             }
             if (back) actions() else Row(Modifier.clip(CircleShape).background(cs.surface.copy(.85f)), verticalAlignment = Alignment.CenterVertically, content = actions)
         }

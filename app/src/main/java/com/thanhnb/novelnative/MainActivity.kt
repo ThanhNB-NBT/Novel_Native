@@ -50,6 +50,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmarks
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
@@ -99,7 +100,7 @@ class MainActivity : ComponentActivity() {
                 val key = "${stack.lastIndex}:${stack.last()}"
                 BackHandler(stack.size > 1) { holder.removeState(key); Nav.pop() }
                 AutoUpdatePrompt()
-                Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().mascotGaze()) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         // Đẩy màn mới vào từ phải (màn cũ lùi nhẹ + mờ), lùi lại thì ngược chiều; đổi chương (cùng độ sâu) không hiệu ứng
                         AnimatedContent(
@@ -131,6 +132,7 @@ class MainActivity : ComponentActivity() {
                                         Screen.Offline -> OfflineScreen()
                                         Screen.EditProfile -> EditProfileScreen()
                                         Screen.Queue -> QueueScreen()
+                                        Screen.Cultivation -> CultivationScreen()
                                         Screen.Guide -> GuideScreen()
                                         Screen.Changelog -> ChangelogScreen()
                                         Screen.Lunar -> LunarScreen()
@@ -160,6 +162,7 @@ private class TabItem(val label: String, val on: ImageVector, val off: ImageVect
 private val tabs = listOf(
     TabItem("Tủ truyện", Icons.Rounded.Bookmarks, Icons.Outlined.Bookmarks),
     TabItem("Khám phá", Icons.Rounded.Explore, Icons.Outlined.Explore),
+    TabItem("Tu Tiên", Icons.Rounded.AutoAwesome, Icons.Rounded.AutoAwesome),
     TabItem("Thông báo", Icons.Rounded.Notifications, Icons.Outlined.Notifications),
     TabItem("Tôi", Icons.Rounded.Person, Icons.Outlined.Person),
 )
@@ -187,7 +190,8 @@ private fun Tabs() {
                 when (tab) {
                     0 -> LibraryTab()
                     1 -> ExploreTab()
-                    2 -> NotifTab()
+                    2 -> CultivationScreen(tab = true)
+                    3 -> NotifTab()
                     else -> AccountTab()
                 }
             } }
@@ -228,7 +232,7 @@ private fun Dock(unread: Int, glass: HazeState, pos: () -> Float, modifier: Modi
         val p = pos()
         tabs.forEachIndexed { i, t ->
             // mức "đang chọn" liên tục: 1 khi pager nằm đúng tab i, giảm tuyến tính về 0 khi lệch một trang
-            DockItem(t, (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f), if (i == 2) unread else 0) { Nav.tab = i }
+            DockItem(t, (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f), if (i == 3) unread else 0) { Nav.tab = i }
         }
     }
 }
