@@ -37,6 +37,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
@@ -57,6 +61,15 @@ class LunarDate(val day: Int, val month: Int, val year: Int, val leap: Boolean, 
 
 private val CAN = listOf("Giáp", "Ất", "Bính", "Đinh", "Mậu", "Kỷ", "Canh", "Tân", "Nhâm", "Quý")
 private val CHI = listOf("Tý", "Sửu", "Dần", "Mão", "Thìn", "Tỵ", "Ngọ", "Mùi", "Thân", "Dậu", "Tuất", "Hợi")
+private val CAN_HAN = listOf("甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸")
+private val CHI_HAN = listOf("子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥")
+
+/** "Bính Ngọ" → "丙午". */
+private fun han(canChi: String): String {
+    val (can, chi) = canChi.split(' ')
+    return CAN_HAN[CAN.indexOf(can).coerceAtLeast(0)] + CHI_HAN[CHI.indexOf(chi).coerceAtLeast(0)]
+}
+
 private val MONTHS = listOf("Giêng", "Hai", "Ba", "Tư", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười", "Mười Một", "Chạp")
 private const val TZ = 7.0
 private const val DR = PI / 180
@@ -318,6 +331,8 @@ fun LunarScreen(tab: Boolean = false) {
                 { month = today.withDayOfMonth(1); sel = today }, Modifier.align(Alignment.CenterHorizontally),
             ) { Text("Về hôm nay") }
 
+            DayHero(sel)
+
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(horizontal = 8.dp, vertical = 12.dp)) {
                 Row(Modifier.padding(bottom = 6.dp)) {
                     listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN").forEachIndexed { i, w ->
@@ -349,55 +364,82 @@ fun LunarScreen(tab: Boolean = false) {
             }
 
             Legend()
-            DayDetail(sel, today)
+            DayExtras(sel, today)
             Spacer(Modifier.height(32.dp))
         }
     }
 }
 
-/** Chi tiết ngày đang chọn: ngày âm + trăng, dịp lễ, Can Chi + nạp âm, tiết khí, giờ hoàng đạo. */
+/** Tờ lịch của ngày đang chọn: số ngày âm cỡ lớn, trăng, hoàng/hắc đạo + dịp lễ, Can Chi (chữ Hán + âm Việt), nạp âm. */
 @Composable
-private fun DayDetail(d: LocalDate, today: LocalDate) {
+private fun DayHero(d: LocalDate) {
     val cs = MaterialTheme.colorScheme
     val l = toLunar(d)
     val ev = events(d, l)
     val good = isGoodDay(l)
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
-                    Text(
-                        "Ngày ${l.day} ${l.monthName.replaceFirst("Tháng", "tháng")}", style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold, color = cs.onSurface,
-                    )
-                    Text("${moonName(l.day)} · năm ${l.yearName}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+    val e = napAmElement(l)
+    val white = Color.White
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Brush.linearGradient(listOf(cs.primary, lerp(cs.primary, Color.Black, .55f)))).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = white.copy(.8f))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    AnimatedContent(l.day, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }, label = "lunarDay") { n ->
+                        Text("$n", style = MaterialTheme.typography.headlineLarge.copy(fontSize = 76.sp, lineHeight = 80.sp), fontWeight = FontWeight.ExtraBold, color = white)
+                    }
+                    Column(Modifier.padding(start = 10.dp, bottom = 12.dp)) {
+                        Text("${l.monthName.replaceFirst("Tháng", "tháng")} âm lịch", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = white)
+                        Text(moonName(l.day), style = MaterialTheme.typography.labelMedium, color = white.copy(.75f))
+                    }
                 }
-                MoonPhase(l.day, 64.dp)
             }
-            // hoàng đạo / hắc đạo + các dịp lễ
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Tag(if (good) "Ngày hoàng đạo" else "Ngày hắc đạo", if (good) GOOD_GREEN else cs.onSurfaceVariant, solid = good)
-                ev.forEach { Tag(it.name, if (it.lunar) cs.primary else FULL_DOT) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CanChiTile("Năm", l.yearName, Modifier.weight(1f))
-                CanChiTile("Tháng", l.monthCanChi, Modifier.weight(1f))
-                CanChiTile("Ngày", l.dayCanChi, Modifier.weight(1f))
-            }
-            NapAmRow(l)
+            MoonPhase(l.day, 84.dp)
         }
-        TermCard(d)
-        HoursCard(l, isToday = d == today)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HeroTag(if (good) "Ngày hoàng đạo" else "Ngày hắc đạo", if (good) GOOD_GREEN else white.copy(.16f))
+            ev.forEach { HeroTag(it.name, white.copy(.16f)) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HeroCanChi("Năm", l.yearName, Modifier.weight(1f))
+            HeroCanChi("Tháng", l.monthCanChi, Modifier.weight(1f))
+            HeroCanChi("Ngày", l.dayCanChi, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).background(elementColor(e), CircleShape))
+            Text("Nạp âm", Modifier.padding(start = 10.dp).width(64.dp), style = MaterialTheme.typography.labelMedium, color = white.copy(.7f))
+            Text(napAm(l).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = white)
+            Text("Hành ${e.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelMedium, color = white.copy(.85f), fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
 @Composable
-private fun Tag(text: String, color: Color, solid: Boolean = false) {
-    Text(
-        text, Modifier.clip(RoundedCornerShape(50)).background(if (solid) color else color.copy(alpha = .12f)).padding(horizontal = 12.dp, vertical = 5.dp),
-        style = MaterialTheme.typography.labelMedium, color = if (solid) Color.White else color, fontWeight = FontWeight.SemiBold, maxLines = 1,
-    )
+private fun HeroTag(text: String, bg: Color) = Text(
+    text, Modifier.clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 12.dp, vertical = 5.dp),
+    style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1,
+)
+
+/** Ô Can Chi: chữ Hán to ở trên, âm Việt nhỏ ở dưới. */
+@Composable
+private fun HeroCanChi(label: String, value: String, modifier: Modifier) = Column(
+    modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(.13f)).padding(vertical = 10.dp),
+    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp),
+) {
+    Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(.7f), letterSpacing = 1.sp)
+    Text(han(value), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+    Text(value, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.85f), maxLines = 1)
+}
+
+/** Phần dưới tờ lịch: tiết khí + đồng hồ 12 canh giờ. */
+@Composable
+private fun DayExtras(d: LocalDate, today: LocalDate) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        TermCard(d)
+        HoursCard(toLunar(d), isToday = d == today)
+    }
 }
 
 /** Màu theo ngũ hành của nạp âm. */
@@ -407,18 +449,6 @@ private fun elementColor(e: String) = when (e) {
     "thủy" -> Color(0xFF2F7BE0)
     "hỏa" -> Color(0xFFE5532D)
     else -> Color(0xFF9A6B3F) // thổ
-}
-
-@Composable
-private fun NapAmRow(l: LunarDate) {
-    val cs = MaterialTheme.colorScheme
-    val e = napAmElement(l)
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).background(elementColor(e), CircleShape))
-        Text("Nạp âm", Modifier.padding(start = 10.dp).width(64.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-        Text(napAm(l).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Text("Hành ${e.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelMedium, color = elementColor(e), fontWeight = FontWeight.SemiBold)
-    }
 }
 
 /** Tiết khí: tiết đang diễn ra, thanh tiến độ tới tiết kế tiếp (số ngày còn lại). */
@@ -450,45 +480,53 @@ private fun TermCard(d: LocalDate) {
     }
 }
 
-/** 12 canh giờ: giờ hoàng đạo tô nhấn, giờ hiện tại (nếu xem hôm nay) có viền. */
+/** Đồng hồ 12 canh giờ: Tý ở đỉnh, đi theo chiều kim đồng hồ; giờ hoàng đạo tô xanh, giờ hiện tại (xem hôm nay) có vòng ngoài. */
 @Composable
 private fun HoursCard(l: LunarDate, isToday: Boolean) {
     val cs = MaterialTheme.colorScheme
     val good = remember(l.jd) { goodHours(l) }
     val nowIdx = if (isToday) ((java.time.LocalTime.now().hour + 1) / 2) % 12 else -1
+    val ringDp = 248f
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Eyebrow("Giờ hoàng đạo", Modifier.weight(1f))
             Text("${good.size} giờ tốt", style = MaterialTheme.typography.labelMedium, color = GOOD_GREEN, fontWeight = FontWeight.SemiBold)
         }
-        for (row in 0 until 2) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (c in 0 until 6) {
-                val i = row * 6 + c
-                val g = i in good
-                val shape = RoundedCornerShape(14.dp)
-                Column(
-                    Modifier.weight(1f).clip(shape).background(if (g) GOOD_GREEN.copy(alpha = .14f) else Color.Transparent)
-                        .border(if (i == nowIdx) 1.8.dp else 1.dp, if (i == nowIdx) cs.primary else if (g) GOOD_GREEN.copy(alpha = .35f) else cs.outlineVariant.copy(alpha = .6f), shape)
-                        .padding(vertical = 9.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(HOURS[i].first, style = MaterialTheme.typography.titleSmall, fontWeight = if (g) FontWeight.ExtraBold else FontWeight.Medium, color = if (g) GOOD_GREEN else cs.onSurfaceVariant)
-                    Text(HOURS[i].second, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Box(Modifier.align(Alignment.CenterHorizontally).size(ringDp.dp), Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val w = 30.dp.toPx()
+                val r = size.minDimension / 2 - w / 2 - 6.dp.toPx()
+                val tl = Offset(center.x - r, center.y - r)
+                for (i in 0 until 12) {
+                    val start = -90f + i * 30f - 15f + 2f // lệch nửa cung để Tý nằm giữa đỉnh; chừa khe 4° giữa các cung
+                    drawArc(if (i in good) GOOD_GREEN else cs.onSurface.copy(alpha = .09f), start, 26f, false, tl, Size(2 * r, 2 * r), style = Stroke(w))
+                    if (i == nowIdx) {
+                        val ro = r + w / 2 + 4.dp.toPx()
+                        drawArc(cs.primary, start, 26f, false, Offset(center.x - ro, center.y - ro), Size(2 * ro, 2 * ro), style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                    }
+                }
+            }
+            val rl = ringDp / 2 - 15f - 6f
+            for (i in 0 until 12) {
+                val a = Math.toRadians(-90.0 + i * 30.0)
+                Text(
+                    HOURS[i].first, Modifier.offset(x = (rl * cos(a)).dp, y = (rl * sin(a)).dp),
+                    style = MaterialTheme.typography.labelLarge, fontWeight = if (i in good) FontWeight.ExtraBold else FontWeight.Medium,
+                    color = if (i in good) Color.White else cs.onSurfaceVariant,
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (nowIdx >= 0) {
+                    Text("Bây giờ", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    Text("Giờ ${HOURS[nowIdx].first}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = if (nowIdx in good) GOOD_GREEN else cs.onSurface)
+                    Text(HOURS[nowIdx].second, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                } else {
+                    Text("${good.size}/12", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = GOOD_GREEN)
+                    Text("giờ hoàng đạo", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CanChiTile(label: String, value: String, modifier: Modifier) {
-    val cs = MaterialTheme.colorScheme
-    Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(cs.primary.copy(alpha = .08f)).padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, letterSpacing = 1.sp)
-        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.primary, maxLines = 1)
+        Text(good.joinToString(" · ") { "${HOURS[it].first} ${HOURS[it].second}" }, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 
