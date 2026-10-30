@@ -78,7 +78,7 @@ internal fun CultActions(st: JSONObject, showHalo: Boolean, onChange: () -> Unit
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         tabs.forEach { (k, icon, title) ->
             Column(Modifier.weight(1f).cultCard(16.dp).clickable { open = k }.padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(icon, null, Modifier.size(24.dp), tint = cs.primary)
+                Box(Modifier.size(40.dp).clip(CircleShape).background(cs.primary.copy(.14f)), Alignment.Center) { Icon(icon, null, Modifier.size(22.dp), tint = cs.primary) }
                 Text(title, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge, maxLines = 1)
             }
         }

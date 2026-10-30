@@ -18,7 +18,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Backpack
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.GridView
@@ -32,13 +34,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -73,6 +80,8 @@ import kotlin.math.sin
  */
 
 internal val RealmNames = listOf("Luyện Khí", "Trúc Cơ", "Kim Đan", "Nguyên Anh", "Hóa Thần", "Luyện Hư", "Hợp Thể", "Đại Thừa", "Độ Kiếp")
+private val HanNum = listOf("一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二", "十三", "十四", "十五")
+private val StatIcons = mapOf("atk" to Icons.Rounded.Bolt, "def" to Icons.Rounded.ShieldMoon, "hp" to Icons.Rounded.Favorite, "agi" to Icons.Rounded.Air, "than_thuc" to Icons.Rounded.AutoAwesome)
 private val RealmHan = listOf("煉氣", "築基", "金丹", "元嬰", "化神", "煉虛", "合體", "大乘", "渡劫")
 internal val TienTierNames = listOf(
     "Tiên Nhân", "Địa Tiên", "Thiên Tiên", "Kim Tiên", "Thái Ất Kim Tiên", "Đại La Kim Tiên", "Đạo Tổ",
@@ -380,6 +389,73 @@ fun CultivationScreen(tab: Boolean = false) {
 }
 
 /**
+ * Trận pháp dưới chân: vòng nét đứt chạy quanh, vạch khắc xoay, vòng trong chạy ngược, chín nút = chín tầng (đã qua thì sáng, tầng hiện tại đập nhẹ).
+ * Mọi chu kỳ là bội nguyên của vòng 8 giây [t] nên lặp liền mạch; ellipse dẹt 0,24 để ra phối cảnh nhìn từ trên xuống.
+ */
+private fun DrawScope.drawFormation(c: Offset, rx: Float, col: Color, t: Float, lit: Int) {
+    val tau = 2f * PI.toFloat()
+    val d = density
+    val ry = rx * .24f
+    fun pt(a: Float, k: Float) = Offset(c.x + rx * k * cos(a), c.y + ry * k * sin(a))
+    withTransform({ scale(1f, .24f, c) }) {
+        drawCircle(Brush.radialGradient(listOf(col.copy(.34f), col.copy(.1f), Color.Transparent), c, rx * 1.25f), rx * 1.25f, c)
+    }
+    fun ring(k: Float, alpha: Float, w: Float, dash: Float = 0f, dir: Float = 1f) = drawOval(
+        col.copy(alpha), Offset(c.x - rx * k, c.y - ry * k), Size(rx * k * 2, ry * k * 2),
+        style = Stroke(w * d, pathEffect = if (dash > 0f) PathEffect.dashPathEffect(floatArrayOf(dash * d, dash * .7f * d), dir * t * dash * 1.7f * 6f * d) else null),
+    )
+    ring(1f, .8f, 1.5f, 9f)
+    ring(.8f, .45f, 1f)
+    ring(.5f, .6f, 1f, 6f, -1f)
+    for (i in 0 until 16) {
+        val a = i * tau / 16 + t * tau
+        val long = i % 4 == 0
+        drawLine(col.copy(.45f + .4f * (.5f + .5f * sin(a))), pt(a, .83f), pt(a, if (long) .97f else .91f), strokeWidth = (if (long) 1.8f else 1f) * d, cap = StrokeCap.Round)
+    }
+    for (i in 0 until 9) {
+        val a = PI.toFloat() + i * tau / 9
+        val p = pt(a, 1f)
+        val depth = 1f + .3f * sin(a)
+        if (i < lit) {
+            val pulse = if (i == lit - 1) 1f + .35f * sin(t * tau * 2f) else 1f
+            drawCircle(col.copy(.3f), 8f * d * depth * pulse, p)
+            drawCircle(col, 4f * d * depth, p)
+            drawCircle(Color.White, 2.2f * d * depth, p)
+        } else drawCircle(col.copy(.55f), 3f * d * depth, p, style = Stroke(1f * d))
+    }
+}
+
+/** Nút đột phá: đủ tu vi thì chuyển sắc theo màu cảnh giới, quầng sáng đập nhịp và vệt sáng quét ngang; chưa đủ thì xám phẳng. */
+@Composable
+private fun AdvanceButton(label: String, enabled: Boolean, ready: Boolean, col: Color, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val tr = rememberInfiniteTransition(label = "adv")
+    val pulse by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "p")
+    val sweep by tr.animateFloat(-.4f, 1.4f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "s")
+    val fg = if (ready) onColor(col) else cs.onSurfaceVariant
+    val fill: Brush = if (ready) Brush.horizontalGradient(listOf(lerp(col, Color.White, .25f), col, lerp(col, Color.Black, .15f))) else SolidColor(cs.onSurface.copy(.06f))
+    Box(
+        Modifier.padding(top = 14.dp).fillMaxWidth().height(50.dp)
+            .then(if (ready) Modifier.drawBehind {
+                drawRoundRect(col.copy(.18f + .22f * pulse), Offset(-5.dp.toPx(), -3.dp.toPx()), Size(size.width + 10.dp.toPx(), size.height + 6.dp.toPx()), CornerRadius(20.dp.toPx()))
+            } else Modifier)
+            .clip(RoundedCornerShape(16.dp)).background(fill)
+            .then(if (ready) Modifier.drawWithContent {
+                drawContent()
+                val x = sweep * size.width
+                drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(.4f), Color.Transparent), x - size.width * .2f, x + size.width * .2f))
+            } else Modifier)
+            .clickable(enabled = enabled, onClick = onClick),
+        Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (ready) Icon(Icons.Rounded.Bolt, null, Modifier.padding(end = 6.dp).size(18.dp), tint = fg)
+            Text(label, fontWeight = FontWeight.Bold, color = fg)
+        }
+    }
+}
+
+/**
  * Phần đầu màn: tranh thuỷ mặc (ngày/đêm) tan dần vào nền app, tiêu đề nằm trên tranh, nhân vật bồng bềnh trên một vòng
  * sáng màu cảnh giới, vài hạt linh khí bay lên. Dưới cùng là tên cảnh giới và một dòng thông tin.
  */
@@ -429,6 +505,7 @@ private fun HeroStage(s: JSONObject, realmCol: Color, header: @Composable () -> 
                     val ground = size.height * .92f
                     val ac = Offset(cx, size.height * .55f)
                     drawCircle(Brush.radialGradient(listOf(aura.copy(.34f), Color.Transparent), ac, size.height * .45f), size.height * .45f, ac)
+                    drawFormation(Offset(cx, size.height * .86f), size.height * .38f, aura, t, if (ascended) 9 else s.optInt("stage", 1))
                     // bóng đổ mềm dưới chân, co lại khi nhân vật nhún lên
                     val rx = size.height * .2f * (1f - .08f * sin(t * 4f * PI.toFloat()))
                     drawOval(Brush.radialGradient(listOf(Color.Black.copy(.35f), Color.Transparent), Offset(cx, ground), rx), Offset(cx - rx, ground - rx * .2f), Size(rx * 2, rx * .4f))
@@ -451,14 +528,26 @@ private fun HeroStage(s: JSONObject, realmCol: Color, header: @Composable () -> 
                 Box(Modifier.size(24.dp, 1.dp).background(realmCol))
                 Text(
                     if (ascended) "仙界" else RealmHan.getOrElse(realm - 1) { "" },
-                    style = TextStyle(fontSize = 13.sp, letterSpacing = 6.sp, color = cs.onSurface.copy(.8f), shadow = Shadow(cs.background, blurRadius = 10f)),
+                    style = TextStyle(fontSize = 15.sp, letterSpacing = 6.sp, color = cs.onSurface.copy(.8f), shadow = Shadow(cs.background, blurRadius = 10f)),
                 )
                 Box(Modifier.size(24.dp, 1.dp).background(realmCol))
             }
-            Text(
-                if (ascended) TienTierNames.getOrElse(tier) { "Tiên Nhân" } else RealmNames.getOrElse(s.optInt("realm", 1) - 1) { "?" },
-                style = TextStyle(fontFamily = Serif, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = cs.onSurface, shadow = Shadow(cs.background, blurRadius = 12f)),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (ascended) TienTierNames.getOrElse(tier) { "Tiên Nhân" } else RealmNames.getOrElse(s.optInt("realm", 1) - 1) { "?" },
+                    style = TextStyle(fontFamily = Serif, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = cs.onSurface, shadow = Shadow(cs.background, blurRadius = 12f)),
+                )
+                // ấn triện: tầng (cảnh giới thường) hoặc bậc (tiên giới), cùng màu ấn với tờ Lịch âm
+                val seal = LocalSeal.current
+                val onSeal = onColor(seal, lightBias = 1.4f)
+                Column(
+                    Modifier.padding(start = 10.dp).clip(RoundedCornerShape(4.dp)).background(seal).padding(horizontal = 7.dp, vertical = 3.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(HanNum.getOrElse(if (ascended) tier else s.optInt("stage", 1) - 1) { "" }, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 14.sp)
+                    Text(if (ascended) "階" else "層", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 14.sp)
+                }
+            }
             RealmBadges(s, realmCol)
         }
     }
@@ -475,7 +564,9 @@ private fun RealmCard(s: JSONObject, exp: Double, req: Double, rate: Double, rea
     val full = exp >= req - 0.5
     val maxed = ascended && tier >= TienTierNames.lastIndex
     val frac = (exp / req).toFloat().coerceIn(0f, 1f)
-    Column(modifier.fillMaxWidth().cultCard().padding(16.dp)) {
+    val sheen by rememberInfiniteTransition(label = "sheen").animateFloat(-.4f, 1.4f, infiniteRepeatable(tween(2800, easing = LinearEasing)), label = "sw")
+    val shape = RoundedCornerShape(20.dp)
+    Column(modifier.fillMaxWidth().clip(shape).background(cs.surface.copy(.86f)).border(1.dp, Brush.verticalGradient(listOf(realmCol.copy(.65f), cs.onSurface.copy(.08f))), shape).padding(16.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text("${gon(exp)} / ${gon(req)}", fontWeight = FontWeight.Bold)
             Text(" · ${"%.1f".format(frac * 100).replace('.', ',')}%", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -485,7 +576,14 @@ private fun RealmCard(s: JSONObject, exp: Double, req: Double, rate: Double, rea
             )
         }
         Box(Modifier.padding(top = 10.dp).fillMaxWidth().height(12.dp).clip(CircleShape).background(cs.onSurface.copy(.1f))) {
-            Box(Modifier.fillMaxWidth(frac.coerceAtLeast(.03f)).fillMaxHeight().clip(CircleShape).background(Brush.horizontalGradient(listOf(realmCol.copy(.7f), realmCol))))
+            Box(
+                Modifier.fillMaxWidth(frac.coerceAtLeast(.03f)).fillMaxHeight().clip(CircleShape).background(Brush.horizontalGradient(listOf(realmCol.copy(.7f), realmCol)))
+                    .drawWithContent {
+                        drawContent()
+                        val x = sheen * size.width
+                        drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(.55f), Color.Transparent), x - size.width * .3f, x + size.width * .3f))
+                    },
+            )
         }
         BuffChips(s)
         val label = when {
@@ -495,12 +593,7 @@ private fun RealmCard(s: JSONObject, exp: Double, req: Double, rate: Double, rea
             stage >= 9 -> "Đột phá cảnh giới"
             else -> "Lên tầng ${stage + 1}"
         }
-        Button(
-            onAdvance, Modifier.padding(top = 14.dp).fillMaxWidth().height(46.dp), enabled = full && !busy && !maxed, shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(disabledContainerColor = cs.onSurface.copy(.06f), disabledContentColor = cs.onSurfaceVariant),
-        ) {
-            Text(label, fontWeight = FontWeight.Bold)
-        }
+        AdvanceButton(label, full && !busy && !maxed, full && !maxed, realmCol, onAdvance)
         if (!full && !maxed) Text(
             "Còn ${gon(req - exp)} tu vi" + (if (rate > 0) " · khoảng ${eta((req - exp) / rate)}" else ""),
             Modifier.fillMaxWidth().padding(top = 6.dp), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, textAlign = TextAlign.Center,
@@ -510,6 +603,7 @@ private fun RealmCard(s: JSONObject, exp: Double, req: Double, rate: Double, rea
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             StatNames.forEach { (k, name) ->
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(realmCol.copy(.12f)).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(StatIcons.getValue(k), null, Modifier.size(14.dp), tint = ensureContrast(realmCol, cs.surface, 3f, if (cs.background.luminance() < .5f) Color.White else Color.Black))
                     Text(if (stats.has(k)) gon(stats.optDouble(k)) else "—", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
                     Text(name, fontSize = 10.sp, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -538,6 +632,7 @@ internal fun ItemTile(item: JSONObject?, qty: Int = 1, dim: Boolean = false, onC
     Box(
         Modifier.fillMaxWidth().aspectRatio(1f).clip(shape).background(cs.surface.copy(.62f)).border(1.dp, cs.onSurface.copy(.08f), shape)
             .then(if (grade != null) Modifier.background(grade.copy(.09f)) else Modifier)
+            .then(if (grade != null && item != null && item.optInt("grade") >= 4) Modifier.background(Brush.radialGradient(listOf(grade.copy(.32f), Color.Transparent))) else Modifier)
             .then(if (grade != null) Modifier.drawBehind {
                 val h = 3.dp.toPx()
                 drawRect(grade, Offset(size.width * .3f, size.height - h), Size(size.width * .4f, h))
