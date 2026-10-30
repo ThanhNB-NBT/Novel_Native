@@ -354,13 +354,7 @@ fun LunarScreen(tab: Boolean = false) {
         PageHeader("Âm lịch Việt Nam", "Lịch âm", "曆", back = !tab)
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, bottom = if (tab) DockSpace else 0.dp) // tab: chừa chỗ cho dock kính nổi
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(onDragEnd = {
-                        if (abs(drag) > 80f) go(if (drag < 0) 1 else -1)
-                        drag = 0f
-                    }) { _, d -> drag += d }
-                },
+                .padding(start = 16.dp, end = 16.dp, bottom = if (tab) DockSpace else 0.dp), // tab: chừa chỗ cho dock kính nổi
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // Thanh tháng: tháng dương to, dòng nhỏ ghi các tháng âm nằm trong tháng này
@@ -381,7 +375,16 @@ fun LunarScreen(tab: Boolean = false) {
 
             DayHero(sel)
 
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(horizontal = 8.dp, vertical = 12.dp)) {
+            // vuốt ngang đổi tháng chỉ trên lưới ngày; ngoài lưới thì vuốt để đổi tab (pager của dock nhận cử chỉ)
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(horizontal = 8.dp, vertical = 12.dp)
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(onDragEnd = {
+                            if (abs(drag) > 80f) go(if (drag < 0) 1 else -1)
+                            drag = 0f
+                        }) { _, d -> drag += d }
+                    },
+            ) {
                 Row(Modifier.padding(bottom = 6.dp)) {
                     listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN").forEachIndexed { i, w ->
                         Text(w, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = if (i == 6) cs.error else cs.onSurfaceVariant)
