@@ -13,6 +13,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FactCheck
@@ -263,6 +265,9 @@ private val tabs = listOf("Worker", "Crawl", "Đang đọc", "Truyện", "Báo c
 fun AdminScreen() {
     val ok = load("admin", Session.user?.id) { Api.isAdmin() }
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    val pager = rememberPagerState(tab) { tabs.size }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { tab = it } } // vuốt ngang đổi tab; chạm tab thì pager trượt tới
     var act by remember { mutableStateOf<Act?>(null) }
     var menu by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
@@ -292,19 +297,21 @@ fun AdminScreen() {
             if (!admin) return@Loaded Empty("Bạn không có quyền quản trị.")
             Column(Modifier.fillMaxSize()) {
                 ScrollableTabRow(
-                    tab, containerColor = Color.Transparent, edgePadding = 12.dp,
+                    pager.currentPage, containerColor = Color.Transparent, edgePadding = 12.dp,
                     divider = { HorizontalDivider(color = cs.outlineVariant.copy(.5f)) },
                 ) {
                     tabs.forEachIndexed { i, t ->
-                        Tab(tab == i, { tab = i }, selectedContentColor = cs.primary, unselectedContentColor = cs.onSurfaceVariant, text = { Text(t, fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp) })
+                        Tab(pager.currentPage == i, { scope.launch { pager.animateScrollToPage(i) } }, selectedContentColor = cs.primary, unselectedContentColor = cs.onSurfaceVariant, text = { Text(t, fontWeight = if (pager.currentPage == i) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp) })
                     }
                 }
-                when (tab) {
-                    0 -> JobsTab()
-                    1 -> CrawlTab()
-                    2 -> ReadingTab()
-                    3 -> NovelsTab()
-                    else -> ReportsTab()
+                HorizontalPager(pager, Modifier.fillMaxSize(), key = { it }) { page ->
+                    when (page) {
+                        0 -> JobsTab()
+                        1 -> CrawlTab()
+                        2 -> ReadingTab()
+                        3 -> NovelsTab()
+                        else -> ReportsTab()
+                    }
                 }
             }
         }
