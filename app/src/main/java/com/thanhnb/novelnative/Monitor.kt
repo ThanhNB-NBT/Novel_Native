@@ -353,3 +353,38 @@ private fun StreamCard(
 }
 
 private const val SLOTS = 60
+
+/** Màu theo ngưỡng dùng chung cho đồng hồ: dưới 70% = màu gốc, 70–85% = cảnh báo (vàng), từ 85% = nguy hiểm. */
+@Composable
+fun levelColor(frac: Float, base: Color): Color = when {
+    frac >= .85f -> MaterialTheme.colorScheme.error
+    frac >= .7f -> Color(0xFFD9962B)
+    else -> base
+}
+
+/** Viên thuốc trạng thái: nền nhạt cùng tông với chữ, nên luôn có chữ đi kèm màu (không chỉ dựa vào màu). */
+@Composable
+fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier) = Text(
+    text, modifier.background(color.copy(alpha = .14f), androidx.compose.foundation.shape.RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 3.dp),
+    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = color, maxLines = 1,
+)
+
+/** Đồng hồ vòng: số phần trăm ở giữa, nhãn và chi tiết bên dưới. [frac] null = chưa có số liệu (vòng trống, dấu —). */
+@Composable
+fun RingGauge(label: String, frac: Float?, sub: String?, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val tint = levelColor(frac ?: 0f, cs.primary)
+    Column(modifier, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+        Box(Modifier.size(84.dp), androidx.compose.ui.Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val w = 9.dp.toPx(); val inset = w / 2
+                val arc = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
+                drawArc(cs.onSurface.copy(alpha = .08f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(w))
+                if (frac != null) drawArc(tint, -90f, 360f * frac.coerceIn(0f, 1f), false, Offset(inset, inset), arc, style = Stroke(w, cap = StrokeCap.Round))
+            }
+            Text(if (frac == null) "—" else "%.0f%%".format(frac * 100), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        Text(label, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
+    }
+}

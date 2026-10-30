@@ -201,10 +201,21 @@ private fun GeminiQuota(models: List<GeminiModel>, dayRows: List<JSONObject>, ke
             Text(name, Modifier.weight(1f), style = monoStyle(12, cs.onSurface), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (m == null) "$used · đã gỡ khỏi chuỗi" else "$used/${fmtK(m.rpd * keys.size)} · ${m.rpm} RPM", style = MaterialTheme.typography.labelSmall)
         }
-        keys.forEach { k ->
-            val u = dayRows.filter { it.optString("model") == name && it.optString("key_label") == k }.sum("requests")
-            val rpd = m?.rpd
-            Gauge(k, if (rpd == null || rpd == 0) null else u.toFloat() / rpd, if (rpd == null) "$u" else "$u/$rpd", Modifier.padding(top = 6.dp))
+        val rpd = m?.rpd
+        // 7 key thường lệch nhau ít: một dải cột nhỏ thay cho 7 thanh ngang, mỗi cột cao theo phần quota ngày của key đó
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
+            keys.forEach { k ->
+                val u = dayRows.filter { it.optString("model") == name && it.optString("key_label") == k }.sum("requests")
+                val f = if (rpd == null || rpd == 0) 0f else (u.toFloat() / rpd).coerceIn(0f, 1f)
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("$u", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                    Box(Modifier.fillMaxWidth().height(44.dp).padding(vertical = 3.dp), contentAlignment = Alignment.BottomCenter) {
+                        Box(Modifier.fillMaxSize().background(cs.onSurface.copy(.07f), RoundedCornerShape(6.dp)))
+                        Box(Modifier.fillMaxWidth().fillMaxHeight(maxOf(f, .05f)).background(levelColor(f, cs.primary), RoundedCornerShape(6.dp)))
+                    }
+                    Text(k.substringAfter('#', k), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                }
+            }
         }
     }
 }
