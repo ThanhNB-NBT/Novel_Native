@@ -206,6 +206,17 @@ private fun SectionTitle(title: String, trailing: @Composable (() -> Unit)? = nu
     }
 }
 
+/** Khung xương màn Tu Tiên: sân khấu nhân vật + hai thẻ, đúng bố cục sẽ hiện ra. */
+@Composable
+private fun CultSkeleton(tab: Boolean) = Column(
+    Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = if (tab) DockSpace else 32.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+) {
+    Box(Modifier.fillMaxWidth().height(260.dp).shimmer(28.dp))
+    Box(Modifier.fillMaxWidth().height(120.dp).shimmer(24.dp))
+    Box(Modifier.fillMaxWidth().height(90.dp).shimmer(24.dp))
+}
+
 @Composable
 fun CultivationScreen(tab: Boolean = false) {
     val cs = MaterialTheme.colorScheme
@@ -247,7 +258,7 @@ fun CultivationScreen(tab: Boolean = false) {
         // có nhân vật thì header nằm trong danh sách và cuộn đi cùng
         if (st.res?.getOrNull()?.strOrNull("race") == null) header()
         if (Session.user == null) { Empty("Đăng nhập để bắt đầu tu hành."); return@Column }
-        Loaded(st) { s ->
+        Loaded(st, loading = { CultSkeleton(tab) }) { s ->
             if (s.strOrNull("race") == null) {
                 AvatarPicker { race, gender -> act { CultApi.setAvatar(race, gender); "Đã nhập ${RaceNames[race]} — bắt đầu tu hành!" } }
                 return@Loaded
