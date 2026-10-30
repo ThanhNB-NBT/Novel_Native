@@ -13,7 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -73,6 +73,7 @@ import kotlin.math.sin
  */
 
 internal val RealmNames = listOf("Luyện Khí", "Trúc Cơ", "Kim Đan", "Nguyên Anh", "Hóa Thần", "Luyện Hư", "Hợp Thể", "Đại Thừa", "Độ Kiếp")
+private val RealmHan = listOf("煉氣", "築基", "金丹", "元嬰", "化神", "煉虛", "合體", "大乘", "渡劫")
 internal val TienTierNames = listOf(
     "Tiên Nhân", "Địa Tiên", "Thiên Tiên", "Kim Tiên", "Thái Ất Kim Tiên", "Đại La Kim Tiên", "Đạo Tổ",
     "Hỗn Nguyên Thánh Nhân", "Hồng Mông Chí Tôn", "Hư Vô Đại Đạo Tổ", "Siêu Thoát Giả", "Vĩnh Hằng Chúa Tể",
@@ -105,6 +106,8 @@ internal fun gradeColor(g: Int) = GradeColors[(g - 1).coerceIn(0, GradeColors.la
 internal fun gon(v: Double): String {
     fun so(x: Double) = "%.1f".format(x).replace('.', ',')
     return when {
+        v >= 1_000_000_000_000 -> so(v / 1_000_000_000_000) + "T"
+        v >= 1_000_000_000 -> so(v / 1_000_000_000) + "B"
         v >= 1_000_000 -> so(v / 1_000_000) + "M"
         v >= 10_000 -> so(v / 1_000) + "K"
         else -> v.toLong().toString()
@@ -150,7 +153,6 @@ private fun effectText(it: JSONObject): String {
 }
 
 /** size chỉ định = khung cố định; bỏ trống = lấp đầy ô cha (ô lưới túi đồ / trang bị). */
-/** size chỉ định = khung cố định; bỏ trống = lấp đầy ô cha (ô lưới túi đồ / trang bị). */
 @Composable
 internal fun ItemArt(item: JSONObject, size: Dp = Dp.Unspecified) {
     val pixel = item.optString("pixel")
@@ -169,6 +171,14 @@ internal fun Modifier.cultCard(radius: Dp = 20.dp): Modifier {
     return clip(shape).background(cs.surface.copy(.62f)).border(1.dp, cs.onSurface.copy(.08f), shape)
 }
 
+/** Dải nền giấy đặc hơn thẻ kính, dành cho khối có chữ nhỏ/danh sách dài nằm trên tranh; nhiều dải liền nhau ghép thành một khối (top/bottom = bo góc đầu/cuối). */
+@Composable
+private fun Modifier.band(top: Boolean, bottom: Boolean): Modifier {
+    val t = if (top) 22.dp else 0.dp
+    val b = if (bottom) 22.dp else 0.dp
+    return clip(RoundedCornerShape(t, t, b, b)).background(MaterialTheme.colorScheme.surface.copy(.9f))
+}
+
 /** Header Tu Tiên: không chữ, chỉ linh vật ở giữa (nút lùi bên trái khi mở như trang con). */
 @Composable
 private fun MascotHeader(back: Boolean, onAdmin: (() -> Unit)? = null) {
@@ -182,7 +192,7 @@ private fun MascotHeader(back: Boolean, onAdmin: (() -> Unit)? = null) {
 @Composable
 private fun SectionTitle(title: String, trailing: @Composable (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontFamily = Serif, fontWeight = FontWeight.Bold)
         trailing?.invoke()
     }
 }
@@ -249,10 +259,13 @@ fun CultivationScreen(tab: Boolean = false) {
             val pad = Modifier.padding(horizontal = 16.dp)
 
             PullToRefreshBox(false, ::refresh) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (tab) DockSpace else 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    item { HeroStage(s, realmCol, header) }
+                val gap = Modifier.padding(bottom = 12.dp)
+                val rows = bag.chunked(5)
+                val bagMsg = if (inv.res?.isFailure == true) "Không tải được túi đồ — kéo xuống để thử lại." else if (bag.isEmpty()) "Chưa có vật phẩm — đọc truyện để nhận cơ duyên." else null
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (tab) DockSpace else 32.dp)) {
+                    item { Box(gap) { HeroStage(s, realmCol, header) } }
                     item {
-                        RealmCard(s, exp, req, rate, realmCol, busy, pad, onSpeed = { speed = true }) {
+                        RealmCard(s, exp, req, rate, realmCol, busy, pad.then(gap), onSpeed = { speed = true }) {
                             if (!busy) {
                                 busy = true
                                 val stage = s.optInt("stage", 1)
@@ -270,11 +283,11 @@ fun CultivationScreen(tab: Boolean = false) {
                             }
                         }
                     }
-                    item { Box(pad) { CultActions(s, showHalo = ascended || (admin && BuildConfig.DEBUG)) { refresh() } } }
+                    item { Box(pad.then(gap)) { CultActions(s, showHalo = ascended || (admin && BuildConfig.DEBUG)) { refresh() } } }
                     item {
-                        Column(pad, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SectionTitle("Trang bị")
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(pad.then(gap).band(true, true).padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(Modifier.padding(start = 6.dp)) { SectionTitle("Trang bị") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 SlotTypes.forEach { (type, label) ->
                                     val it = equipped.optJSONObject(type)
                                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -286,7 +299,7 @@ fun CultivationScreen(tab: Boolean = false) {
                         }
                     }
                     item {
-                        Box(pad) {
+                        Box(pad.band(true, false).padding(start = 16.dp, end = 8.dp, top = 8.dp)) {
                             SectionTitle("Túi đồ · ${bag.size}") {
                                 TextButton({ sheet = "suutam" }) { Text("Sưu tầm") }
                                 TextButton({ craft = true }) { Text("Luyện đan") }
@@ -295,10 +308,12 @@ fun CultivationScreen(tab: Boolean = false) {
                         }
                     }
                     // tải túi lỗi thì nói rõ, đừng hiện "0 món" như thể mất hết đồ
-                    if (inv.res?.isFailure == true) item { Empty("Không tải được túi đồ — kéo xuống để thử lại.") }
-                    else if (bag.isEmpty()) item { Empty("Chưa có vật phẩm — đọc truyện để nhận cơ duyên.") }
-                    items(bag.chunked(5)) { row ->
-                        Row(pad.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (bagMsg != null) item { Box(pad.band(false, true).padding(bottom = 12.dp)) { Empty(bagMsg) } }
+                    itemsIndexed(rows) { i, row ->
+                        Row(
+                            pad.fillMaxWidth().band(false, i == rows.lastIndex).padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (i == rows.lastIndex) 16.dp else 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             row.forEach { r ->
                                 val it = r.getJSONObject("cult_items")
                                 Box(Modifier.weight(1f)) { ItemTile(it, r.optInt("qty")) { picked = it.put("qty", r.optInt("qty")) } }
@@ -432,6 +447,14 @@ private fun HeroStage(s: JSONObject, realmCol: Color, header: @Composable () -> 
                 }
                 orbitLayer(front = true)
             }
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(24.dp, 1.dp).background(realmCol))
+                Text(
+                    if (ascended) "仙界" else RealmHan.getOrElse(realm - 1) { "" },
+                    style = TextStyle(fontSize = 13.sp, letterSpacing = 6.sp, color = cs.onSurface.copy(.8f), shadow = Shadow(cs.background, blurRadius = 10f)),
+                )
+                Box(Modifier.size(24.dp, 1.dp).background(realmCol))
+            }
             Text(
                 if (ascended) TienTierNames.getOrElse(tier) { "Tiên Nhân" } else RealmNames.getOrElse(s.optInt("realm", 1) - 1) { "?" },
                 style = TextStyle(fontFamily = Serif, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = cs.onSurface, shadow = Shadow(cs.background, blurRadius = 12f)),
@@ -454,16 +477,16 @@ private fun RealmCard(s: JSONObject, exp: Double, req: Double, rate: Double, rea
     val frac = (exp / req).toFloat().coerceIn(0f, 1f)
     Column(modifier.fillMaxWidth().cultCard().padding(16.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text("${gon(exp)} / ${gon(req)}", Modifier.weight(1f), fontWeight = FontWeight.Bold)
+            Text("${gon(exp)} / ${gon(req)}", fontWeight = FontWeight.Bold)
+            Text(" · ${"%.1f".format(frac * 100).replace('.', ',')}%", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Text(
                 "+${"%.1f".format(rate).replace('.', ',')}/giây ⓘ", Modifier.clip(CircleShape).clickable(onClick = onSpeed).padding(horizontal = 6.dp, vertical = 2.dp),
                 style = MaterialTheme.typography.labelMedium, color = cs.primary,
             )
         }
-        LinearProgressIndicator(
-            { frac }, Modifier.padding(top = 8.dp).fillMaxWidth().height(8.dp).clip(CircleShape),
-            color = realmCol, trackColor = cs.onSurface.copy(.08f), gapSize = 0.dp, drawStopIndicator = {},
-        )
+        Box(Modifier.padding(top = 10.dp).fillMaxWidth().height(12.dp).clip(CircleShape).background(cs.onSurface.copy(.1f))) {
+            Box(Modifier.fillMaxWidth(frac.coerceAtLeast(.03f)).fillMaxHeight().clip(CircleShape).background(Brush.horizontalGradient(listOf(realmCol.copy(.7f), realmCol))))
+        }
         BuffChips(s)
         val label = when {
             maxed -> "Đã đạt cực hạn"
@@ -484,10 +507,10 @@ private fun RealmCard(s: JSONObject, exp: Double, req: Double, rate: Double, rea
         )
         HorizontalDivider(Modifier.padding(vertical = 14.dp), color = cs.outlineVariant.copy(.5f))
         val stats = s.optJSONObject("stats") ?: JSONObject()
-        Row(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             StatNames.forEach { (k, name) ->
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (stats.has(k)) gon(stats.optDouble(k)) else "—", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(realmCol.copy(.12f)).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (stats.has(k)) gon(stats.optDouble(k)) else "—", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
                     Text(name, fontSize = 10.sp, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
@@ -514,6 +537,7 @@ internal fun ItemTile(item: JSONObject?, qty: Int = 1, dim: Boolean = false, onC
     val grade = if (item != null && !dim) gradeColor(item.optInt("grade")) else null
     Box(
         Modifier.fillMaxWidth().aspectRatio(1f).clip(shape).background(cs.surface.copy(.62f)).border(1.dp, cs.onSurface.copy(.08f), shape)
+            .then(if (grade != null) Modifier.background(grade.copy(.09f)) else Modifier)
             .then(if (grade != null) Modifier.drawBehind {
                 val h = 3.dp.toPx()
                 drawRect(grade, Offset(size.width * .3f, size.height - h), Size(size.width * .4f, h))
@@ -535,14 +559,14 @@ internal fun ItemTile(item: JSONObject?, qty: Int = 1, dim: Boolean = false, onC
 private fun RealmBadges(s: JSONObject, realmCol: Color) {
     val cs = MaterialTheme.colorScheme
     val stage = s.optInt("stage", 1)
-    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Box(Modifier.padding(top = 8.dp)) { Pill {
         if (s.strOrNull("ascended_at") == null) {
             repeat(9) { i ->
                 Box(Modifier.padding(horizontal = 2.dp).size(if (i < stage) 16.dp else 10.dp, 5.dp).clip(CircleShape).background(if (i < stage) realmCol else cs.onSurface.copy(.15f)))
             }
             Text("Tầng $stage", Modifier.padding(start = 8.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        } else Text("Bậc ${s.optInt("tien_tier", 0) + 1} / ${TienTierNames.size} · Tiên giới", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = realmCol)
-    }
+        } else Text("Bậc ${s.optInt("tien_tier", 0) + 1} / ${TienTierNames.size} · Tiên giới", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    } }
     FlowRow(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp),
