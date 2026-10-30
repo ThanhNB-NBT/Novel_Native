@@ -68,6 +68,7 @@ sealed interface Screen {
     data object Changelog : Screen
     data object Lunar : Screen
     data object Admin : Screen
+    data object Monitor : Screen
     data object AdminLlm : Screen
     data object AdminVps : Screen
     data object AdminErrors : Screen

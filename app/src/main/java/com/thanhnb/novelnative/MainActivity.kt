@@ -50,13 +50,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bookmarks
-import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
                                         Screen.Guide -> GuideScreen()
                                         Screen.Changelog -> ChangelogScreen()
                                         Screen.Lunar -> LunarScreen()
+                                        Screen.Monitor -> MonitorScreen()
                                         Screen.Admin -> AdminScreen()
                                         Screen.AdminLlm -> LlmScreen()
                                         Screen.AdminVps -> VpsScreen()
@@ -157,13 +158,13 @@ class MainActivity : ComponentActivity() {
         ReaderKeys.handler?.invoke(event) == true || super.dispatchKeyEvent(event)
 }
 
-private class TabItem(val label: String, val on: ImageVector, val off: ImageVector)
+private class TabItem(val label: String, val on: ImageVector, val off: ImageVector, val iconOnly: Boolean = false)
 
 private val tabs = listOf(
     TabItem("Tủ truyện", Icons.Rounded.Bookmarks, Icons.Outlined.Bookmarks),
     TabItem("Khám phá", Icons.Rounded.Explore, Icons.Outlined.Explore),
-    TabItem("Tu Tiên", Icons.Rounded.AutoAwesome, Icons.Rounded.AutoAwesome),
-    TabItem("Thông báo", Icons.Rounded.Notifications, Icons.Outlined.Notifications),
+    TabItem("Tu Tiên", Icons.Rounded.SelfImprovement, Icons.Rounded.SelfImprovement, iconOnly = true), // người ngồi thiền; cố định chỉ icon
+    TabItem("Lịch âm", Icons.Rounded.CalendarMonth, Icons.Outlined.CalendarMonth),
     TabItem("Tôi", Icons.Rounded.Person, Icons.Outlined.Person),
 )
 
@@ -191,7 +192,7 @@ private fun Tabs() {
                     0 -> LibraryTab()
                     1 -> ExploreTab()
                     2 -> CultivationScreen(tab = true)
-                    3 -> NotifTab()
+                    3 -> LunarScreen(tab = true)
                     else -> AccountTab()
                 }
             } }
@@ -232,7 +233,7 @@ private fun Dock(unread: Int, glass: HazeState, pos: () -> Float, modifier: Modi
         val p = pos()
         tabs.forEachIndexed { i, t ->
             // mức "đang chọn" liên tục: 1 khi pager nằm đúng tab i, giảm tuyến tính về 0 khi lệch một trang
-            DockItem(t, (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f), if (i == 3) unread else 0) { Nav.tab = i }
+            DockItem(t, (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f), if (i == 0) unread else 0) { Nav.tab = i }
         }
     }
 }
@@ -246,7 +247,7 @@ private fun RowScope.DockItem(t: TabItem, sel: Float, badge: Int, onClick: () ->
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .9f else 1f, spring(.55f, 520f), label = "s")
     Box(
-        Modifier.weight(1f + 1.15f * sel).fillMaxHeight().graphicsLayer { scaleX = scale; scaleY = scale }
+        Modifier.weight(if (t.iconOnly) 1f else 1f + 1.15f * sel).fillMaxHeight().graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(26.dp))
             .background(cs.primary.copy(alpha = (if (dark) .26f else .15f) * sel))
             .clickable(src, null, onClick = onClick),
@@ -256,7 +257,7 @@ private fun RowScope.DockItem(t: TabItem, sel: Float, badge: Int, onClick: () ->
             val on = sel > .5f
             BadgedBox({ if (badge > 0 && !on) Badge { Text("$badge") } }) { Icon(if (on) t.on else t.off, t.label, Modifier.size(25.dp), color) }
             // tên tab: bề rộng và độ đậm chạy theo sel — nở dần ra thay vì bật lên
-            Text(
+            if (!t.iconOnly) Text(
                 t.label,
                 Modifier.padding(start = (7 * sel).dp).layout { m, c ->
                     val pl = m.measure(c.copy(minWidth = 0, maxWidth = Constraints.Infinity))

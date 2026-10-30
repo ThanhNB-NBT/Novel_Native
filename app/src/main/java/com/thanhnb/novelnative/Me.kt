@@ -19,6 +19,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 
@@ -77,6 +79,10 @@ fun LibraryTab() {
         }
         if (uid == null) return NeedLogin("Đăng nhập để theo dõi truyện và lưu chỗ đang đọc", Icons.AutoMirrored.Rounded.Login)
         val l = load("library", uid) { Api.library() }
+        val notif = load("notif", uid) { Api.notifications() }
+        // giữ mốc cũ trong phiên để các chương vừa dịch xong vẫn tô nổi; mở Tủ truyện = đã xem
+        val seenBefore = remember { Prefs.notifSeenAt }
+        LaunchedEffect(Nav.tab) { if (Nav.tab == 0) { delay(2500); Prefs.setSeen(Instant.now().toString()) } }
         val scope = rememberCoroutineScope()
         var confirm by remember { mutableStateOf<Novel?>(null) }
         var grid by rememberSaveable { mutableStateOf(true) }
@@ -91,6 +97,10 @@ fun LibraryTab() {
                     horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(if (grid) 20.dp else 4.dp),
                 ) {
                     if (hero != null) item(span = { GridItemSpan(maxLineSpan) }) { ContinueCard(hero) }
+                    val fresh = notif.res?.getOrNull().orEmpty()
+                    if (fresh.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                        NewChaptersRow(fresh, seenBefore) { fresh.forEach(Api::dismiss); notif.reload() }
+                    }
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("${novels.size} truyện", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
@@ -128,47 +138,34 @@ fun unreadCount(): Int {
     return list.count { it.latestAt > Prefs.notifSeenAt }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Hàng "Mới dịch xong" đầu Tủ truyện: bìa truyện có chương mới trong 7 ngày (gộp từ tab Thông báo cũ). Rỗng thì ẩn. */
 @Composable
-fun NotifTab() {
-    val uid = Session.user?.id
-    Column {
-        if (uid == null) {
-            PageHeader("Chương mới dịch xong", "Thông báo", "訊")
-            return NeedLogin("Đăng nhập để nhận báo chương mới của truyện bạn theo dõi.", Icons.Rounded.NotificationsNone)
+private fun NewChaptersRow(list: List<Notif>, seenBefore: String, clear: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Mới dịch xong", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            TextButton(clear, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Đã xem hết", style = MaterialTheme.typography.labelMedium) }
         }
-        val l = load("notif", uid) { Api.notifications() }
-        // Mở tab = đã xem; giữ mốc cũ trong phiên để vẫn tô đậm những dòng vừa mới
-        val seenBefore = remember { Prefs.notifSeenAt }
-        LaunchedEffect(Unit) { Prefs.setSeen(Instant.now().toString()) }
-        val list = l.res?.getOrNull().orEmpty()
-        PageHeader("Chương mới dịch xong", "Thông báo", "訊") {
-            if (list.isNotEmpty()) IconButton({ list.forEach(Api::dismiss); l.reload() }) { Icon(Icons.Rounded.DeleteSweep, "Xoá tất cả") }
-        }
-        Loaded(l) { notifs ->
-            PullToRefreshBox(false, l.reload) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = DockSpace)) {
-                    if (notifs.isEmpty()) item { Empty("Chưa có chương mới trong 7 ngày qua.") }
-                    items(notifs, key = { it.novelId }) { n ->
-                        val fresh = n.latestAt > seenBefore
-                        Column(Modifier.bounceClick { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) }) {
-                            Row(Modifier.padding(start = 20.dp, top = 10.dp, bottom = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Cover(n.cover, 44.dp, 60.dp, label = n.title, flat = true)
-                                Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                                    Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(
-                                        if (n.chapters.size == 1) "Chương ${n.chapters[0]} đã dịch xong"
-                                        else "${n.chapters.size} chương mới (${n.chapters.first()}–${n.chapters.last()})",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (fresh) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (fresh) FontWeight.SemiBold else null,
-                                    )
-                                }
-                                if (fresh) Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
-                                IconButton({ Api.dismiss(n); l.reload() }) { Icon(Icons.Rounded.Close, "Xoá", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            }
-                        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(list, key = { it.novelId }) { n ->
+                val fresh = n.latestAt > seenBefore
+                Column(Modifier.width(92.dp).bounceClick { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) }) {
+                    Box {
+                        Cover(n.cover, 92.dp, 124.dp, label = n.title)
+                        Text(
+                            "+${n.chapters.size}", Modifier.align(Alignment.TopEnd).padding(6.dp)
+                                .background(if (fresh) cs.primary else cs.surfaceContainerHighest, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+                            color = if (fresh) cs.onPrimary else cs.onSurfaceVariant,
+                        )
                     }
+                    Text(n.title, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        if (n.chapters.size == 1) "Ch. ${n.chapters[0]}" else "Ch. ${n.chapters.first()}–${n.chapters.last()}",
+                        style = MaterialTheme.typography.labelSmall, color = if (fresh) cs.primary else cs.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -259,6 +256,7 @@ fun AccountTab() {
             SettingGroup(
                 { SettingTile(Icons.Rounded.Lightbulb, "Hướng dẫn sử dụng", "Mẹo đọc, lưu và yêu cầu dịch", { Nav.push(Screen.Guide) }) },
                 { SettingTile(Icons.Rounded.NewReleases, "Có gì mới", "Ghi chú các bản phát hành gần nhất", { Nav.push(Screen.Changelog) }) },
+                { SettingTile(Icons.Rounded.Speed, "Theo dõi máy", "CPU, RAM, pin, mạng, nhiệt độ", { Nav.push(Screen.Monitor) }) },
                 { UpdateTile() },
             )
             Text(

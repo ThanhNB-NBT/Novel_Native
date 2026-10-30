@@ -282,7 +282,7 @@ private fun solarLine(d: LocalDate) = "%s, %02d/%02d/%d".format(WEEKDAYS[d.dayOf
 
 /** Lịch tháng: thẻ lưới ngày dương kèm ngày âm, thẻ chi tiết ngày đang chọn; vuốt ngang hoặc mũi tên đổi tháng. */
 @Composable
-fun LunarScreen() {
+fun LunarScreen(tab: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val today = remember { LocalDate.now() }
     var month by remember { mutableStateOf(today.withDayOfMonth(1)) }
@@ -290,9 +290,10 @@ fun LunarScreen() {
     var drag by remember { mutableFloatStateOf(0f) }
     fun go(delta: Long) { month = month.plusMonths(delta) }
     Column(Modifier.fillMaxSize()) {
-        PageHeader("Âm lịch Việt Nam", "Lịch âm", "曆", back = true)
+        PageHeader("Âm lịch Việt Nam", "Lịch âm", "曆", back = !tab)
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, bottom = if (tab) DockSpace else 0.dp) // tab: chừa chỗ cho dock kính nổi
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(onDragEnd = {
                         if (abs(drag) > 80f) go(if (drag < 0) 1 else -1)
