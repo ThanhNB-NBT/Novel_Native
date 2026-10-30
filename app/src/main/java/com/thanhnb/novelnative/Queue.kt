@@ -95,22 +95,13 @@ private fun Summary(q: Queue) {
     val cs = MaterialTheme.colorScheme
     val translating = q.active.count { it.status == "translating" }
     val live = translating > 0
-    Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
-        run {
-            Text(if (live) "ĐANG DỊCH" else "ĐANG NGHỈ", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp, color = if (live) cs.primary else cs.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                Cell("${q.recent.size}", "chương/giờ", cs.primary, Modifier.weight(1f))
-                Cell("$translating", "đang dịch", cs.onSurface, Modifier.weight(1f))
-                Cell("${q.pendingTotal}", "đang chờ", cs.onSurface, Modifier.weight(1f))
-            }
+    Column(Modifier.padding(vertical = 4.dp)) {
+        Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Hệ thống dịch", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            StatusPill(if (live) "Đang dịch" else "Đang nghỉ", if (live) cs.live else cs.onSurfaceVariant)
         }
+        StatRow(Triple("${q.recent.size}", "chương/giờ", cs.primary), Triple("$translating", "đang dịch", null), Triple("${q.pendingTotal}", "đang chờ", null))
     }
-}
-
-@Composable
-private fun Cell(v: String, label: String, c: Color, m: Modifier) = Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
-    Text(v, style = monoStyle(24, c), fontWeight = FontWeight.Bold)
-    Text(label, style = MaterialTheme.typography.labelMedium)
 }
 
 @Composable

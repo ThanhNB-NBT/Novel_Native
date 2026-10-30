@@ -218,24 +218,35 @@ fun AdminNovelScreen(id: Int) {
     val cs = MaterialTheme.colorScheme
     val n = novel.res?.getOrNull()
     Column(Modifier.fillMaxSize()) {
-        PageHeader("Quản trị truyện", n.novelTitle(id), "管", back = true)
+        PageHeader("Hệ thống", "Quản trị truyện", "管", back = true)
         PullToRefreshBox(false, { rev++; novel.reload() }, Modifier.weight(1f)) {
             LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = 32.dp)) {
                 if (n != null) item {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        listOfNotNull(
-                            "Nguồn" to (n.optJSONObject("sources")?.s("name") ?: "—"), "Trạng thái" to Api.statusLabel(n.s("status").orEmpty()),
-                            n.genreList().joinToString(", ").ifEmpty { null }?.let { "Thể loại" to it },
-                            "Chương mới" to (n.s("last_chapter_at")?.let { "${ago(it)} trước" } ?: "—"),
-                            "Đã dịch" to "${n.optInt("chapter_count_translated")}/${n.optInt("chapter_count_source")} chương",
-                        ).forEach { (k, v) ->
-                            Row(Modifier.padding(vertical = 3.dp)) {
-                                Text(k, Modifier.width(92.dp), style = MaterialTheme.typography.labelMedium)
-                                Text(v, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    val src = n.optInt("chapter_count_source")
+                    val tr = n.optInt("chapter_count_translated")
+                    val title = n.novelTitle(id)
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Cover(n.s("cover_url"), 72.dp, 104.dp, label = title, flat = true)
+                            Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                n.s("author_vi")?.let { Text(it, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    StatusPill(Api.statusLabel(n.s("status").orEmpty()), cs.primary)
+                                    if (n.optBoolean("hidden")) StatusPill("Đã ẩn", cs.onSurfaceVariant)
+                                }
                             }
                         }
+                        Spacer(Modifier.height(12.dp))
+                        HeroCard("Đã dịch", fmtK(tr), fmtK(src), if (src > 0) tr.toFloat() / src else null, if (src > 0) "${"%.0f".format(tr * 100f / src)}% mục lục" else null)
+                        Spacer(Modifier.height(10.dp))
+                        KvCard(
+                            Triple("Nguồn", n.optJSONObject("sources")?.s("name") ?: "—", null),
+                            Triple("Chương mới", n.s("last_chapter_at")?.let { "${ago(it)} trước" } ?: "—", null),
+                            *listOfNotNull(n.genreList().joinToString(", ").ifEmpty { null }?.let { Triple("Thể loại", it, null) }).toTypedArray(),
+                        )
                     }
-                    HorizontalDivider(Modifier.padding(top = 8.dp), color = cs.outlineVariant.copy(.5f))
+                    SectionLabel("Danh sách chương")
                 }
                 if (pg.items.isEmpty() && !pg.loading) item { Empty(pg.error ?: "Chưa có chương nào.") }
                 itemsIndexed(pg.items, key = { _, c -> c.getInt("chapter_index") }) { _, c ->
@@ -247,15 +258,15 @@ fun AdminNovelScreen(id: Int) {
                         else -> "Chưa dịch" to cs.outline
                     }
                     val tok = c.optInt("prompt_tokens") + c.optInt("completion_tokens")
-                    val info = listOfNotNull(label, c.s("model_used"), if (tok > 0) "${fmtK(tok)} token" else null, c.s("translated_at")?.let { "${ago(it)} trước" }).joinToString(" · ")
+                    val info = listOfNotNull(c.s("model_used"), if (tok > 0) "${fmtK(tok)} token" else null, c.s("translated_at")?.let { "${ago(it)} trước" }).joinToString(" · ")
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(9.dp).background(color, CircleShape))
-                        Column(Modifier.padding(start = 12.dp)) {
+                        Column(Modifier.weight(1f)) {
                             Text("${c.optInt("chapter_index")}. ${c.s("title_vi") ?: "(chưa có tên)"}", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(info, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (info.isNotEmpty()) Text(info, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
+                        StatusPill(label, color, Modifier.padding(start = 10.dp))
                     }
-                    HorizontalDivider(Modifier.padding(start = 37.dp, end = 16.dp), color = cs.outlineVariant.copy(.4f))
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.4f))
                 }
                 if (pg.loading) item { Spin() }
             }
