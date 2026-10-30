@@ -86,6 +86,57 @@ private fun dirSize(f: File?): Long = when {
 private val thermalNames = listOf("Bình thường", "Hơi nóng", "Vừa", "Nóng", "Rất nóng", "Nguy hiểm", "Tắt máy")
 
 /** Lấy mẫu mọi số đo mà app thường (không cần quyền nguy hiểm) đọc được; giữ trạng thái trước đó để tính tốc độ. */
+/**
+ * Sức khỏe pin, dò theo chuỗi nguồn thay vì gắn cứng một mẫu máy: mỗi nguồn thử độc lập, nguồn nào máy trả lời thì hiện
+ * (ghi tên nguồn để biết độ tin cậy), nguồn im lặng thì ghi ✗ ở dòng cuối.
+ *   1. hãng báo — BATTERY_PROPERTY_STATE_OF_HEALTH (Android 14+, tuỳ HAL của hãng)
+ *   2. nhân — /sys/class/power_supply: charge_full ÷ charge_full_design (hoặc energy_*); nhiều máy chặn app đọc
+ *   3. ước tính — điện tích còn ÷ mức pin, so với dung lượng thiết kế trong PowerProfile (API ẩn); lệch theo hãng
+ */
+private fun batteryHealth(ctx: Context, bm: BatteryManager, pct: Int, cycles: Int): List<Pair<String, String>> {
+    val out = mutableListOf<Pair<String, String>>()
+    fun sys(vararg names: String): Long? {
+        for (d in listOf("battery", "bms", "main", "Battery")) for (n in names) {
+            val v = runCatching { File("/sys/class/power_supply/$d/$n").readText().trim().toLong() }.getOrNull()
+            if (v != null && v > 0) return v
+        }
+        return null
+    }
+    val cyc = if (cycles >= 0) cycles.toLong() else sys("cycle_count")
+    out += "Số lần sạc" to (cyc?.let { if (cycles >= 0) "$it" else "$it · đọc từ nhân" } ?: "máy không báo")
+
+    // 10 = BATTERY_PROPERTY_STATE_OF_HEALTH: hằng số ẩn khỏi SDK công khai nên gọi bằng số
+    val soh = if (Build.VERSION.SDK_INT >= 34) runCatching { bm.getIntProperty(10) }.getOrNull()?.takeIf { it in 1..100 } else null
+    if (soh != null) out += "Độ chai · hãng báo" to "${100 - soh}% (còn $soh% dung lượng)"
+
+    val full = sys("charge_full"); val design = sys("charge_full_design")
+    val eFull = sys("energy_full"); val eDesign = sys("energy_full_design")
+    var kernel = false
+    if (full != null && design != null) {
+        kernel = true
+        out += "Dung lượng đầy · nhân" to "%.0f%% thiết kế (%d/%d mAh)".format(100.0 * full / design, full / 1000, design / 1000)
+    } else if (eFull != null && eDesign != null) {
+        kernel = true
+        out += "Dung lượng đầy · nhân" to "%.0f%% thiết kế".format(100.0 * eFull / eDesign)
+    }
+
+    val counter = runCatching { bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER) }.getOrDefault(0)
+    val designMah = runCatching {
+        val c = Class.forName("com.android.internal.os.PowerProfile")
+        c.getMethod("getBatteryCapacity").invoke(c.getConstructor(Context::class.java).newInstance(ctx)) as Double
+    }.getOrNull()?.takeIf { it > 100 }
+    var est = false
+    if (counter > 0 && pct in 15..95 && designMah != null) {
+        est = true
+        val now = counter / 1000.0 / (pct / 100.0)
+        out += "Dung lượng đầy · ước tính" to "%.0f mAh / thiết kế %.0f (~%.0f%%), chỉ tham khảo".format(now, designMah, 100 * now / designMah)
+    }
+    fun mark(ok: Boolean) = if (ok) "✓" else "✗"
+    out += "Nguồn đọc được" to "hãng báo ${mark(soh != null)} · nhân ${mark(kernel)} · ước tính ${mark(est)}"
+    if (soh == null && !kernel && !est) out += "Độ chai" to "máy không cho app đọc — xem trong menu pin của hãng"
+    return out
+}
+
 private class Sampler(val ctx: Context) {
     private val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     private val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -200,9 +251,8 @@ private class Sampler(val ctx: Context) {
                     "Sức khoẻ" to health,
                     "Công nghệ" to (b?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: "?"),
                     "Điện tích còn" to "${bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER) / 1000} mAh",
-                    "Số lần sạc" to if (cycles >= 0) "$cycles" else "máy không báo",
                     "Tiết kiệm pin" to if (pm.isPowerSaveMode) "Bật" else "Tắt",
-                )),
+                ) + batteryHealth(ctx, bm, 100 * level / scale, cycles)),
                 MGroup("Mạng", listOf(
                     "Kết nối" to link,
                     "Băng thông báo cáo" to (caps?.let { "↓ ${it.linkDownstreamBandwidthKbps / 1000} · ↑ ${it.linkUpstreamBandwidthKbps / 1000} Mbps" } ?: "—"),
