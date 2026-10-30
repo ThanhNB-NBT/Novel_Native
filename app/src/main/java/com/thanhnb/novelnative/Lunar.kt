@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Size
@@ -370,68 +371,99 @@ fun LunarScreen(tab: Boolean = false) {
     }
 }
 
-/** Tờ lịch của ngày đang chọn: số ngày âm cỡ lớn, trăng, hoàng/hắc đạo + dịp lễ, Can Chi (chữ Hán + âm Việt), nạp âm. */
+private val CINNABAR = Color(0xFFB3261E) // son đỏ của ấn triện / gáy lịch
+private val GOLD = Color(0xFFC49A3A)
+private val CREAM = Color(0xFFFBF3E4)
+private val MONTH_HAN = listOf("正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "冬", "臘")
+
+/** Ngày âm theo cách ghi trên lịch Hán: 初一…初十, 十一…十九, 二十, 廿一…廿九, 三十. */
+private fun hanDay(n: Int): String {
+    val num = "〇一二三四五六七八九十"
+    return when {
+        n <= 10 -> "初" + num[n]
+        n < 20 -> "十" + num[n - 10]
+        n == 20 -> "二十"
+        n < 30 -> "廿" + num[n - 20]
+        else -> "三十"
+    }
+}
+
+/**
+ * Tờ lịch bóc của ngày đang chọn: giấy kem + gáy son đỏ (tên tháng, năm Can Chi), số ngày âm cỡ lớn kèm ấn triện ghi tháng,
+ * trăng trên nền đêm viền vàng đồng, Can Chi chữ Hán ngăn bằng vạch vàng. Nền giấy chuyển nâu ấm ở chế độ tối.
+ */
 @Composable
 private fun DayHero(d: LocalDate) {
     val cs = MaterialTheme.colorScheme
+    val dark = cs.background.luminance() < .5f
+    val paper = if (dark) Color(0xFF2A2119) else CREAM
+    val ink = if (dark) Color(0xFFF1E4CF) else Color(0xFF2B1B12)
+    val soft = ink.copy(.62f)
     val l = toLunar(d)
     val ev = events(d, l)
     val good = isGoodDay(l)
     val e = napAmElement(l)
-    val white = Color.White
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Brush.linearGradient(listOf(cs.primary, lerp(cs.primary, Color.Black, .55f)))).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    val shape = RoundedCornerShape(24.dp)
+    Column(Modifier.fillMaxWidth().clip(shape).background(paper).border(1.dp, GOLD.copy(.55f), shape)) {
+        // gáy lịch
+        Row(
+            Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(CINNABAR, Color(0xFF8E1B16)))).padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("${l.monthName.uppercase()} · ${l.yearName.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = CREAM, letterSpacing = 1.5.sp, maxLines = 1)
+            Text(han(l.yearName) + "年", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CREAM)
+        }
+        Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = white.copy(.8f))
+                Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = soft)
                 Row(verticalAlignment = Alignment.Bottom) {
                     AnimatedContent(l.day, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }, label = "lunarDay") { n ->
-                        Text("$n", style = MaterialTheme.typography.headlineLarge.copy(fontSize = 76.sp, lineHeight = 80.sp), fontWeight = FontWeight.ExtraBold, color = white)
+                        Text("$n", style = MaterialTheme.typography.headlineLarge.copy(fontSize = 88.sp, lineHeight = 92.sp), fontWeight = FontWeight.ExtraBold, color = ink)
                     }
-                    Column(Modifier.padding(start = 10.dp, bottom = 12.dp)) {
-                        Text("${l.monthName.replaceFirst("Tháng", "tháng")} âm lịch", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = white)
-                        Text(moonName(l.day), style = MaterialTheme.typography.labelMedium, color = white.copy(.75f))
+                    // ấn triện: tháng âm
+                    Column(
+                        Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(5.dp)).background(CINNABAR).padding(horizontal = 9.dp, vertical = 5.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CREAM, lineHeight = 20.sp)
+                        Text(if (l.leap) "閏" else "月", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CREAM, lineHeight = 20.sp)
                     }
                 }
+                Text("${hanDay(l.day)} · ${moonName(l.day)}", style = MaterialTheme.typography.labelMedium, color = soft)
             }
-            MoonPhase(l.day, 84.dp)
+            Box(Modifier.size(92.dp).clip(CircleShape).background(Color(0xFF1B2540)).border(1.5.dp, GOLD, CircleShape), Alignment.Center) {
+                MoonPhase(l.day, 68.dp)
+            }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HeroTag(if (good) "Ngày hoàng đạo" else "Ngày hắc đạo", if (good) GOOD_GREEN else white.copy(.16f))
-            ev.forEach { HeroTag(it.name, white.copy(.16f)) }
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (good) HeroTag("Ngày hoàng đạo", CINNABAR, CREAM) else HeroTag("Ngày hắc đạo", Color.Transparent, soft, soft.copy(.5f))
+            ev.forEach { HeroTag(it.name, GOLD.copy(.2f), ink) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HeroCanChi("Năm", l.yearName, Modifier.weight(1f))
-            HeroCanChi("Tháng", l.monthCanChi, Modifier.weight(1f))
-            HeroCanChi("Ngày", l.dayCanChi, Modifier.weight(1f))
+        Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(GOLD.copy(.45f)))
+        Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf("Năm" to l.yearName, "Tháng" to l.monthCanChi, "Ngày" to l.dayCanChi).forEachIndexed { i, (label, v) ->
+                if (i > 0) Box(Modifier.width(1.dp).height(56.dp).background(GOLD.copy(.45f)))
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = soft, letterSpacing = 1.sp)
+                    Text(han(v), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = ink)
+                    Text(v, style = MaterialTheme.typography.labelMedium, color = soft, maxLines = 1)
+                }
+            }
         }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(10.dp).background(elementColor(e), CircleShape))
-            Text("Nạp âm", Modifier.padding(start = 10.dp).width(64.dp), style = MaterialTheme.typography.labelMedium, color = white.copy(.7f))
-            Text(napAm(l).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = white)
-            Text("Hành ${e.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelMedium, color = white.copy(.85f), fontWeight = FontWeight.SemiBold)
+            Text("Nạp âm", Modifier.padding(start = 10.dp).width(64.dp), style = MaterialTheme.typography.labelMedium, color = soft)
+            Text(napAm(l).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = ink)
+            Text("Hành ${e.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelMedium, color = elementColor(e), fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
-private fun HeroTag(text: String, bg: Color) = Text(
-    text, Modifier.clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 12.dp, vertical = 5.dp),
-    style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1,
+private fun HeroTag(text: String, bg: Color, fg: Color, border: Color? = null) = Text(
+    text, Modifier.clip(RoundedCornerShape(50)).background(bg).then(if (border != null) Modifier.border(1.dp, border, RoundedCornerShape(50)) else Modifier).padding(horizontal = 12.dp, vertical = 5.dp),
+    style = MaterialTheme.typography.labelMedium, color = fg, fontWeight = FontWeight.SemiBold, maxLines = 1,
 )
-
-/** Ô Can Chi: chữ Hán to ở trên, âm Việt nhỏ ở dưới. */
-@Composable
-private fun HeroCanChi(label: String, value: String, modifier: Modifier) = Column(
-    modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(.13f)).padding(vertical = 10.dp),
-    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp),
-) {
-    Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(.7f), letterSpacing = 1.sp)
-    Text(han(value), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
-    Text(value, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.85f), maxLines = 1)
-}
 
 /** Phần dưới tờ lịch: tiết khí + đồng hồ 12 canh giờ. */
 @Composable
@@ -537,7 +569,7 @@ private fun Legend() {
         mark(); Text(text, Modifier.padding(start = 5.dp), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        item({ Box(Modifier.size(6.dp).border(1.2.dp, cs.primary, CircleShape)) }, "Mùng 1")
+        item({ Box(Modifier.size(6.dp).border(1.2.dp, CINNABAR, CircleShape)) }, "Mùng 1")
         item({ Box(Modifier.size(6.dp).background(FULL_DOT, CircleShape)) }, "Rằm")
         item({ Box(Modifier.size(6.dp).background(TERM_TEAL, CircleShape)) }, "Tiết khí")
         item({ Box(Modifier.size(6.dp).background(GOOD_GREEN, CircleShape)) }, "Hoàng đạo")
@@ -560,8 +592,8 @@ private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Mo
     val shape = RoundedCornerShape(16.dp)
     Box(
         modifier.aspectRatio(.82f).padding(2.dp).clip(shape)
-            .background(if (isToday) cs.primary else if (isSel) cs.primary.copy(.12f) else Color.Transparent)
-            .then(if (isSel && !isToday) Modifier.border(1.5.dp, cs.primary, shape) else Modifier)
+            .background(if (isToday) CINNABAR else if (isSel) CINNABAR.copy(.12f) else Color.Transparent)
+            .then(if (isSel && !isToday) Modifier.border(1.5.dp, CINNABAR, shape) else Modifier)
             .bounceClick { pick(d) },
         contentAlignment = Alignment.Center,
     ) {
@@ -572,12 +604,12 @@ private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Mo
                 if (mark) Box(
                     Modifier.padding(end = 3.dp).size(5.dp).then(
                         if (l.day == 15) Modifier.background(if (isToday) cs.onPrimary else FULL_DOT, CircleShape)
-                        else Modifier.border(1.2.dp, if (isToday) cs.onPrimary else cs.primary, CircleShape),
+                        else Modifier.border(1.2.dp, if (isToday) cs.onPrimary else CINNABAR, CircleShape),
                     ),
                 )
                 Text(
                     lunarText, style = MaterialTheme.typography.labelSmall,
-                    color = if (isToday) cs.onPrimary.copy(.85f) else if (mark) cs.primary else cs.onSurfaceVariant,
+                    color = if (isToday) cs.onPrimary.copy(.85f) else if (mark) CINNABAR else cs.onSurfaceVariant,
                     fontWeight = if (mark) FontWeight.Bold else null,
                 )
             }
