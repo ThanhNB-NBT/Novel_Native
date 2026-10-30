@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.lerp
@@ -211,6 +212,26 @@ private fun moonName(d: Int) = when (d) {
     else -> "Trăng tàn"
 }
 
+/** Phần sáng của trăng theo ngày âm (null = trăng tối hẳn; rằm = cả đĩa). Đĩa tâm [c] bán kính [r]. */
+private fun litPath(lunarDay: Int, c: Offset, r: Float): Path? {
+    val p = ((lunarDay - 1) / SYNODIC).coerceIn(0.0, 0.999)
+    val k = (1 - cos(2 * PI * p)) / 2 // phần đĩa được chiếu sáng
+    val outer = Rect(c.x - r, c.y - r, c.x + r, c.y + r)
+    if (k > 0.985) return Path().apply { addOval(outer) }
+    if (k <= 0.015) return null
+    val waxing = p < 0.5
+    val crescent = cos(2 * PI * p) > 0
+    val rx = (r * abs(cos(2 * PI * p))).toFloat()
+    val term = Rect(c.x - rx, c.y - r, c.x + rx, c.y + r)
+    return Path().apply {
+        arcTo(outer, -90f, if (waxing) 180f else -180f, true)
+        // đường phân sáng tối: về lại đỉnh qua nửa elip, lồi về phía sáng (lưỡi liềm) hoặc phía tối (khuyết)
+        val throughRight = waxing == crescent
+        arcTo(term, 90f, if (throughRight) -180f else 180f, false)
+        close()
+    }
+}
+
 /**
  * Mặt trăng vẽ theo ngày âm: nền tối, phần sáng = nửa đĩa phía được chiếu + nửa elip làm đường phân sáng tối.
  * Trăng trước rằm (đầy dần) sáng bên phải, sau rằm (vơi dần) sáng bên trái — như nhìn từ bán cầu Bắc.
@@ -224,25 +245,33 @@ private fun MoonPhase(lunarDay: Int, size: Dp, modifier: Modifier = Modifier) {
         val r = this.size.minDimension / 2f
         val c = Offset(this.size.width / 2f, this.size.height / 2f)
         drawCircle(dark, r, c)
-        val p = ((lunarDay - 1) / SYNODIC).coerceIn(0.0, 0.999)
-        val k = (1 - cos(2 * PI * p)) / 2 // phần đĩa được chiếu sáng
-        if (k > 0.985) drawCircle(MOON_LIT, r, c)
-        else if (k > 0.015) {
-            val waxing = p < 0.5
-            val crescent = cos(2 * PI * p) > 0
-            val rx = (r * abs(cos(2 * PI * p))).toFloat()
-            val outer = Rect(c.x - r, c.y - r, c.x + r, c.y + r)
-            val term = Rect(c.x - rx, c.y - r, c.x + rx, c.y + r)
-            val path = Path().apply {
-                arcTo(outer, -90f, if (waxing) 180f else -180f, true)
-                // đường phân sáng tối: về lại đỉnh qua nửa elip, lồi về phía sáng (lưỡi liềm) hoặc phía tối (khuyết)
-                val throughRight = waxing == crescent
-                arcTo(term, 90f, if (throughRight) -180f else 180f, false)
-                close()
-            }
-            drawPath(path, MOON_LIT)
-        }
+        litPath(lunarDay, c, r)?.let { drawPath(it, MOON_LIT) }
         drawCircle(ring, r - .5f, c, style = Stroke(1.dp.toPx()))
+    }
+}
+
+/** Mặt trăng cỡ lớn cho tờ lịch: trời đêm chuyển sắc có sao, quầng sáng, phần tối có ánh đất, phần sáng chuyển sắc kèm hố trăng, viền vàng đồng. */
+@Composable
+private fun MoonHero(lunarDay: Int, size: Dp) {
+    Canvas(Modifier.size(size)) {
+        val s = this.size.minDimension
+        val c = Offset(s / 2, s / 2)
+        val night = s / 2
+        drawCircle(Brush.radialGradient(listOf(Color(0xFF2E3D69), Color(0xFF111A33)), c, night), night, c)
+        listOf(Offset(.22f, .28f) to 1.6f, Offset(.78f, .2f) to 1.2f, Offset(.87f, .58f) to 1.8f, Offset(.15f, .7f) to 1.3f, Offset(.62f, .9f) to 1.4f, Offset(.4f, .1f) to 1.0f)
+            .forEach { (o, rr) -> drawCircle(Color.White.copy(.7f), rr.dp.toPx(), Offset(o.x * s, o.y * s)) }
+        val r = s * .31f
+        drawCircle(Brush.radialGradient(listOf(MOON_LIT.copy(.38f), Color.Transparent), c, r * 2f), r * 2f, c) // quầng sáng
+        drawCircle(Color(0xFF3B4870).copy(.55f), r, c) // phần tối: ánh đất
+        litPath(lunarDay, c, r)?.let { lit ->
+            drawPath(lit, Brush.radialGradient(listOf(Color(0xFFFFF4D6), MOON_LIT, Color(0xFFE6C070)), Offset(c.x - r * .3f, c.y - r * .3f), r * 1.5f))
+            clipPath(lit) {
+                listOf(Triple(-.38f, -.28f, .2f), Triple(.28f, -.5f, .12f), Triple(.34f, .22f, .22f), Triple(-.2f, .42f, .14f), Triple(.6f, -.08f, .09f), Triple(-.55f, .1f, .1f))
+                    .forEach { (x, y, k) -> drawCircle(Color(0xFFB08A4A).copy(.28f), r * k, Offset(c.x + x * r, c.y + y * r)) }
+            }
+        }
+        drawCircle(MOON_LIT.copy(.35f), r, c, style = Stroke(1.dp.toPx()))
+        drawCircle(GOLD, night - .75.dp.toPx(), c, style = Stroke(1.5.dp.toPx()))
     }
 }
 
@@ -431,9 +460,7 @@ private fun DayHero(d: LocalDate) {
                 }
                 Text("${hanDay(l.day)} · ${moonName(l.day)}", style = MaterialTheme.typography.labelMedium, color = soft)
             }
-            Box(Modifier.size(92.dp).clip(CircleShape).background(Color(0xFF1B2540)).border(1.5.dp, GOLD, CircleShape), Alignment.Center) {
-                MoonPhase(l.day, 68.dp)
-            }
+            MoonHero(l.day, 104.dp)
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (good) HeroTag("Ngày hoàng đạo", seal, onSeal) else HeroTag("Ngày hắc đạo", Color.Transparent, soft, soft.copy(.5f))
