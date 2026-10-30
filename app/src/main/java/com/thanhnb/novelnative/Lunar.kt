@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -371,9 +372,9 @@ fun LunarScreen(tab: Boolean = false) {
                 }
                 IconButton({ go(1) }) { Icon(Icons.Rounded.ChevronRight, "Tháng sau") }
             }
-            if (month.year != today.year || month.month != today.month) TextButton(
-                { month = today.withDayOfMonth(1); sel = today }, Modifier.align(Alignment.CenterHorizontally),
-            ) { Text("Về hôm nay") }
+            AnimatedVisibility(month.year != today.year || month.month != today.month, Modifier.align(Alignment.CenterHorizontally)) { // trượt ra/vào, tờ lịch không giật
+                TextButton({ month = today.withDayOfMonth(1); sel = today }) { Text("Về hôm nay") }
+            }
 
             DayHero(sel)
 
