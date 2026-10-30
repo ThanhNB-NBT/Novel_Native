@@ -6,6 +6,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -121,10 +123,18 @@ fun AppTheme(content: @Composable () -> Unit) {
     val ink = if (dark) p.dInk else p.ink
     val soft = if (dark) p.dInkSoft else p.inkSoft
     val line = if (dark) p.dLine else p.line
-    val accent = if (dark) a.dAccent else a.accent
+    val card = if (dark) p.dSurface else p.surface
+    // màu nhấn mô phỏng hệ điều hành có bộ khá nhạt (xanh ngọc, cam, lục…): trên thẻ sáng kém 3:1 thì hạ sáng vừa đủ để icon/nhãn còn nhìn rõ
+    val accent = (if (dark) a.dAccent else a.accent).let {
+        if (dark) it else ensureContrast(it, card, 3f, Color.Black).let { c ->
+            // màu trung tính-sáng (cam, xanh Google…) đọc kém cả với chữ kem lẫn chữ mực: hạ thêm để chữ kem trên nút đạt 4.5:1
+            if (maxOf(contrast(c, Color(0xFFFAF5EB)), contrast(c, Color(0xFF1B1208))) < 4.5f) ensureContrast(c, Color(0xFFFAF5EB), 4.5f, Color.Black) else c
+        }
+    }
+    val seal = (if (dark) a.dSeal else a.seal).let { if (dark) it else ensureContrast(it, card, 3f, Color.Black) }
     val scheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
         primary = accent,
-        onPrimary = if (dark) Color(0xFF2A140B) else Color(0xFFFAF5EB),
+        onPrimary = onColor(accent, dark = if (dark) Color(0xFF2A140B) else Color(0xFF1B1208)), // chữ trên nút: kem hoặc mực, theo cái đọc rõ hơn
         primaryContainer = if (dark) a.dSoft else a.soft,
         onPrimaryContainer = if (dark) a.dAccent else a.deep,
         secondary = a.extra.getOrNull(1) ?: if (dark) Color(0xFFF2A65A) else Color(0xFFE8913C),
@@ -163,9 +173,27 @@ fun AppTheme(content: @Composable () -> Unit) {
         ),
         typography = type(ink, soft),
     ) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalSeal provides (if (dark) a.dSeal else a.seal), content = content)
+        androidx.compose.runtime.CompositionLocalProvider(LocalSeal provides seal, content = content)
     }
 }
+
+/** Tỉ lệ tương phản WCAG giữa hai màu (1–21). */
+fun contrast(a: Color, b: Color): Float {
+    val x = a.luminance()
+    val y = b.luminance()
+    return (maxOf(x, y) + .05f) / (minOf(x, y) + .05f)
+}
+
+/** Pha dần [c] về phía [toward] cho tới khi tương phản với [bg] đạt [min] (tối đa 40 bước; màu đã đạt thì giữ nguyên). */
+fun ensureContrast(c: Color, bg: Color, min: Float, toward: Color): Color {
+    var x = c
+    var i = 0
+    while (contrast(x, bg) < min && i++ < 40) x = lerp(x, toward, .05f)
+    return x
+}
+
+/** Màu chữ/icon đặt trên nền [bg]: lấy trong [light] / [dark] cái tương phản hơn; [lightBias] > 1 ưu tiên chữ sáng khi hai bên xấp xỉ (nhãn in đậm, cỡ lớn). */
+fun onColor(bg: Color, light: Color = Color(0xFFFAF5EB), dark: Color = Color(0xFF1B1208), lightBias: Float = 1f) = if (contrast(bg, light) * lightBias >= contrast(bg, dark)) light else dark
 
 /** Màu thẻ (giấy mới) — nền tách khỏi nền trang. */
 val ColorScheme.card get() = surfaceContainerLow

@@ -371,7 +371,6 @@ fun LunarScreen(tab: Boolean = false) {
     }
 }
 
-private val CINNABAR = Color(0xFFB3261E) // son đỏ của ấn triện / gáy lịch
 private val GOLD = Color(0xFFC49A3A)
 private val CREAM = Color(0xFFFBF3E4)
 private val MONTH_HAN = listOf("正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "冬", "臘")
@@ -395,10 +394,11 @@ private fun hanDay(n: Int): String {
 @Composable
 private fun DayHero(d: LocalDate) {
     val cs = MaterialTheme.colorScheme
-    val dark = cs.background.luminance() < .5f
-    val paper = if (dark) Color(0xFF2A2119) else CREAM
-    val ink = if (dark) Color(0xFFF1E4CF) else Color(0xFF2B1B12)
-    val soft = ink.copy(.62f)
+    val seal = LocalSeal.current // son của ấn triện/gáy lịch = màu triện của bộ màu đang chọn
+    val onSeal = onColor(seal, lightBias = 1.4f)
+    val paper = lerp(cs.card, GOLD, .07f)
+    val ink = cs.onSurface
+    val soft = cs.onSurfaceVariant
     val l = toLunar(d)
     val ev = events(d, l)
     val good = isGoodDay(l)
@@ -407,11 +407,11 @@ private fun DayHero(d: LocalDate) {
     Column(Modifier.fillMaxWidth().clip(shape).background(paper).border(1.dp, GOLD.copy(.55f), shape)) {
         // gáy lịch
         Row(
-            Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(CINNABAR, Color(0xFF8E1B16)))).padding(horizontal = 20.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(seal, lerp(seal, Color.Black, .3f)))).padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("${l.monthName.uppercase()} · ${l.yearName.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = CREAM, letterSpacing = 1.5.sp, maxLines = 1)
-            Text(han(l.yearName) + "年", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CREAM)
+            Text("${l.monthName.uppercase()} · ${l.yearName.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = onSeal, letterSpacing = 1.5.sp, maxLines = 1)
+            Text(han(l.yearName) + "年", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal)
         }
         Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -422,11 +422,11 @@ private fun DayHero(d: LocalDate) {
                     }
                     // ấn triện: tháng âm
                     Column(
-                        Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(5.dp)).background(CINNABAR).padding(horizontal = 9.dp, vertical = 5.dp),
+                        Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(5.dp)).background(seal).padding(horizontal = 9.dp, vertical = 5.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text(MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CREAM, lineHeight = 20.sp)
-                        Text(if (l.leap) "閏" else "月", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CREAM, lineHeight = 20.sp)
+                        Text(MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
+                        Text(if (l.leap) "閏" else "月", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
                     }
                 }
                 Text("${hanDay(l.day)} · ${moonName(l.day)}", style = MaterialTheme.typography.labelMedium, color = soft)
@@ -436,7 +436,7 @@ private fun DayHero(d: LocalDate) {
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (good) HeroTag("Ngày hoàng đạo", CINNABAR, CREAM) else HeroTag("Ngày hắc đạo", Color.Transparent, soft, soft.copy(.5f))
+            if (good) HeroTag("Ngày hoàng đạo", seal, onSeal) else HeroTag("Ngày hắc đạo", Color.Transparent, soft, soft.copy(.5f))
             ev.forEach { HeroTag(it.name, GOLD.copy(.2f), ink) }
         }
         Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(GOLD.copy(.45f)))
@@ -565,11 +565,12 @@ private fun HoursCard(l: LunarDate, isToday: Boolean) {
 @Composable
 private fun Legend() {
     val cs = MaterialTheme.colorScheme
+    val seal = LocalSeal.current
     @Composable fun item(mark: @Composable () -> Unit, text: String) = Row(verticalAlignment = Alignment.CenterVertically) {
         mark(); Text(text, Modifier.padding(start = 5.dp), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        item({ Box(Modifier.size(6.dp).border(1.2.dp, CINNABAR, CircleShape)) }, "Mùng 1")
+        item({ Box(Modifier.size(6.dp).border(1.2.dp, seal, CircleShape)) }, "Mùng 1")
         item({ Box(Modifier.size(6.dp).background(FULL_DOT, CircleShape)) }, "Rằm")
         item({ Box(Modifier.size(6.dp).background(TERM_TEAL, CircleShape)) }, "Tiết khí")
         item({ Box(Modifier.size(6.dp).background(GOOD_GREEN, CircleShape)) }, "Hoàng đạo")
@@ -579,6 +580,8 @@ private fun Legend() {
 @Composable
 private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Modifier, pick: (LocalDate) -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val seal = LocalSeal.current
+    val onSeal = onColor(seal, lightBias = 1.4f)
     val l = toLunar(d)
     val isToday = d == today
     val isSel = d == sel
@@ -588,12 +591,12 @@ private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Mo
     val good = isGoodDay(l)
     val holiday = remember(d) { events(d, l).any { !(it.name == "Mùng 1" || it.name == "Ngày Rằm") } }
     val lunarText = if (l.day == 1) "${l.day}/${l.month}${if (l.leap) "*" else ""}" else "${l.day}"
-    val fg = if (isToday) cs.onPrimary else if (sunday || holiday) cs.error else cs.onSurface
+    val fg = if (isToday) onSeal else if (sunday || holiday) cs.error else cs.onSurface
     val shape = RoundedCornerShape(16.dp)
     Box(
         modifier.aspectRatio(.82f).padding(2.dp).clip(shape)
-            .background(if (isToday) CINNABAR else if (isSel) CINNABAR.copy(.12f) else Color.Transparent)
-            .then(if (isSel && !isToday) Modifier.border(1.5.dp, CINNABAR, shape) else Modifier)
+            .background(if (isToday) seal else if (isSel) seal.copy(.12f) else Color.Transparent)
+            .then(if (isSel && !isToday) Modifier.border(1.5.dp, seal, shape) else Modifier)
             .bounceClick { pick(d) },
         contentAlignment = Alignment.Center,
     ) {
@@ -603,19 +606,19 @@ private fun DayCell(d: LocalDate, today: LocalDate, sel: LocalDate, modifier: Mo
                 // mùng 1 = vòng rỗng (trăng non), rằm = chấm đặc (trăng tròn)
                 if (mark) Box(
                     Modifier.padding(end = 3.dp).size(5.dp).then(
-                        if (l.day == 15) Modifier.background(if (isToday) cs.onPrimary else FULL_DOT, CircleShape)
-                        else Modifier.border(1.2.dp, if (isToday) cs.onPrimary else CINNABAR, CircleShape),
+                        if (l.day == 15) Modifier.background(if (isToday) onSeal else FULL_DOT, CircleShape)
+                        else Modifier.border(1.2.dp, if (isToday) onSeal else seal, CircleShape),
                     ),
                 )
                 Text(
                     lunarText, style = MaterialTheme.typography.labelSmall,
-                    color = if (isToday) cs.onPrimary.copy(.85f) else if (mark) CINNABAR else cs.onSurfaceVariant,
+                    color = if (isToday) onSeal.copy(.85f) else if (mark) seal else cs.onSurfaceVariant,
                     fontWeight = if (mark) FontWeight.Bold else null,
                 )
             }
         }
         // góc trên phải: tiết khí; góc dưới: dải xanh mảnh cho ngày hoàng đạo
-        if (term) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(6.dp).background(if (isToday) cs.onPrimary else TERM_TEAL, CircleShape))
-        if (good) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).width(14.dp).height(2.5.dp).background(if (isToday) cs.onPrimary.copy(.8f) else GOOD_GREEN, RoundedCornerShape(50)))
+        if (term) Box(Modifier.align(Alignment.TopEnd).padding(5.dp).size(6.dp).background(if (isToday) onSeal else TERM_TEAL, CircleShape))
+        if (good) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).width(14.dp).height(2.5.dp).background(if (isToday) onSeal.copy(.8f) else GOOD_GREEN, RoundedCornerShape(50)))
     }
 }
