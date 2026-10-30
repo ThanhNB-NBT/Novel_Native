@@ -91,6 +91,9 @@ val Jakarta = FontFamily(
 )
 val Serif = FontFamily(Font(R.font.noto_serif_bold, FontWeight.Bold))
 
+/** Font Nôm cắt gọn (Hanazono Mincho B, giấy phép Hanazono/GlyphWiki): chỉ 3 chữ 𢆥 𣎃 𣈜 = năm, tháng, ngày — font hệ thống Android không có các chữ này. */
+val Nom = FontFamily(Font(R.font.nom_subset))
+
 /** Màu triện theo bộ màu nhấn đang chọn. */
 val LocalSeal = staticCompositionLocalOf { Color(0xFFB8322A) }
 

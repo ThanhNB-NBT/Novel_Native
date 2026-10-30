@@ -19,7 +19,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -472,8 +475,8 @@ private fun DayHero(d: LocalDate) {
                             Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(5.dp)).background(seal).padding(horizontal = 9.dp, vertical = 5.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
-                            Text(if (l.leap) "閏" else "月", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
+                            Text("𣎃", fontFamily = Nom, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp) // chữ Nôm "tháng"
+                            Text((if (l.leap) "閏" else "") + MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
                         }
                     }
                     Text("${hanDay(l.day)} · ${moonName(l.day)}", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.7f))
@@ -487,10 +490,13 @@ private fun DayHero(d: LocalDate) {
         }
         Box(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(1.dp).background(GOLD.copy(.45f)))
         Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf("Năm" to l.yearName, "Tháng" to l.monthCanChi, "Ngày" to l.dayCanChi).forEachIndexed { i, (label, v) ->
+            listOf(Triple("𢆥", "Năm", l.yearName), Triple("𣎃", "Tháng", l.monthCanChi), Triple("𣈜", "Ngày", l.dayCanChi)).forEachIndexed { i, (nom, label, v) -> // chữ Nôm năm, tháng, ngày
                 if (i > 0) Box(Modifier.width(1.dp).height(56.dp).background(GOLD.copy(.45f)))
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = soft, letterSpacing = 1.sp)
+                    Text(
+                        buildAnnotatedString { withStyle(SpanStyle(fontFamily = Nom, fontSize = 14.sp)) { append(nom) }; append(" ${label.uppercase()}") },
+                        style = MaterialTheme.typography.labelSmall, color = soft, letterSpacing = 1.sp,
+                    )
                     Text(han(v), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = ink)
                     Text(v, style = MaterialTheme.typography.labelMedium, color = soft, maxLines = 1)
                 }
