@@ -102,19 +102,20 @@ fun CrawlTab() {
             fun v(k: String) = p?.get(k)?.let { fmtK(it) } ?: "…"
             val failedCh = p?.get("failedChapters") ?: 0
             Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                StatRow(
-                    Triple(v("novels24h"), "truyện mới 24h", cs.primary), Triple(v("chapters24h"), "chương về 24h", null),
-                    Triple(v("done24h"), "dịch xong 24h", cs.live), Triple(v("failedChapters"), "chương lỗi", if (failedCh > 0) cs.error else null),
+                Spacer(Modifier.height(8.dp))
+                Pulses(beats.res?.getOrNull().orEmpty())
+                Spacer(Modifier.height(10.dp))
+                HeroCard("Truyện mới về · 24 giờ", v("novels24h"), null, null, "${v("chapters24h")} chương về · ${v("done24h")} chương dịch xong · ${v("done1h")} chương/giờ")
+                Spacer(Modifier.height(10.dp))
+                KvCard(
+                    Triple("Chương chờ dịch", v("queued"), null),
+                    Triple("Chưa dịch tên + giới thiệu", v("metaPending"), if ((p?.get("metaPending") ?: 0) > 0) cs.live else null),
+                    Triple("Chương lỗi", v("failedChapters"), if (failedCh > 0) cs.error else null),
+                    Triple("Job lỗi", v("failedJobs"), if ((p?.get("failedJobs") ?: 0) > 0) cs.error else null),
+                    Triple("Truyện đang theo dõi", v("tracked"), null),
                 )
-                MetaChips(
-                    "${v("done1h")}" to "chương/giờ", "${v("queued")}" to "chờ dịch", "${v("metaPending")}" to "chưa dịch giới thiệu",
-                    "${v("failedJobs")}" to "job lỗi", "${v("tracked")}" to "truyện theo dõi",
-                )
-                val b = beats.res?.getOrNull().orEmpty()
-                Pulse(b, "crawler", "Crawler")
-                Pulse(b, "translator", "Translator")
+                Spacer(Modifier.height(6.dp))
             }
-            HorizontalDivider(Modifier.padding(top = 8.dp), color = cs.outlineVariant.copy(.5f))
         }
         val st = settings.res?.getOrNull().orEmpty()
         item { Fold("Cấu hình dịch", openTrans) { openTrans = !openTrans } }
@@ -135,12 +136,13 @@ fun CrawlTab() {
             val on = s.optBoolean("enabled")
             val failing = s.optInt("fail_count") > 0
             val host = s.optString("base_url").substringAfter("://").substringBefore('/').removePrefix("www.")
-            val (chip, color) = if (!on) "TẮT" to cs.onSurfaceVariant else if (failing) "LỖI" to cs.error else "SỐNG" to cs.live
+            val (chip, color) = if (!on) "Tắt" to cs.onSurfaceVariant else if (failing) "Lỗi" to cs.error else "Sống" to cs.live
             val name = s.optString("name")
             AdminRow(
-                null, name, listOfNotNull(chip, host, if (failing) "fail ${s.optInt("fail_count")} chu kỳ" else null, if (on) s.s("last_ok_at")?.let { "OK ${ago(it)} trước" } else null).joinToString(" · "),
+                null, name, listOfNotNull(host, if (failing) "fail ${s.optInt("fail_count")} chu kỳ" else null, if (on) s.s("last_ok_at")?.let { "OK ${ago(it)} trước" } else null).joinToString(" · "),
                 subColor = if (failing) cs.error else cs.onSurfaceVariant,
                 trailing = {
+                    StatusPill(chip, color, Modifier.padding(end = 10.dp))
                     Switch(on, {
                         act = Act(if (it) "Bật nguồn $name?" else "Tắt nguồn $name?", if (it) "Crawler sẽ tự nhận nguồn này trong khoảng 10 giây." else "Crawler ngừng lấy truyện/chương từ nguồn này; job dịch cần bản gốc của nguồn sẽ chuyển sang \"nguồn không khả dụng\".", if (it) "Bật" else "Tắt") {
                             AdminApi.setSourceEnabled(s.getInt("id"), it); if (it) "Đã bật $name" else "Đã tắt $name"

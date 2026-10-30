@@ -93,13 +93,18 @@ fun NovelsTab() {
             item {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                     fun n(k: String) = stats?.get(k)?.let { fmtK(it) } ?: "…"
+                    Spacer(Modifier.height(8.dp))
+                    val done = stats?.get("done") ?: 0
+                    val all = stats?.get("chapters") ?: 0
+                    HeroCard(
+                        "Chương đã dịch", n("done"), if (stats == null) null else fmtK(all), if (all > 0) done.toFloat() / all else null,
+                        if (stats == null) null else "${"%.0f".format(done * 100f / all.coerceAtLeast(1))}% mục lục · ${n("doneToday")} chương dịch hôm nay",
+                    )
+                    if ((stats?.get("failed") ?: 0) > 0) StatusPill("${n("failed")} chương lỗi", cs.error, Modifier.padding(top = 8.dp))
+                    Spacer(Modifier.height(2.dp))
                     StatRow(
                         Triple(n("visible"), "hiện ở Khám phá", cs.primary), Triple(n("novels"), "tổng bản ghi", null),
                         Triple(n("completed"), "hoàn thành", null), Triple(n("metaPending"), "chờ dịch tên", if ((stats?.get("metaPending") ?: 0) > 0) cs.live else null),
-                    )
-                    StatRow(
-                        Triple(n("done"), "chương đã dịch", cs.primary), Triple(n("chapters"), "mục lục lưu", null),
-                        Triple(n("doneToday"), "dịch hôm nay", null), Triple(n("failed"), "chương lỗi", if ((stats?.get("failed") ?: 0) > 0) cs.error else null),
                     )
                     TextField(
                         input, { input = it }, Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true,

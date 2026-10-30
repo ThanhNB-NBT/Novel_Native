@@ -115,27 +115,77 @@ fun MetaChips(vararg items: Pair<String, String>, modifier: Modifier = Modifier)
     }
 }
 
-/** Một dòng nhịp tim worker: thẻ nhỏ, chấm màu có quầng + "hoạt động 12s trước". Im quá 3 phút = coi như treo/tắt. */
+/** Nhịp tim crawler + translator trong MỘT thẻ: chấm đập, viên thuốc trạng thái (luôn có chữ), "5s trước". Im quá 3 phút = coi như treo/tắt. */
 @Composable
-fun Pulse(beats: List<JSONObject>, name: String, label: String) {
+fun Pulses(beats: List<JSONObject>, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
-    val row = beats.firstOrNull { it.optString("name") == name }
-    val age = secondsSince(row?.s("at"))
-    val alive = age != null && age < 180
-    val color = if (alive) cs.live else cs.error
-    val text = when {
-        row == null -> "chưa từng chạy"
-        alive -> "hoạt động ${ago(row.s("at"))} trước" + (row.s("note")?.let { " — $it" } ?: "")
-        else -> "KHÔNG phản hồi (${ago(row.s("at"))}) — kiểm tra Docker"
+    val shape = RoundedCornerShape(20.dp)
+    Column(modifier.fillMaxWidth().clip(shape).background(cs.card).border(.6.dp, cs.outlineVariant.copy(.5f), shape)) {
+        listOf("crawler" to "Crawler", "translator" to "Translator").forEachIndexed { i, (name, label) ->
+            val row = beats.firstOrNull { it.optString("name") == name }
+            val age = secondsSince(row?.s("at"))
+            val alive = age != null && age < 180
+            val color = if (alive) cs.live else cs.error
+            if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.5f))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                HeartDot(color, alive)
+                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                    Text(label, style = MaterialTheme.typography.titleSmall)
+                    val sub = when { row == null -> "chưa từng chạy"; alive -> row.s("note") ?: "đang chạy"; else -> "không phản hồi — kiểm tra Docker" }
+                    Text(sub, style = MaterialTheme.typography.labelMedium, color = if (alive) cs.onSurfaceVariant else cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    StatusPill(if (alive) "Hoạt động" else if (row == null) "Chưa chạy" else "Treo", color)
+                    if (row != null) Text("${ago(row.s("at"))} trước", Modifier.padding(top = 3.dp), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                }
+            }
+        }
     }
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(shape).background(color.copy(.09f)).padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        HeartDot(color, alive)
-        Text(label, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.titleSmall)
-        Text(text, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.labelMedium, color = if (alive) cs.onSurfaceVariant else cs.error, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End)
+}
+
+/** Thẻ số chính của tab: một con số lớn (+ "/ tổng"), thanh tiến độ và dòng chú thích. Số "…" = đang tải. */
+@Composable
+fun HeroCard(label: String, value: String, of: String?, frac: Float?, caption: String?, modifier: Modifier = Modifier, tint: Color = MaterialTheme.colorScheme.primary) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(20.dp)
+    Column(modifier.fillMaxWidth().clip(shape).background(tint.copy(.08f)).border(.6.dp, tint.copy(.3f), shape).padding(16.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.Bottom) {
+            if (value == "…") Box(Modifier.padding(vertical = 6.dp).size(110.dp, 30.dp).shimmer(8.dp))
+            else Text(value, style = monoStyle(34, tint), fontWeight = FontWeight.Bold, maxLines = 1)
+            if (of != null) Text(" / $of", Modifier.padding(bottom = 5.dp), style = monoStyle(14, cs.onSurfaceVariant))
+        }
+        if (frac != null) LinearProgressIndicator(
+            { frac.coerceIn(0f, 1f) }, Modifier.fillMaxWidth().padding(top = 8.dp).height(8.dp),
+            color = tint, trackColor = cs.onSurface.copy(.08f), strokeCap = androidx.compose.ui.graphics.StrokeCap.Round, gapSize = 0.dp, drawStopIndicator = {},
+        )
+        if (caption != null) Text(caption, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+    }
+}
+
+/** Bảng "nhãn ........ số": thay cho đống viên thuốc xuống dòng lộn xộn. Màu chỉ gán cho số cần chú ý. */
+@Composable
+fun KvCard(vararg rows: Triple<String, String, Color?>, modifier: Modifier = Modifier) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(20.dp)
+    Column(modifier.fillMaxWidth().clip(shape).background(cs.card).border(.6.dp, cs.outlineVariant.copy(.5f), shape)) {
+        rows.forEachIndexed { i, (label, v, c) ->
+            if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.5f))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                if (v == "…") Box(Modifier.size(44.dp, 16.dp).shimmer(5.dp)) else Text(v, style = monoStyle(14, c ?: cs.onSurface), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+/** Nhãn nhóm nhỏ phía trên danh sách, kèm số đếm dạng viên thuốc. */
+@Composable
+fun SectionLabel(text: String, count: String? = null) {
+    val cs = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+        if (count != null) Text(count, Modifier.clip(CircleShape).background(cs.onSurface.copy(.07f)).padding(horizontal = 9.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium)
     }
 }
 

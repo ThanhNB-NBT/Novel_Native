@@ -33,7 +33,8 @@ fun JobsTab() {
     val l = load("admin.jobs") { AdminApi.jobs() }
     val beats = load("admin.beats") { AdminApi.heartbeat() }
     val total = load("admin.pending") { AdminApi.pendingJobCount() }
-    LaunchedEffect(Unit) { while (true) { delay(20_000); l.reload(); beats.reload(); total.reload() } }
+    val pulse = load("admin.pulse") { AdminApi.crawlPulse() }
+    LaunchedEffect(Unit) { while (true) { delay(20_000); l.reload(); beats.reload(); total.reload(); pulse.reload() } }
     var open by remember { mutableStateOf<Int?>(null) }
     AdminPane(l) { jobs ->
         val running = jobs.count { it.optString("status") == "running" }
@@ -56,11 +57,13 @@ fun JobsTab() {
                 if (blocked > 0) Text("$blocked job thiếu bản gốc, nguồn đang tắt", style = MaterialTheme.typography.labelMedium, color = cs.error)
                 if ((total.res?.getOrNull() ?: 0) > jobs.size) Text("Danh sách hiển thị ${jobs.size} job đầu hàng đợi", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(8.dp))
-                val b = beats.res?.getOrNull().orEmpty()
-                Pulse(b, "crawler", "Crawler")
-                Pulse(b, "translator", "Translator")
+                Pulses(beats.res?.getOrNull().orEmpty())
+                Spacer(Modifier.height(10.dp))
+                val p = pulse.res?.getOrNull()
+                fun v(k: String) = p?.get(k)?.let { fmtK(it) } ?: "…"
+                KvCard(Triple("Tốc độ dịch", if (p == null) "…" else "${v("done1h")} chương/giờ", null), Triple("Dịch xong 24 giờ", v("done24h"), cs.live), Triple("Chương chờ dịch", v("queued"), null))
             }
-            HorizontalDivider(Modifier.padding(top = 10.dp, bottom = 2.dp), color = cs.outlineVariant.copy(.5f))
+            SectionLabel("Hàng đợi theo truyện", if (groups.isEmpty()) null else "${groups.size} truyện")
         }
         if (groups.isEmpty()) item { Empty("Không có job đang chạy / chờ / lỗi.") }
         items(groups, key = { it.key }) { (id, js) ->

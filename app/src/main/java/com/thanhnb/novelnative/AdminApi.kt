@@ -82,7 +82,7 @@ object AdminApi {
 
     /** Người đang đọc trong 8 giờ qua (RLS admin_read_progress mới thấy của mọi user). */
     suspend fun readingNow() = get(
-        "reading_progress?select=novel_id,chapter_index,updated_at,novels(title_vi,title_zh)&updated_at=gte.${ago(8)}&order=updated_at.desc&limit=100",
+        "reading_progress?select=novel_id,chapter_index,updated_at,novels(title_vi,title_zh,cover_url,chapter_count_source)&updated_at=gte.${ago(8)}&order=updated_at.desc&limit=100",
     )
 
     suspend fun reports() = get(
