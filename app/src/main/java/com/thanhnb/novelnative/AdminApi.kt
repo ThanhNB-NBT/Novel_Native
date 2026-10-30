@@ -36,31 +36,26 @@ object AdminApi {
 
     // ---------- Worker ----------
 
+    /**
+     * Mọi bộ đếm của tab Truyện + Crawl + Worker trong MỘT lượt RPC (mig 143). Trước đây 18 truy vấn đếm riêng, mỗi cái ~300ms
+     * qua Tunnel + RLS gọi is_admin() từng hàng → vào màn Quản trị chờ 3-5s. Nhiều màn mở cùng lúc dùng chung kết quả 2 giây.
+     */
+    private var countsAt = 0L
+    private var countsVal: Map<String, Int>? = null
+    private suspend fun counts(): Map<String, Int> {
+        countsVal?.takeIf { System.nanoTime() - countsAt < 2_000_000_000L }?.let { return it }
+        val o = JSONObject(Api.rpc("admin_counts"))
+        return o.keys().asSequence().associateWith { o.optInt(it) }.also { countsVal = it; countsAt = System.nanoTime() }
+    }
+
     /** Số job pending THẬT; danh sách [jobs] chỉ là cửa sổ đầu hàng đợi. */
-    suspend fun pendingJobCount() = count("translation_jobs?status=eq.pending&type=neq.audit")
+    suspend fun pendingJobCount() = counts()["pendingJobs"] ?: 0
 
     const val JOBS_WINDOW = 120
 
-    /** Job running/failed/pending (cửa sổ đầu hàng đợi, xếp như worker claim) + cờ downloading/source_unavailable. */
-    suspend fun jobs(): List<JSONObject> {
-        val jobs = Api.sortLikeClaim(
-            get(
-                "translation_jobs?select=id,type,status,priority,attempts,error,created_at,started_at,novel_id,chapter_id," +
-                    "novels(title_vi,title_zh,sources(name,label,enabled)),chapters(chapter_index)" +
-                    "&status=in.(running,failed,pending)&type=neq.audit&order=priority.asc,created_at.asc&limit=$JOBS_WINDOW",
-            ),
-        )
-        // job pending mà chương chưa có content_zh = crawler đang tải nguồn
-        val ids = jobs.filter { it.optString("status") == "pending" && it.optInt("chapter_id") > 0 }.map { it.getInt("chapter_id") }
-        val noZh = if (ids.isEmpty()) emptySet() else get("chapters?select=id&id=in.(${ids.joinToString(",")})&content_zh=is.null").map { it.getInt("id") }.toSet()
-        jobs.forEach { j ->
-            val down = j.optInt("chapter_id") in noZh
-            val srcOff = j.optJSONObject("novels")?.optJSONObject("sources")?.let { it.has("enabled") && !it.optBoolean("enabled", true) } == true
-            j.put("downloading", down)
-            j.put("source_unavailable", down && srcOff)
-        }
-        return jobs
-    }
+    /** Job running/failed/pending (cửa sổ đầu hàng đợi, xếp như worker claim) + cờ downloading/source_unavailable do máy chủ tính sẵn. */
+    suspend fun jobs(): List<JSONObject> =
+        Api.sortLikeClaim(JSONArray(Api.rpc("admin_jobs_window", "p_limit" to JOBS_WINDOW)).rows())
 
     /** Nhịp tim crawler/translator: name, at, note. */
     suspend fun heartbeat() = get("worker_heartbeat?select=name,at,note")
@@ -123,20 +118,9 @@ object AdminApi {
 
     suspend fun novel(id: Int) = get("novels?select=$NOVEL_COLS&id=eq.$id").firstOrNull()
 
-    /** Thống kê toàn app (count head). */
-    suspend fun appStats(): Map<String, Int> = coroutineScope {
-        val day0 = Instant.now().atOffset(ZoneOffset.UTC).toLocalDate().atStartOfDay().toInstant(ZoneOffset.UTC).toString()
-        val q = linkedMapOf(
-            "novels" to "novels?",
-            "visible" to "novels?is_canonical=eq.true&hidden=eq.false",
-            "metaPending" to "novels?meta_translated=eq.false",
-            "completed" to "novels?status=eq.completed&is_canonical=eq.true",
-            "chapters" to "chapters?",
-            "done" to "chapters?translation_status=eq.done",
-            "doneToday" to "chapters?translation_status=eq.done&translated_at=gte.${Api.enc(day0)}",
-            "failed" to "chapters?translation_status=eq.failed",
-        )
-        q.mapValues { (_, p) -> async { count(p) } }.mapValues { it.value.await() }
+    /** Thống kê toàn app. */
+    suspend fun appStats(): Map<String, Int> = counts().filterKeys {
+        it in setOf("novels", "visible", "metaPending", "completed", "chapters", "done", "doneToday", "failed")
     }
 
     suspend fun setHidden(id: Int, hidden: Boolean) { patch("novels?id=eq.$id", JSONObject().put("hidden", hidden)) }
@@ -171,21 +155,9 @@ object AdminApi {
             "&created_at=gte.${ago(24)}&order=created_at.desc",
     )
 
-    /** Nhịp 24 giờ của crawler + translator — toàn count nên rẻ. */
-    suspend fun crawlPulse(): Map<String, Int> = coroutineScope {
-        val since = ago(24)
-        val q = linkedMapOf(
-            "novels24h" to "novels?created_at=gte.$since",
-            "chapters24h" to "chapters?created_at=gte.$since",
-            "done24h" to "chapters?translation_status=eq.done&translated_at=gte.$since",
-            "queued" to "chapters?translation_status=eq.queued",
-            "failedChapters" to "chapters?translation_status=eq.failed",
-            "metaPending" to "novels?meta_translated=eq.false",
-            "tracked" to "novels?is_canonical=eq.true&hidden=eq.false",
-            "failedJobs" to "translation_jobs?status=eq.failed",
-            "done1h" to "chapters?translation_status=eq.done&translated_at=gte.${ago(1)}",
-        )
-        q.mapValues { (_, p) -> async { count(p) } }.mapValues { it.value.await() }
+    /** Nhịp 24 giờ của crawler + translator. */
+    suspend fun crawlPulse(): Map<String, Int> = counts().filterKeys {
+        it in setOf("novels24h", "chapters24h", "done24h", "queued", "failedChapters", "metaPending", "tracked", "failedJobs", "done1h")
     }
 
     // ---------- LLM / lỗi / VPS ----------
