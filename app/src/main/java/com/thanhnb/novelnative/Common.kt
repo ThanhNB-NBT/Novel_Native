@@ -1,5 +1,6 @@
 package com.thanhnb.novelnative
 
+import kotlin.coroutines.cancellation.CancellationException
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.composed
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -67,8 +68,8 @@ sealed interface Screen {
     data object Guide : Screen
     data object Changelog : Screen
     data object Lunar : Screen
-    data object Admin : Screen
     data object Monitor : Screen
+    data object Admin : Screen
     data object AdminLlm : Screen
     data object AdminVps : Screen
     data object AdminErrors : Screen
@@ -106,6 +107,23 @@ fun <T> load(vararg keys: Any?, block: suspend () -> T): Loader<T> {
     }
     return Loader(res) { tick++ }
 }
+
+/** Tải trước vào cùng bộ nhớ với [load]: màn nào mở key này sau đó sẽ thấy dữ liệu ngay. Trả về kết quả (null nếu lỗi). */
+@Suppress("UNCHECKED_CAST")
+suspend fun <T : Any> prefetch(vararg keys: Any?, block: suspend () -> T?): T? {
+    val key = keys.toList()
+    (memo[key] as T?)?.let { return it }
+    val v = runCatching { block() }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+    if (v != null) memo[key] = v
+    return v
+}
+
+/** Đọc bộ nhớ của [load]/[prefetch] mà không tải gì. */
+@Suppress("UNCHECKED_CAST")
+fun <T : Any> peek(vararg keys: Any?): T? = memo[keys.toList()] as T?
+
+/** Xoá khỏi bộ nhớ mọi mục có key thoả [drop]. */
+fun evictMemo(drop: (List<Any?>) -> Boolean) { memo.keys.removeAll(drop) }
 
 @Composable
 fun <T> Loaded(l: Loader<T>, topInset: Boolean = false, loading: @Composable () -> Unit = { ListSkeleton(topInset) }, content: @Composable (T) -> Unit) {
