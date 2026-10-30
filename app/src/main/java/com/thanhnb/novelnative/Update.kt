@@ -116,7 +116,7 @@ fun UpdateDialog(release: Release, onDismiss: () -> Unit) {
                     Text("${(p * 100).toInt()}%", style = monoStyle())
                 }
                 error != null -> Text("Tải không được: $error")
-                else -> Text(release.notes.ifBlank { "Tải bản mới rồi cài đè bản đang dùng." }, maxLines = 12, overflow = TextOverflow.Ellipsis)
+                else -> Text(releaseLines(release.notes).joinToString("\n").ifBlank { "Tải bản mới rồi cài đè bản đang dùng." }, maxLines = 12, overflow = TextOverflow.Ellipsis)
             }
         },
         confirmButton = {

@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # cần lịch sử + tag để soạn ghi chú từ commit
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -45,8 +47,15 @@ jobs:
           chmod +x gradlew
           ./gradlew --console=plain :app:assembleRelease -PversionName="${GITHUB_REF_NAME#v}" -PversionCode="$((100 + ${{ github.run_number }}))"
           mv app/build/outputs/apk/release/app-release.apk "GacTruyenNative-$GITHUB_REF_NAME.apk"
+      - name: Soạn ghi chú từ commit kể từ bản trước
+        # generate_release_notes chỉ liệt kê PR; repo này đẩy commit thẳng nên ghi chú luôn rỗng → lấy tiêu đề commit
+        run: |
+          prev=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          git log --no-merges --pretty='- %s' ${prev:+$prev..}HEAD | head -30 > notes.md
+          [ -s notes.md ] || echo "- Cải tiến nhỏ và sửa lỗi" > notes.md
+          cat notes.md
       - name: Tạo GitHub Release kèm APK
         uses: softprops/action-gh-release@v3
         with:
           files: GacTruyenNative-*.apk
-          generate_release_notes: true
+          body_path: notes.md

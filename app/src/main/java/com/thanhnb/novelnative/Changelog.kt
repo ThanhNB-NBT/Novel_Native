@@ -33,12 +33,15 @@ private suspend fun fetchNotes(): String = withContext(Dispatchers.IO) {
     c.inputStream.bufferedReader().use { it.readText() }
 }
 
+/** Thân release (markdown) → các dòng chữ thường; bỏ dòng "Full Changelog" tự sinh và ký hiệu markdown. */
+internal fun releaseLines(body: String): List<String> =
+    body.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("**Full Changelog") && !it.startsWith("## What's Changed") }
+        .map { l -> l.trimStart('#', ' ').let { if (l.startsWith("* ") || l.startsWith("- ")) "• " + l.drop(2) else it }.replace("**", "").replace("`", "") }
+
 private fun parse(json: String): List<Note> {
     val a = JSONArray(json)
     return (0 until a.length()).map(a::getJSONObject).filter { !it.optBoolean("draft") }.map { r ->
-        val lines = r.optString("body").lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("**Full Changelog") }
-            .map { l -> l.trimStart('#', ' ').let { if (l.startsWith("* ") || l.startsWith("- ")) "• " + l.drop(2) else it }.replace("**", "").replace("`", "") }
-        Note(r.optString("tag_name"), r.optString("published_at").take(10).split("-").reversed().joinToString("/"), lines)
+        Note(r.optString("tag_name"), r.optString("published_at").take(10).split("-").reversed().joinToString("/"), releaseLines(r.optString("body")))
     }
 }
 
@@ -72,7 +75,7 @@ fun ChangelogScreen() {
 private fun NoteCard(n: Note) {
     val cs = MaterialTheme.colorScheme
     PaperCard {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = if (n.lines.isEmpty()) 10.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     n.tag, Modifier.clip(RoundedCornerShape(10.dp)).background(cs.primary.copy(.12f)).padding(horizontal = 10.dp, vertical = 3.dp),
@@ -82,7 +85,6 @@ private fun NoteCard(n: Note) {
                 Spacer(Modifier.weight(1f))
                 Text(n.date, style = monoStyle(12))
             }
-            if (n.lines.isEmpty()) Text("Không có ghi chú.", style = MaterialTheme.typography.bodyMedium)
             n.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
         }
     }
