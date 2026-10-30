@@ -24,7 +24,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -250,19 +256,28 @@ private fun MoonPhase(lunarDay: Int, size: Dp, modifier: Modifier = Modifier) {
     }
 }
 
-/** Mặt trăng cỡ lớn cho tờ lịch: trời đêm chuyển sắc có sao, quầng sáng, phần tối có ánh đất, phần sáng chuyển sắc kèm hố trăng, viền vàng đồng. */
+private val STARS = listOf( // chỉ rải nửa phải: bên trái là chữ, sao chen vào làm rối
+    Triple(.47f, .62f, 1.0f), Triple(.55f, .22f, 1.2f), Triple(.62f, .9f, 1.7f), Triple(.68f, .12f, 1.0f), Triple(.74f, .5f, 1.4f), Triple(.8f, .82f, 1.0f),
+    Triple(.86f, .16f, 1.8f), Triple(.91f, .55f, 1.2f), Triple(.95f, .86f, 1.5f), Triple(.58f, .45f, .9f), Triple(.98f, .3f, 1.0f), Triple(.5f, .08f, 1.3f),
+)
+
+/** Nền vũ trụ: những chấm sao rải cố định (không ngẫu nhiên, để tờ lịch không nhảy sao mỗi lần vẽ lại). */
 @Composable
-private fun MoonHero(lunarDay: Int, size: Dp) {
-    Canvas(Modifier.size(size)) {
+private fun Stars(modifier: Modifier) = Canvas(modifier) {
+    STARS.forEach { (x, y, r) -> drawCircle(Color.White.copy(alpha = .3f + r * .2f), r.dp.toPx(), Offset(x * size.width, y * size.height)) }
+}
+
+/** Mặt trăng trần lơ lửng giữa nền vũ trụ: quầng sáng, phần tối có ánh đất, phần sáng chuyển sắc kèm hố trăng; nhấp nhô nhẹ lên xuống. */
+@Composable
+private fun FloatingMoon(lunarDay: Int, size: Dp) {
+    val t = rememberInfiniteTransition(label = "moonFloat")
+    val dy by t.animateFloat(-4f, 4f, infiniteRepeatable(tween(3600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "dy")
+    Canvas(Modifier.size(size).graphicsLayer { translationY = dy.dp.toPx() }) {
         val s = this.size.minDimension
         val c = Offset(s / 2, s / 2)
-        val night = s / 2
-        drawCircle(Brush.radialGradient(listOf(Color(0xFF2E3D69), Color(0xFF111A33)), c, night), night, c)
-        listOf(Offset(.22f, .28f) to 1.6f, Offset(.78f, .2f) to 1.2f, Offset(.87f, .58f) to 1.8f, Offset(.15f, .7f) to 1.3f, Offset(.62f, .9f) to 1.4f, Offset(.4f, .1f) to 1.0f)
-            .forEach { (o, rr) -> drawCircle(Color.White.copy(.7f), rr.dp.toPx(), Offset(o.x * s, o.y * s)) }
-        val r = s * .31f
-        drawCircle(Brush.radialGradient(listOf(MOON_LIT.copy(.38f), Color.Transparent), c, r * 2f), r * 2f, c) // quầng sáng
-        drawCircle(Color(0xFF3B4870).copy(.55f), r, c) // phần tối: ánh đất
+        val r = s * .3f
+        drawCircle(Brush.radialGradient(listOf(MOON_LIT.copy(.30f), MOON_LIT.copy(.10f), Color.Transparent), c, r * 2.1f), r * 2.1f, c) // quầng sáng
+        drawCircle(Color(0xFF3B4870).copy(.6f), r, c) // phần tối: ánh đất
         litPath(lunarDay, c, r)?.let { lit ->
             drawPath(lit, Brush.radialGradient(listOf(Color(0xFFFFF4D6), MOON_LIT, Color(0xFFE6C070)), Offset(c.x - r * .3f, c.y - r * .3f), r * 1.5f))
             clipPath(lit) {
@@ -270,8 +285,7 @@ private fun MoonHero(lunarDay: Int, size: Dp) {
                     .forEach { (x, y, k) -> drawCircle(Color(0xFFB08A4A).copy(.28f), r * k, Offset(c.x + x * r, c.y + y * r)) }
             }
         }
-        drawCircle(MOON_LIT.copy(.35f), r, c, style = Stroke(1.dp.toPx()))
-        drawCircle(GOLD, night - .75.dp.toPx(), c, style = Stroke(1.5.dp.toPx()))
+        drawCircle(MOON_LIT.copy(.3f), r, c, style = Stroke(1.dp.toPx()))
     }
 }
 
@@ -442,25 +456,29 @@ private fun DayHero(d: LocalDate) {
             Text("${l.monthName.uppercase()} · ${l.yearName.uppercase()}", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = onSeal, letterSpacing = 1.5.sp, maxLines = 1)
             Text(han(l.yearName) + "年", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal)
         }
-        Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = soft)
-                Row(verticalAlignment = Alignment.Bottom) {
-                    AnimatedContent(l.day, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }, label = "lunarDay") { n ->
-                        Text("$n", style = MaterialTheme.typography.headlineLarge.copy(fontSize = 88.sp, lineHeight = 92.sp), fontWeight = FontWeight.ExtraBold, color = ink)
+        // dải trời đêm: sao rải khắp, số ngày + ấn triện bên trái, trăng lơ lửng bên phải
+        Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color(0xFF0F1830), Color(0xFF243360))))) {
+            Stars(Modifier.matchParentSize())
+            Row(Modifier.padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(solarLine(d), style = MaterialTheme.typography.labelLarge, color = Color.White.copy(.75f))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        AnimatedContent(l.day, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }, label = "lunarDay") { n ->
+                            Text("$n", style = MaterialTheme.typography.headlineLarge.copy(fontSize = 88.sp, lineHeight = 92.sp), fontWeight = FontWeight.ExtraBold, color = Color.White)
+                        }
+                        // ấn triện: tháng âm
+                        Column(
+                            Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(5.dp)).background(seal).padding(horizontal = 9.dp, vertical = 5.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
+                            Text(if (l.leap) "閏" else "月", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
+                        }
                     }
-                    // ấn triện: tháng âm
-                    Column(
-                        Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(5.dp)).background(seal).padding(horizontal = 9.dp, vertical = 5.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
-                        Text(if (l.leap) "閏" else "月", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
-                    }
+                    Text("${hanDay(l.day)} · ${moonName(l.day)}", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.7f))
                 }
-                Text("${hanDay(l.day)} · ${moonName(l.day)}", style = MaterialTheme.typography.labelMedium, color = soft)
+                FloatingMoon(l.day, 128.dp)
             }
-            MoonHero(l.day, 104.dp)
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (good) HeroTag("Ngày hoàng đạo", seal, onSeal) else HeroTag("Ngày hắc đạo", Color.Transparent, soft, soft.copy(.5f))
