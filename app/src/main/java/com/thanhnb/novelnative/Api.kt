@@ -154,14 +154,22 @@ object Session {
         JSONObject(Api.raw("POST", "auth/v1/token?grant_type=password", JSONObject(mapOf("email" to email, "password" to password)), auth = false)),
     )
 
-    /** Làm mới token khi sắp hết hạn (hoặc bị 401). Refresh token hỏng → đăng xuất. */
-    suspend fun refresh(force: Boolean = false) = lock.withLock {
+    /** Làm mới token khi sắp hết hạn (hoặc bị 401). Refresh token hỏng → đăng xuất.
+     *  [stale] = token request vừa bị 401 đã gửi: nhiều request 401 cùng lúc thì chỉ người đầu refresh,
+     *  người sau thấy token đã đổi là thôi — khỏi đốt hạn mức /token (30 lần/5 phút/IP từ 01/11). */
+    suspend fun refresh(force: Boolean = false, stale: String? = null) = lock.withLock {
         val rt = refreshToken ?: return@withLock
+        if (force && stale != null && token != stale) return@withLock
         if (!force && System.currentTimeMillis() / 1000 < expiresAt - 60) return@withLock
         try {
             save(JSONObject(Api.raw("POST", "auth/v1/token?grant_type=refresh_token", JSONObject(mapOf("refresh_token" to rt)), auth = false)))
         } catch (e: ApiError) {
-            if (e.code in 400..499) signOut() else throw e
+            // Chỉ refresh token hỏng (400/401/403) mới đăng xuất; 429 = bị giới hạn tần suất → giữ phiên, lát thử lại.
+            when (e.code) {
+                400, 401, 403 -> signOut()
+                429 -> Unit
+                else -> throw e
+            }
         }
     }
 }
@@ -184,16 +192,17 @@ object Api {
         withContext(Dispatchers.IO) {
             Endpoint.await()
             if (auth) Session.refresh()
+            val sent = if (auth) Session.token else null
             val req = okhttp3.Request.Builder().url("${Endpoint.url}/$path")
                 .method(method, if (method == "GET" || method == "HEAD") null else (body?.toString() ?: "").toRequestBody(JSON))
                 .header("apikey", Endpoint.anon)
-                .header("Authorization", "Bearer ${(if (auth) Session.token else null) ?: Endpoint.anon}")
+                .header("Authorization", "Bearer ${sent ?: Endpoint.anon}")
                 .apply { prefer?.let { header("Prefer", it) } }
                 .build()
             http.newCall(req).execute().use { resp ->
                 val code = resp.code
                 if (code == 401 && auth && retry && Session.token != null) {
-                    Session.refresh(force = true)
+                    Session.refresh(force = true, stale = sent)
                     return@withContext raw(method, path, body, prefer, auth, retry = false)
                 }
                 val text = resp.body?.string().orEmpty()
