@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="512" height="512">
+<defs>
+<linearGradient id="a" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffe46a"/><stop offset="1" stop-color="#e0a21a"/></linearGradient>
+<linearGradient id="b" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff3b0"/><stop offset="1" stop-color="#ffd24a"/></linearGradient>
+<linearGradient id="c" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c9820d"/><stop offset="1" stop-color="#8a560a"/></linearGradient>
+<radialGradient id="g" cx="50%" cy="60%" r="50%"><stop offset="0" stop-color="#fff2a8" stop-opacity=".8"/><stop offset="1" stop-color="#fff2a8" stop-opacity="0"/></radialGradient>
+<linearGradient id="rock" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a6a55"/><stop offset="1" stop-color="#3f352b"/></linearGradient>
+</defs>
+<ellipse cx="128" cy="232" rx="92" ry="12" fill="#000" opacity=".2"/>
+<circle cx="128" cy="130" r="100" fill="url(#g)"/>
+<!-- rock base -->
+<path d="M34 214 Q40 176 78 170 L180 168 Q222 176 224 214 Q226 230 206 232 H54 Q32 230 34 214Z" fill="url(#rock)" stroke="#241c14" stroke-width="4" stroke-linejoin="round"/>
+<path d="M60 190q24-10 40 0M150 188q24-8 44 4" stroke="#9c8a70" stroke-width="3" fill="none" stroke-linecap="round" opacity=".7"/>
+<!-- left small crystal -->
+<g stroke="#6b430a" stroke-width="4" stroke-linejoin="round">
+<path d="M62 176 L74 112 L96 100 L106 176Z" fill="url(#a)"/>
+<path d="M74 112 L96 100 L98 176 L86 176Z" fill="url(#b)" stroke="none"/>
+<path d="M96 100 L106 176 L98 176Z" fill="url(#c)" stroke="none"/>
+<path d="M62 176 L74 112 L96 100 L106 176Z" fill="none"/>
+</g>
+<!-- right small crystal -->
+<g stroke="#6b430a" stroke-width="4" stroke-linejoin="round">
+<path d="M158 178 L168 120 L194 96 L204 178Z" fill="url(#a)"/>
+<path d="M168 120 L194 96 L190 178 L172 178Z" fill="url(#b)" stroke="none"/>
+<path d="M194 96 L204 178 L190 178Z" fill="url(#c)" stroke="none"/>
+<path d="M158 178 L168 120 L194 96 L204 178Z" fill="none"/>
+</g>
+<!-- main spire -->
+<g stroke="#6b430a" stroke-width="5" stroke-linejoin="round">
+<path d="M96 186 L104 82 L128 28 L152 82 L162 186Z" fill="url(#a)"/>
+<path d="M104 82 L128 28 L128 186 L96 186Z" fill="url(#b)" stroke="none"/>
+<path d="M128 28 L152 82 L162 186 L128 186Z" fill="url(#c)" stroke="none" opacity=".85"/>
+<path d="M96 186 L104 82 L128 28 L152 82 L162 186Z" fill="none"/>
+<path d="M104 82 H152 M128 28 V186" stroke-width="3" opacity=".7"/>
+</g>
+<path d="M112 100 L122 52" stroke="#fffbe0" stroke-width="6" stroke-linecap="round" opacity=".85"/>
+<path d="M118 150c8-18 20 10 26-8" stroke="#fff6c4" stroke-width="4" fill="none" stroke-linecap="round" opacity=".8"/>
+<g fill="#fff"><path d="M190 52l4 10 10 4-10 4-4 10-4-10-10-4 10-4z"/><path d="M52 90l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" opacity=".85"/><circle cx="214" cy="140" r="3"/></g>
+</svg>

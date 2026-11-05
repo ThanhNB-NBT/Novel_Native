@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="512" height="512">
+<defs>
+<radialGradient id="glow" cx="50%" cy="45%" r="50%"><stop offset="0" stop-color="#fff6c8" stop-opacity=".95"/><stop offset=".5" stop-color="#ffd86b" stop-opacity=".45"/><stop offset="1" stop-color="#ffd86b" stop-opacity="0"/></radialGradient>
+<linearGradient id="jade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fe3c4"/><stop offset=".55" stop-color="#3fb48a"/><stop offset="1" stop-color="#1d7a60"/></linearGradient>
+<linearGradient id="jadeD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a9d7a"/><stop offset="1" stop-color="#14594a"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0a8"/><stop offset=".5" stop-color="#e2b23a"/><stop offset="1" stop-color="#9c6d12"/></linearGradient>
+<radialGradient id="pill" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#d9f1ff"/><stop offset="1" stop-color="#6fa8e8"/></radialGradient>
+</defs>
+<ellipse cx="128" cy="228" rx="86" ry="11" fill="#000" opacity=".18"/>
+<circle cx="128" cy="96" r="92" fill="url(#glow)"/>
+<g stroke="#ffe48a" stroke-width="3" stroke-linecap="round" opacity=".8"><path d="M128 8v22M60 30l14 18M196 30l-14 18M30 78l20 8M226 78l-20 8"/></g>
+<!-- lid open behind -->
+<path d="M62 120 L84 78 H172 L194 120 Z" fill="url(#jadeD)" stroke="#0f4a3c" stroke-width="4" stroke-linejoin="round"/>
+<path d="M84 78 H172 L180 94 H76 Z" fill="#6fd1ac" opacity=".55"/>
+<!-- pill -->
+<circle cx="128" cy="104" r="30" fill="url(#pill)" stroke="#2f5f9a" stroke-width="4"/>
+<path d="M114 96c10-14 30-6 24 8s-24 14-22 26" fill="none" stroke="#3b7fd4" stroke-width="5" stroke-linecap="round"/>
+<circle cx="118" cy="92" r="6" fill="#fff" opacity=".9"/>
+<!-- box body -->
+<path d="M50 138 H206 L196 218 Q195 226 186 226 H70 Q61 226 60 218 Z" fill="url(#jade)" stroke="#0f4a3c" stroke-width="4" stroke-linejoin="round"/>
+<path d="M50 138 H206 L204 154 H52 Z" fill="url(#gold)" stroke="#6d4a0a" stroke-width="3"/>
+<path d="M70 176c14-14 28 14 42 0s28 14 42 0 28 14 32 0" fill="none" stroke="#d6fff0" stroke-width="4" stroke-linecap="round" opacity=".8"/>
+<path d="M74 168 L70 214" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".35"/>
+<circle cx="128" cy="196" r="13" fill="url(#gold)" stroke="#6d4a0a" stroke-width="3"/>
+<path d="M128 187v18M119 196h18" stroke="#6d4a0a" stroke-width="3"/>
+<g fill="#fff"><path d="M200 52l4 10 10 4-10 4-4 10-4-10-10-4 10-4z"/><path d="M48 58l3 7 7 3-7 3-3 7-3-7-7-3 7-3z" opacity=".8"/></g>
+</svg>
