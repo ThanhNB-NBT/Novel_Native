@@ -141,7 +141,7 @@ internal fun SpeedDialog(s: JSONObject, dismiss: () -> Unit) {
         add(Triple("Linh căn (${rootName(s)})", "×" + num(linhCanMult(els.size, variant, lc)), variant != null))
         if (lc > 1) add(Triple("Luyện căn", "${lc - 1} điểm (đã gộp vào bậc)", true))
         if (s.optString("race") == "ma") add(Triple("Tà tốc Ma tộc", "×1,1", true))
-        if (s.strOrNull("ascended_at") != null && tier > 0) add(Triple("Tiên uy (${TienTierNames.getOrElse(tier) { "" }})", "×" + num(1 + .2 * tier), true))
+        if (s.strOrNull("ascended_at") != null && tier > 0) add(Triple("Tiên uy (${TienTierNames.getOrElse(tier) { "" }})", "×" + num(Math.pow(1.6, tier.toDouble())), true))
         if (ratePct > 0) add(Triple("Pháp khí (vũ khí · pháp bảo)", "+${num(ratePct)}%", true))
         if (s.until("buff_until")?.isAfter(now) == true && s.optInt("buff_pct") > 0) add(Triple("Đan tăng tốc", "+${s.optInt("buff_pct")}%", true))
         if (s.until("stone_until")?.isAfter(now) == true && s.optInt("stone_pct") > 0) add(Triple("Linh thạch", "+${s.optInt("stone_pct")}%", true))
