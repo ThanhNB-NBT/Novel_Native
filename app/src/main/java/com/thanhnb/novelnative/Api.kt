@@ -430,6 +430,20 @@ object Api {
         return Suggest(r.optString("thay").ifBlank { chon }, r.optBoolean("dung"), items)
     }
 
+    /** Thông tin sinh để xem tử vi của chính mình (RLS chỉ trả dòng của mình); chưa nhập → null. */
+    suspend fun tuViHoSo(): HoSoSinh? = get("tu_vi_ho_so?select=ngay_sinh,gio_sinh,gioi_tinh&limit=1").objs().firstOrNull()?.let {
+        HoSoSinh(LocalDate.parse(it.getString("ngay_sinh")), it.getInt("gio_sinh"), it.getString("gioi_tinh"))
+    }
+
+    suspend fun luuTuViHoSo(h: HoSoSinh) {
+        rpc("tu_vi_luu_ho_so", "p_ngay" to h.ngay.toString(), "p_gio" to h.gio, "p_gioi" to h.gioi)
+    }
+
+    /** Edge Function tu-vi: lá số + cách cục + Phu Thê + Tứ Hóa của ngày [xem]. Hàm thuần, không đọc DB. */
+    suspend fun tuVi(h: HoSoSinh, xem: LocalDate): JSONObject = JSONObject(
+        raw("POST", "functions/v1/tu-vi", JSONObject(mapOf("ngay" to h.ngay.toString(), "gio" to h.gio, "gioi" to h.gioi, "xem" to xem.toString()))),
+    )
+
     /** Tên riêng đã sửa → ghi vào thuật ngữ truyện để chương dịch SAU đúng tên (chỉ sửa term đang mang đúng bản sai, như Flutter). */
     suspend fun learnTerm(novelId: Int, wrong: String, correct: String) {
         get("glossary_terms?select=id&novel_id=eq.$novelId&correct_vi=eq.${enc(wrong)}").objs().forEach {

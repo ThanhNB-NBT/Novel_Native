@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
                                         Screen.Guide -> GuideScreen()
                                         Screen.Changelog -> ChangelogScreen()
                                         Screen.Lunar -> LunarScreen()
+                                        is Screen.LaSo -> LaSoScreen(s.h, s.mine)
                                         Screen.Monitor -> MonitorScreen()
                                         Screen.Admin -> AdminScreen()
                                         Screen.AdminLlm -> LlmScreen()

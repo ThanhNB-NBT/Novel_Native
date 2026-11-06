@@ -524,6 +524,7 @@ private fun HeroTag(text: String, bg: Color, fg: Color, border: Color? = null) =
 @Composable
 private fun DayExtras(d: LocalDate, today: LocalDate) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        TuViCard(d)
         TermCard(d)
         HoursCard(toLunar(d), isToday = d == today)
     }
