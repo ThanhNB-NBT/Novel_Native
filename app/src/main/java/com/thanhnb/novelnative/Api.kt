@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -492,17 +494,20 @@ object Api {
     // ---------- Tủ truyện + tiến độ ----------
 
     /** Tủ truyện = truyện theo dõi (library) ∪ đang đọc (reading_progress), mới động tới nhất lên đầu. */
-    suspend fun library(): List<Novel> {
-        val u = uid() ?: return emptyList()
+    suspend fun library(): List<Novel> = coroutineScope {
+        val u = uid() ?: return@coroutineScope emptyList()
+        // Hai truy vấn độc lập: chạy song song, chờ bằng cái chậm hơn thay vì cộng dồn
+        val lib = async { get("library?select=added_at,novels($COLS)&user_id=eq.$u") }
+        val prog = async { get("reading_progress?select=chapter_index,updated_at,novels($COLS)&user_id=eq.$u") }
         val byId = LinkedHashMap<Int, Pair<Novel, String>>()
-        get("library?select=added_at,novels($COLS)&user_id=eq.$u").objs().forEach {
+        lib.await().objs().forEach {
             val n = novel(it.getJSONObject("novels")); byId[n.id] = n to it.optString("added_at")
         }
-        get("reading_progress?select=chapter_index,updated_at,novels($COLS)&user_id=eq.$u").objs().forEach {
+        prog.await().objs().forEach {
             val n = novel(it.getJSONObject("novels")).copy(curChapter = it.getInt("chapter_index"))
             byId[n.id] = n to it.optString("updated_at")
         }
-        return byId.values.sortedByDescending { it.second }.map { it.first }
+        byId.values.sortedByDescending { it.second }.map { it.first }
     }
 
     suspend fun inLibrary(novelId: Int): Boolean {

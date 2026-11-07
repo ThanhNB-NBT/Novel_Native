@@ -41,10 +41,10 @@ fun SplashOverlay() {
     val text = remember { Animatable(0f) }
     val fade = remember { Animatable(1f) }
     LaunchedEffect(Unit) {
-        brush.animateTo(1f, tween(650, easing = FastOutSlowInEasing))
-        text.animateTo(1f, tween(450, easing = FastOutSlowInEasing))
-        kotlinx.coroutines.delay(250)
-        fade.animateTo(0f, tween(320))
+        // Tổng ~0,6s: màn này không chờ gì, kéo dài chỉ làm người dùng đợi thêm
+        brush.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+        text.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+        fade.animateTo(0f, tween(150))
         Splash.done = true
         visible = false
     }

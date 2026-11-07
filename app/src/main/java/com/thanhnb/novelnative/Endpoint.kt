@@ -59,6 +59,8 @@ object Endpoint {
     private fun apply(e: Ep) { url = e.url; anon = e.anon }
 
     fun start(scope: CoroutineScope) {
+        // Không có file cấu hình từ xa → chỉ có địa chỉ build sẵn, không có gì để chọn; dò chỉ làm chậm lúc mở (0,4–6s qua Cloudflare).
+        if (BuildConfig.ENDPOINT_CONFIG_URL.isBlank()) { ready.complete(Unit); return }
         scope.launch(Dispatchers.IO) {
             val allowed = allowedHosts()
             val cached = valid(Prefs.sp.getString("endpoint_url", null), Prefs.sp.getString("endpoint_anon", null), allowed)
