@@ -233,9 +233,9 @@ fun AdminRow(
     HorizontalDivider(Modifier.padding(start = if (icon != null) 52.dp else 16.dp, end = 16.dp), color = cs.outlineVariant.copy(.5f))
 }
 
-/** Thanh tiến độ mảnh (CPU/RAM/lượt API); đỏ khi gần đầy. */
+/** Thanh tiến độ mảnh (CPU/RAM/lượt API); mặc định đỏ khi gần đầy, [danger] để nơi gọi tự quyết (vd. điểm thấp). */
 @Composable
-fun Gauge(label: String, frac: Float?, value: String, modifier: Modifier = Modifier) {
+fun Gauge(label: String, frac: Float?, value: String, modifier: Modifier = Modifier, danger: Boolean = frac != null && frac > .9f) {
     val cs = MaterialTheme.colorScheme
     Column(modifier) {
         Row(Modifier.fillMaxWidth()) {
@@ -244,7 +244,7 @@ fun Gauge(label: String, frac: Float?, value: String, modifier: Modifier = Modif
         }
         LinearProgressIndicator(
             { (frac ?: 0f).coerceIn(0f, 1f) }, Modifier.fillMaxWidth().padding(top = 4.dp).height(6.dp),
-            color = if (frac != null && frac > .9f) cs.error else cs.primary, trackColor = cs.onSurface.copy(.08f), strokeCap = androidx.compose.ui.graphics.StrokeCap.Round, gapSize = 0.dp,
+            color = if (danger) cs.error else cs.primary, trackColor = cs.onSurface.copy(.08f), strokeCap = androidx.compose.ui.graphics.StrokeCap.Round, gapSize = 0.dp,
             drawStopIndicator = {},
         )
     }

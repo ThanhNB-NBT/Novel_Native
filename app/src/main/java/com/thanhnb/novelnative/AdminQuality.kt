@@ -48,7 +48,7 @@ fun QualityTab() {
         if (models.isNotEmpty()) item {
             SectionLabel("Theo model")
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                models.forEach { m -> Gauge("${m.optString("model")} · ${m.optInt("n")} ch", (m.optDouble("avg", 0.0) / 100).toFloat(), "${m.optString("avg")} · ${pct(m.optInt("bad"), m.optInt("n"))} kém") }
+                models.forEach { m -> Gauge("${m.optString("model")} · ${m.optInt("n")} ch", (m.optDouble("avg", 0.0) / 100).toFloat(), "${m.optString("avg")} · ${pct(m.optInt("bad"), m.optInt("n"))} kém", danger = m.optDouble("avg", 0.0) < 90) }
             }
         }
 
@@ -56,7 +56,7 @@ fun QualityTab() {
         if (daily.isNotEmpty()) item {
             SectionLabel("Theo ngày")
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                daily.forEach { d -> Gauge(d.optString("day").takeLast(5).split('-').reversed().joinToString("/") + " · ${d.optInt("n")} ch", (d.optDouble("avg", 0.0) / 100).toFloat(), d.optString("avg")) }
+                daily.forEach { d -> Gauge(d.optString("day").takeLast(5).split('-').reversed().joinToString("/") + " · ${d.optInt("n")} ch", (d.optDouble("avg", 0.0) / 100).toFloat(), d.optString("avg"), danger = d.optDouble("avg", 0.0) < 90) }
             }
         }
 
