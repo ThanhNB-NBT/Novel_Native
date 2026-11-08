@@ -58,6 +58,10 @@ fun JobsTab() {
                 if ((total.res?.getOrNull() ?: 0) > jobs.size) Text("Danh sách hiển thị ${jobs.size} job đầu hàng đợi", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(8.dp))
                 Pulses(beats.res?.getOrNull().orEmpty())
+                // Cảnh báo chất lượng dịch 24h (worker ghi mỗi giờ, diem_dich.canh_bao); ổn thì không hiện gì.
+                beats.res?.getOrNull()?.firstOrNull { it.optString("name") == "chat_luong" }?.s("note")?.takeIf { it.startsWith("⚠") }?.let {
+                    Text("Chất lượng dịch $it — xem tab Chất lượng", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge, color = cs.error)
+                }
                 Spacer(Modifier.height(10.dp))
                 val p = pulse.res?.getOrNull()
                 fun v(k: String) = p?.get(k)?.let { fmtK(it) } ?: "…"
