@@ -258,9 +258,9 @@ fun <T> AdminPane(l: Loader<T>, empty: String? = null, content: LazyListScope.(T
     }
 }
 
-private val tabs = listOf("Worker", "Crawl", "Đang đọc", "Truyện", "Báo cáo")
+private val tabs = listOf("Worker", "Crawl", "Đang đọc", "Truyện", "Chất lượng", "Báo cáo")
 
-/** Màn Quản trị (chỉ admin; RLS phía server cũng chặn). 5 tab, bỏ Tu Tiên. */
+/** Màn Quản trị (chỉ admin; RLS phía server cũng chặn). 6 tab, bỏ Tu Tiên. */
 @Composable
 fun AdminScreen() {
     val ok = load("admin", Session.user?.id) { Api.isAdmin() }
@@ -310,6 +310,7 @@ fun AdminScreen() {
                         1 -> CrawlTab()
                         2 -> ReadingTab()
                         3 -> NovelsTab()
+                        4 -> QualityTab()
                         else -> ReportsTab()
                     }
                 }

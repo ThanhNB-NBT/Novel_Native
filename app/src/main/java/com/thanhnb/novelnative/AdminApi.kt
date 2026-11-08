@@ -165,6 +165,13 @@ object AdminApi {
     suspend fun llmUsageDaily() = JSONObject(Api.rpc("admin_llm_usage_daily", "p_days" to 30))
     suspend fun tokenUsage() = JSONArray(Api.rpc("admin_token_usage")).rows()
 
+    /** Điểm chất lượng dịch (mig 147): tổng quan [days] ngày + chương điểm thấp nhất, gọi song song. */
+    suspend fun quality(days: Int = 14) = coroutineScope {
+        val o = async { JSONObject(Api.rpc("admin_quality_overview", "p_days" to days)) }
+        val w = async { JSONArray(Api.rpc("admin_quality_worst", "p_days" to days, "p_limit" to 40)).rows() }
+        o.await() to w.await()
+    }
+
     /** Lỗi app người dùng gửi về (bảng client_errors, chỉ admin đọc); user_id → tên hiển thị tra riêng. */
     suspend fun clientErrors(): List<JSONObject> {
         val rows = get("client_errors?select=user_id,created_at,app_version,platform,message,stack&order=created_at.desc&limit=100")
