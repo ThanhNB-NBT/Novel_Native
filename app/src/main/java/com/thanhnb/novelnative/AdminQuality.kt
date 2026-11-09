@@ -48,7 +48,7 @@ fun QualityTab() {
         if (models.isNotEmpty()) item {
             SectionLabel("Theo model")
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                models.forEach { m -> Gauge("${m.optString("model")} · ${m.optInt("n")} ch", (m.optDouble("avg", 0.0) / 100).toFloat(), "${m.optString("avg")} · ${pct(m.optInt("bad"), m.optInt("n"))} kém", danger = m.optDouble("avg", 0.0) < 90) }
+                models.forEach { m -> Gauge("${m.optString("model")} · ${m.optInt("n")} ch", (m.optDouble("avg", 0.0) / 100).toFloat(), "${m.optString("avg")} · ${pct(m.optInt("bad"), m.optInt("n"))} dưới 90", danger = m.optDouble("avg", 0.0) < 90) }
             }
         }
 
