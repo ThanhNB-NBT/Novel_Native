@@ -34,6 +34,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.time.Duration
@@ -64,11 +67,15 @@ val ColorScheme.live get() = if (background.luminance() < .5f) androidx.compose.
 /** Việc ghi dữ liệu thật: luôn qua hộp thoại xác nhận trước khi [run]. [run] trả câu báo thành công. */
 class Act(val title: String, val text: String, val yes: String, val danger: Boolean = false, val run: suspend () -> String)
 
+// Việc ghi phải chạy hết dù hộp thoại/bottom sheet đã đóng: rememberCoroutineScope bị huỷ khi rời màn hình
+// → request đứt giữa chừng và toast "rememberCoroutineScope left the composition".
+private val actScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
 @Composable
 fun ConfirmDialog(act: Act?, close: () -> Unit, after: () -> Unit = {}) {
     if (act == null) return
-    val scope = rememberCoroutineScope()
-    val ctx = LocalContext.current
+    val scope = actScope
+    val ctx = LocalContext.current.applicationContext
     AlertDialog(
         close,
         title = { Text(act.title) },
