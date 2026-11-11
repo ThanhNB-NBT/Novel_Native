@@ -72,7 +72,7 @@ fun ExploreTab() {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = DockSpace)) {
                 item("hero") {
                     Box {
-                        if (recommended.isNotEmpty()) HeroCarousel(recommended.take(6)) else Spacer(Modifier.statusBarsPadding().height(80.dp))
+                        if (recommended.isNotEmpty()) HeroCarousel(recommended.sortedBy { it.cover.isNullOrEmpty() }.take(6)) else Spacer(Modifier.statusBarsPadding().height(80.dp))
                         Brand()
                     }
                 }
@@ -178,10 +178,11 @@ private fun Spotlight(s: Section, items: List<Novel>) = Column {
     SectionHeader(s.title) { Nav.push(Screen.More(s)) }
     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         items(items, key = { it.id }) { n ->
-            Column(Modifier.width(76.dp).bounceClick { open(n) }) {
-                Cover(n.cover, 76.dp, 106.dp, label = n.title, flat = true)
-                Spacer(Modifier.height(6.dp))
-                Text(n.title, style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
+            Column(Modifier.width(92.dp).bounceClick { open(n) }) {
+                Cover(n.cover, 92.dp, 128.dp, label = n.title)
+                Spacer(Modifier.height(7.dp))
+                Text(n.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
+                Text("${n.chaptersSource} chương", Modifier.padding(top = 2.dp), style = monoStyle(10, MaterialTheme.colorScheme.onSurfaceVariant))
             }
         }
     }
@@ -218,8 +219,9 @@ private fun Rail(s: Section, items: List<Novel>) = Column {
 private fun Ranking(s: Section, items: List<Novel>) = Column {
     val cs = MaterialTheme.colorScheme
     SectionHeader(s.title) { Nav.push(Screen.More(s)) }
-    items.forEachIndexed { i, n ->
-        Row(Modifier.fillMaxWidth().bounceClick { open(n) }.padding(start = 20.dp, end = 20.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    PaperCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) { Column(Modifier.padding(vertical = 6.dp)) { items.forEachIndexed { i, n ->
+        if (i > 0) HorizontalDivider(Modifier.padding(start = 62.dp, end = 16.dp), color = cs.outlineVariant.copy(.5f))
+        Row(Modifier.fillMaxWidth().bounceClick { open(n) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "${i + 1}", Modifier.width(34.dp), style = MaterialTheme.typography.headlineMedium,
                 fontStyle = FontStyle.Italic, fontWeight = FontWeight.ExtraBold, color = if (i < 3) cs.primary else cs.onSurfaceVariant.copy(.45f),
@@ -230,8 +232,9 @@ private fun Ranking(s: Section, items: List<Novel>) = Column {
                 Spacer(Modifier.height(3.dp))
                 Text((listOf(n.source) + n.genres.take(3)).filter(String::isNotEmpty).joinToString(" · "), style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            Text("${n.chaptersSource}", Modifier.padding(start = 8.dp), style = monoStyle(11, cs.onSurfaceVariant))
         }
-    }
+    } } }
 }
 
 /** "Đã hoàn thành": poster lớn, tên đè lên chân bìa. */
@@ -242,7 +245,7 @@ private fun PosterRail(s: Section, items: List<Novel>) = Column {
         items(items, key = { it.id }) { n ->
             Box(Modifier.bounceClick { open(n) }) {
                 Cover(n.cover, 130.dp, 182.dp, label = n.title)
-                Box(Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(.75f))))
+                Box(Modifier.matchParentSize().clip(RoundedCornerShape(8.dp)).background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(.9f))))
                 if (n.source.isNotEmpty()) SourceBadge(n.source, Modifier.align(Alignment.TopStart).padding(8.dp))
                 Column(Modifier.align(Alignment.BottomStart).width(130.dp).padding(8.dp)) {
                     Text(n.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, lineHeight = 15.sp, fontFamily = Jakarta, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -293,10 +296,14 @@ fun SearchScreen() {
     val genres = load("genres") { Api.genres() }.res?.getOrNull().orEmpty()
     val sources = load("sources") { Api.sources() }.res?.getOrNull().orEmpty()
     var res by remember { mutableStateOf<Result<List<Novel>>?>(null) }
+    var more by remember { mutableStateOf(false) } // còn trang kế
+    var moreErr by remember { mutableStateOf<Throwable?>(null) }
     LaunchedEffect(q, f) {
         delay(350) // gõ liền tay thì chỉ hỏi server lần cuối
         res = null
-        res = runCatching { Api.search(f.copy(q = q)) }
+        val r = runCatching { Api.search(f.copy(q = q)) }
+        moreErr = null; more = (r.getOrNull()?.size ?: 0) >= Api.SEARCH_PAGE
+        res = r
     }
     val cs = MaterialTheme.colorScheme
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -341,7 +348,24 @@ fun SearchScreen() {
                 Empty(if (q.isBlank()) "Không có truyện phù hợp bộ lọc." else "Không tìm thấy “$q”.")
                 if (q.isNotBlank()) OutlinedButton({ if (Session.user == null) Nav.push(Screen.Login) else reqQuery = q.trim() }) { Text("Yêu cầu tìm truyện này") }
             }
-            else -> LazyColumn(contentPadding = WindowInsets.navigationBars.asPaddingValues()) { items(r.getOrThrow(), key = { it.id }) { n -> NovelRow(n, onClick = { if (q.isNotBlank()) history = SearchHistory.add(q); Nav.push(Screen.Detail(n.id)) }) } }
+            else -> LazyColumn(contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
+                items(r.getOrThrow(), key = { it.id }) { n -> NovelRow(n, onClick = { if (q.isNotBlank()) history = SearchHistory.add(q); Nav.push(Screen.Detail(n.id)) }) }
+                if (more) item {
+                    if (moreErr != null) Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(friendly(moreErr), style = MaterialTheme.typography.bodyMedium)
+                        TextButton({ moreErr = null }) { Text("Thử lại") }
+                    } else {
+                        // ô cuối chỉ được compose khi cuộn tới → đó chính là lúc tải trang kế
+                        LaunchedEffect(r) {
+                            val old = r.getOrThrow()
+                            runCatching { Api.search(f.copy(q = q), old.size) }
+                                .onSuccess { new -> more = new.size >= Api.SEARCH_PAGE; res = Result.success(old + new.filter { n -> old.none { it.id == n.id } }) }
+                                .onFailure { if (it !is kotlinx.coroutines.CancellationException) moreErr = it } // cuộn ngược lên = huỷ, không phải lỗi
+                        }
+                        Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) { CircularProgressIndicator(strokeWidth = 3.dp) }
+                    }
+                }
+            }
         }
     }
 }

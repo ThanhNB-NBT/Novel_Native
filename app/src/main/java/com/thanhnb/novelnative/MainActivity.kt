@@ -3,6 +3,7 @@ package com.thanhnb.novelnative
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
+import android.content.Intent
 import android.os.Bundle
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -75,6 +76,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); openFromNotification(intent) }
+
+    // chạm thông báo "chương dịch xong" → mở thẳng truyện đó; mở lại từ Gần đây (intent cũ) thì không
+    private fun openFromNotification(i: Intent?) {
+        val id = i?.getIntExtra(Notify.EXTRA_NOVEL, 0) ?: 0
+        if (id > 0 && i!!.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) Nav.push(Screen.Detail(id))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
@@ -82,6 +91,7 @@ class MainActivity : ComponentActivity() {
         AppErrorLog.install()
         Offline.init(this)
         Notify.init(this)
+        Notify.schedule(this)
         Thread { HanViet.load(applicationContext) }.start()
         Session.load()
         if (Session.user != null) {
@@ -90,6 +100,7 @@ class MainActivity : ComponentActivity() {
             CoroutineScope(Dispatchers.IO).launch { Notify.checkMissed(app) }
         }
         Nav.tab = if (Session.user != null) 0 else 1 // chưa đăng nhập → mở Khám phá
+        if (savedInstanceState == null) openFromNotification(intent) // xoay màn/khôi phục: Nav còn nguyên, đừng đẩy lần nữa
         enableEdgeToEdge()
         setContent {
             AppTheme {

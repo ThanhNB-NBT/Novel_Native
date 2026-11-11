@@ -280,7 +280,8 @@ fun CultivationScreen(tab: Boolean = false) {
 
             PullToRefreshBox(false, ::refresh) {
                 val gap = Modifier.padding(bottom = 12.dp)
-                val rows = bag.chunked(5)
+                // mỗi phẩm một nhóm: dòng tiêu đề (first = phẩm, second = cả nhóm) rồi các hàng 5 ô (first = 0)
+                val rows = bag.groupBy { it.getJSONObject("cult_items").optInt("grade") }.flatMap { (g, l) -> listOf(g to l) + l.chunked(5).map { 0 to it } }
                 val bagMsg = if (inv.res?.isFailure == true) "Không tải được túi đồ — kéo xuống để thử lại." else if (bag.isEmpty()) "Chưa có vật phẩm — đọc truyện để nhận cơ duyên." else null
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (tab) DockSpace else 32.dp)) {
                     item { Box(gap) { HeroStage(s, realmCol, header) } }
@@ -329,8 +330,12 @@ fun CultivationScreen(tab: Boolean = false) {
                     }
                     // tải túi lỗi thì nói rõ, đừng hiện "0 món" như thể mất hết đồ
                     if (bagMsg != null) item { Box(pad.band(false, true).padding(bottom = 12.dp)) { Empty(bagMsg) } }
-                    itemsIndexed(rows) { i, row ->
-                        Row(
+                    itemsIndexed(rows) { i, (g, row) ->
+                        if (g > 0) Row(pad.fillMaxWidth().band(false, false).padding(start = 18.dp, end = 16.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).background(gradeColor(g), CircleShape))
+                            Text("${GradeNames.getOrElse(g - 1) { "?" }} phẩm", Modifier.padding(start = 8.dp).weight(1f), style = MaterialTheme.typography.labelLarge, color = cs.legible(gradeColor(g)))
+                            Text("${row.sumOf { it.optInt("qty", 1) }}", style = monoStyle(11, cs.onSurfaceVariant))
+                        } else Row(
                             pad.fillMaxWidth().band(false, i == rows.lastIndex).padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (i == rows.lastIndex) 16.dp else 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
@@ -630,6 +635,7 @@ private fun eta(sec: Double): String {
         m < 1 -> "vài giây"
         m < 60 -> "$m phút"
         m < 60 * 24 -> "${m / 60} giờ ${m % 60} phút"
+        m >= 1440L * 365 -> "hơn ${m / (1440L * 365)} năm"
         else -> "${m / 1440} ngày ${(m % 1440) / 60} giờ"
     }
 }

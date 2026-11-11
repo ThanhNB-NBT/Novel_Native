@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -50,6 +51,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -223,21 +225,30 @@ fun ReaderScreen(s: Screen.Read) {
         onDispose { ctl.isAppearanceLightStatusBars = !appDark; ctl.isAppearanceLightNavigationBars = !appDark }
     }
 
+    // đang tự gửi yêu cầu dịch → màn chờ hiện vòng xoay thay vì nháy nút "Yêu cầu dịch" rồi mới đổi sang "hàng đợi"
+    var asking by remember(s.novelId, s.index) { mutableStateOf(Session.user != null) }
     LaunchedEffect(s.novelId, s.index) {
         runCatching { Api.requestToc(s.novelId) }
         if (Session.user != null) {
-            Api.aheadCount().let { n -> if (n > 0) runCatching { Api.requestTranslation(s.novelId, s.index + n) } }
-            runCatching { Api.saveProgress(s.novelId, s.index) }
+            Api.aheadCount().let { n -> if (n > 0) runCatching { Api.requestTranslation(s.novelId, s.index + n, from = s.index) } }
+            asking = false
         }
     }
 
     val l = load("ch", s.novelId, s.index) { Api.chapter(s.novelId, s.index) }
     val ch = l.res?.getOrNull()
+    // chỉ ghi tiến độ khi chương có thật: lướt quá chương cuối không đẩy tiến độ vượt mục lục
+    LaunchedEffect(s.novelId, s.index, ch != null) {
+        if (ch != null && Session.user != null) runCatching { Api.saveProgress(s.novelId, s.index) }
+    }
     // Chưa dịch xong → hỏi lại mỗi 5s tới khi 'done' (Flutter dùng realtime, ở đây poll cho gọn)
     // Chương chưa có (truyện "lười" đang được crawler tải mục lục) cũng poll như vậy
     val loaded = l.res?.isSuccess == true
-    LaunchedEffect(loaded, ch?.status) {
-        if (loaded && ch?.status != "done" && (ch != null || Session.user != null)) while (true) { delay(5000); l.reload() }
+    LaunchedEffect(loaded, ch?.status, asking) {
+        if (loaded && ch?.status != "done" && (ch != null || Session.user != null)) {
+            if (!asking) l.reload() // vừa gửi yêu cầu xong → lấy trạng thái mới ngay, khỏi chờ 5s
+            while (true) { delay(5000); l.reload() }
+        }
     }
     val terms = if (st.gloss) load("gloss", s.novelId) { Api.glossary(s.novelId) }.res?.getOrNull().orEmpty() else emptyList()
 
@@ -359,7 +370,13 @@ fun ReaderScreen(s: Screen.Read) {
                     CompositionLocalProvider(LocalContentColor provides fg.copy(alpha = 0.55f)) {
                         IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", Modifier.size(20.dp)) }
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Chương ${s.index}", fontFamily = Jakarta, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Row(
+                                Modifier.clip(RoundedCornerShape(50)).background(fg.copy(alpha = 0.07f)).clickable { sheet = 1 }.padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("Chương ${s.index}", fontFamily = Jakarta, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = fg.copy(alpha = 0.78f))
+                                Icon(Icons.Rounded.ExpandMore, "Mục lục", Modifier.size(18.dp))
+                            }
                             Orb(modifier = Modifier.padding(start = 6.dp).size(30.dp))
                         }
                         Text("${(pct * 100).roundToInt()}%", Modifier.padding(end = 4.dp), style = monoStyle(11, fg.copy(alpha = 0.45f)))
@@ -407,10 +424,19 @@ fun ReaderScreen(s: Screen.Read) {
             Loaded(l, loading = { TextSkeleton() }) { c ->
                 when {
                     Session.user == null -> NeedLogin("Đăng nhập để đọc truyện.")
-                    c == null -> Waiting("toc", fg) {}
-                    c.status != "done" -> Waiting(c.status, fg) {
+                    c == null -> {
+                        // quá chương cuối của mục lục → báo hết chương thay vì xoay "đang tải mục lục" mãi
+                        val last = load("toc", s.novelId) { Api.toc(s.novelId) }.res?.getOrNull()?.lastOrNull()?.index
+                        if (last == null || s.index <= last) Waiting("toc", fg) {}
+                        else Column(Modifier.fillMaxSize().padding(32.dp), Arrangement.Center, Alignment.CenterHorizontally) {
+                            Text("Bạn đã đọc hết $last chương hiện có.\nChương mới sẽ hiện ở đây khi nguồn cập nhật.", textAlign = TextAlign.Center)
+                            Spacer(Modifier.height(12.dp))
+                            Button({ go(last) }) { Text("Về chương $last") }
+                        }
+                    }
+                    c.status != "done" -> Waiting(if (asking && c.status != "queued" && c.status != "translating") "asking" else c.status, fg, s) {
                         scope.launch {
-                            runCatching { Api.requestTranslation(s.novelId, s.index + 10) }.onFailure { msg = friendly(it) }
+                            runCatching { Api.requestTranslation(s.novelId, s.index + 10, from = s.index) }.onFailure { msg = friendly(it) }
                             l.reload()
                         }
                     }
@@ -531,24 +557,22 @@ private fun ScrollChapter(
         LazyColumn(Modifier.fillMaxSize().nestedScroll(conn), list, contentPadding = insets.asPaddingValues()) {
             if (prev != null) {
                 itemsIndexed(prevParas, key = { i, _ -> "q$i" }) { _, p -> Para(p, st, body, terms, fg, false, null) }
-                item(key = "qe") { Text("· Hết chương ${prev.index} ·", Modifier.fillMaxWidth().padding(0.dp, 28.dp, 0.dp, 8.dp), color = fg.copy(alpha = 0.45f), fontSize = 12.sp, fontFamily = Jakarta, textAlign = TextAlign.Center) }
+                item(key = "qe") { ChapterEnd("Hết chương ${prev.index}", fg, Modifier.padding(0.dp, 28.dp, 0.dp, 8.dp)) }
             }
-            item(key = "t") { Text(c.title, Modifier.padding(st.margin.dp, 24.dp, st.margin.dp, 20.dp), style = title) }
+            item(key = "t") { ChapterTitle(c.title, title, st.margin) }
             itemsIndexed(c.paragraphs, key = { i, _ -> "p$i" }) { i, p ->
                 Para(p, st, body, terms, fg, i == hl, onEdit)
                 // quà nằm NGAY DƯỚI đoạn của nó, cùng một item để chỉ số đoạn (tiến độ, TTS) không lệch
                 if (gift != null && gift.first == i) gift.second()
             }
             item(key = "e") {
-                Column(Modifier.fillMaxWidth().padding(st.margin.dp, 28.dp, st.margin.dp, if (next == null) 80.dp else 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        if (next == null) "Hết chương ${c.index} · kéo tiếp để sang chương sau" else "· Hết chương ${c.index} ·",
-                        color = fg.copy(alpha = 0.45f), fontSize = 12.sp, fontFamily = Jakarta,
-                    )
-                }
+                ChapterEnd(
+                    if (next == null) "Hết chương ${c.index} · kéo tiếp để sang chương sau" else "Hết chương ${c.index}", fg,
+                    Modifier.padding(st.margin.dp, 28.dp, st.margin.dp, if (next == null) 80.dp else 8.dp),
+                )
             }
             if (next != null) {
-                item(key = "nt") { Text(next.title, Modifier.padding(st.margin.dp, 24.dp, st.margin.dp, 20.dp), style = title) }
+                item(key = "nt") { ChapterTitle(next.title, title, st.margin) }
                 itemsIndexed(nextParas, key = { i, _ -> "n$i" }) { _, p -> Para(p, st, body, terms, fg, false, null) }
             }
         }
@@ -563,6 +587,24 @@ private fun ScrollChapter(
             )
         }
     }
+}
+
+/** Tiêu đề chương (chế độ cuộn) kèm một nét son ngắn bên dưới. */
+@Composable
+private fun ChapterTitle(text: String, style: TextStyle, margin: Float) = Column(Modifier.padding(margin.dp, 24.dp, margin.dp, 20.dp)) {
+    Text(text, style = style)
+    Box(Modifier.padding(top = 14.dp).size(36.dp, 3.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50)))
+}
+
+/** Vạch hết chương: nét mảnh – dấu thoi màu nhấn – nét mảnh, dòng chữ nhỏ bên dưới. */
+@Composable
+private fun ChapterEnd(text: String, fg: Color, modifier: Modifier) = Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(48.dp, 1.dp).background(fg.copy(alpha = .22f)))
+        Box(Modifier.padding(horizontal = 12.dp).size(7.dp).rotate(45f).background(MaterialTheme.colorScheme.primary))
+        Box(Modifier.size(48.dp, 1.dp).background(fg.copy(alpha = .22f)))
+    }
+    Text(text, Modifier.padding(top = 12.dp), color = fg.copy(alpha = 0.45f), fontSize = 12.sp, fontFamily = Jakarta, textAlign = TextAlign.Center)
 }
 
 /** Số item của chương trước (đoạn cuối + vạch) đặt phía trên tiêu đề chương hiện tại; 0 nếu chưa có chương trước. */
@@ -793,11 +835,12 @@ private fun marked(text: String, terms: List<String>): AnnotatedString {
 }
 
 @Composable
-private fun Waiting(status: String, fg: Color, request: () -> Unit) =
+private fun Waiting(status: String, fg: Color, s: Screen.Read? = null, request: () -> Unit) =
     Column(Modifier.fillMaxSize().padding(32.dp), Arrangement.Center, Alignment.CenterHorizontally) {
         val (label, canRequest) = when (status) {
             "queued" -> "Chương đang trong hàng đợi dịch…" to false
             "translating" -> "Đang dịch…" to false
+            "asking" -> "Đang gửi yêu cầu dịch…" to false
             "toc" -> "Đang tải mục lục từ nguồn (~10–20 giây)…" to false
             "failed" -> "Dịch lỗi." to true
             else -> "Chương này chưa được dịch." to true
@@ -805,6 +848,16 @@ private fun Waiting(status: String, fg: Color, request: () -> Unit) =
         if (!canRequest) CircularProgressIndicator(color = fg)
         Spacer(Modifier.height(16.dp))
         Text(label, textAlign = TextAlign.Center, fontFamily = Jakarta)
+        if (status == "queued" && s != null) {
+            // vị trí trong hàng đợi + ước lượng; 20 giây hỏi lại một lần (lỗi mạng thì giữ dòng cũ)
+            val eta by produceState<String?>(null, s.novelId, s.index) {
+                while (true) { runCatching { Api.queueEta(s.novelId, s.index) }.onSuccess { value = it }; delay(20_000) }
+            }
+            eta?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(it, textAlign = TextAlign.Center, fontFamily = Jakarta, style = MaterialTheme.typography.bodySmall, color = fg.copy(alpha = .7f))
+            }
+        }
         if (canRequest) {
             Spacer(Modifier.height(12.dp))
             Button(request) { Text(if (status == "failed") "Dịch lại" else "Yêu cầu dịch") }
@@ -816,9 +869,13 @@ private fun TocSheet(novelId: Int, current: Int, pick: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val toc = load("toc", novelId) { Api.toc(novelId) }
     Column(Modifier.fillMaxHeight(0.75f)) {
-        Text("Mục lục", Modifier.padding(20.dp, 0.dp, 20.dp, 8.dp), style = MaterialTheme.typography.titleLarge)
         Loaded(toc, loading = { TextSkeleton() }) { chapters ->
             val list = rememberLazyListState((chapters.indexOfFirst { it.index == current } - 3).coerceAtLeast(0))
+            val scope = rememberCoroutineScope()
+            Row(Modifier.padding(20.dp, 0.dp, 20.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Mục lục", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                JumpField("Tới chương… /${chapters.size}", Modifier.width(150.dp)) { n -> scope.launch { list.scrollToItem(chapterPos(chapters, n)) } }
+            }
             LazyColumn(state = list) {
                 itemsIndexed(chapters, key = { _, c -> c.index }) { _, c ->
                     val on = c.index == current
@@ -853,8 +910,8 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         // khung xem trước: nền/chữ/font/cỡ/giãn/lề đều là giá trị THẬT đang chọn
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(col.bg).border(1.dp, cs.outlineVariant, RoundedCornerShape(12.dp))
-                .padding((st.margin / 1.6f).dp, 10.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(col.bg).border(1.dp, cs.outlineVariant, RoundedCornerShape(18.dp))
+                .padding((st.margin / 1.6f).dp, 14.dp),
         ) {
             Text(
                 "Lục Trầm khẽ nhắm mắt, linh khí quanh thân tụ lại như sương sớm. “Đạo hữu, mời.”", maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -868,12 +925,12 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
         SheetLabel("Màu nền", if (dark) "nền tối" else "nền sáng") {
             Seg(listOf("Tự động", "Sáng", "Tối"), st.mode, Modifier.width(216.dp)) { st.mode = it }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             readerColors.forEachIndexed { i, rc ->
                 val on = i == (if (dark) st.dark else st.light)
                 Box(
-                    Modifier.size(38.dp).clip(CircleShape).background(rc.bg)
-                        .border(if (on) 2.4.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, CircleShape)
+                    Modifier.size(44.dp).border(2.dp, if (on) cs.primary else Color.Transparent, CircleShape).padding(4.dp)
+                        .clip(CircleShape).background(rc.bg).border(1.dp, cs.outlineVariant, CircleShape)
                         .clickable { if (dark) st.dark = i else st.light = i },
                     Alignment.Center,
                 ) { Text("A", color = rc.fg, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
@@ -890,10 +947,12 @@ private fun StyleSheet(st: Style, dark: Boolean, startAuto: () -> Unit) {
         FontRow(readerFonts.filter { it.serif == serif }, st)
 
         SheetLabel("Bố cục")
+        Column(Modifier.clip(RoundedCornerShape(18.dp)).background(cs.background.copy(alpha = 0.7f)).padding(horizontal = 14.dp, vertical = 4.dp)) {
         SliderRow("Cỡ chữ", "${st.size.roundToInt()}", st.size, 15f..28f) { st.size = it }
         SliderRow("Giãn dòng", "%.1f×".format(st.lh), st.lh, 1.3f..2.2f) { st.lh = (it * 10).roundToInt() / 10f }
         SliderRow("Viền 2 bên", "${st.margin.roundToInt()}", st.margin, 8f..48f) { st.margin = it }
         if (!st.page) SliderRow("Tự cuộn", "${st.speed.roundToInt()}", st.speed, 15f..120f, startAuto) { st.speed = it }
+        }
 
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

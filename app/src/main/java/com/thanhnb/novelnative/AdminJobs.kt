@@ -49,7 +49,7 @@ fun JobsTab() {
             val cs = MaterialTheme.colorScheme
             Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 StatRow(
-                    Triple("$running", "đang dịch", cs.primary),
+                    Triple("$running", "đang dịch", if (running > 0) cs.primary else null),
                     Triple("$crawling", "chờ tải gốc", if (crawling > 0) cs.live else null),
                     Triple("${total.res?.getOrNull() ?: pendingHere}", "chờ dịch", null),
                     Triple("$failed", "lỗi", if (failed > 0) cs.error else null),

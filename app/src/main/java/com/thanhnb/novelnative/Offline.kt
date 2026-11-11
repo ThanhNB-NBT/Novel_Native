@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -194,8 +195,10 @@ fun OfflineCard(n: Novel) {
     val prog = Offline.running[n.id]
     var confirm by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().bounceClick { if (prog == null) Offline.start(n.id) }) {
-        Row(Modifier.padding(start = 20.dp, top = 12.dp, bottom = 12.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (have != null) Icons.Rounded.DownloadDone else Icons.Rounded.Download, null, tint = cs.primary)
+        Row(Modifier.padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(cs.primary.copy(.12f)), Alignment.Center) {
+                Icon(if (have != null) Icons.Rounded.DownloadDone else Icons.Rounded.Download, null, Modifier.size(20.dp), cs.primary)
+            }
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 Text("Đọc offline", style = MaterialTheme.typography.titleMedium)
                 Text(

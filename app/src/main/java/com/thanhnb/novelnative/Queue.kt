@@ -87,7 +87,7 @@ fun QueueScreen() {
             }
         }
     }
-    open?.let { g -> ChapterSheet(g) { open = null } }
+    open?.let { g -> ChapterSheet(g, { open = null }) { l.reload() } }
 }
 
 @Composable
@@ -121,12 +121,19 @@ private fun NovelRow(g: Group, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChapterSheet(g: Group, close: () -> Unit) {
+private fun ChapterSheet(g: Group, close: () -> Unit, after: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     fun rank(s: String) = when (s) { "translating" -> 0; "downloading" -> 1; "queued" -> 2; else -> 3 }
     val items = g.jobs.sortedWith(compareBy({ rank(it.status) }, { it.index }))
+    // hàng đợi dùng chung, job không ghi ai yêu cầu → chỉ admin được huỷ (server chặn bằng RLS admin_all_jobs, cờ này chỉ để ẩn nút)
+    val admin = load("admin", Session.user?.id) { Api.isAdmin() }.res?.getOrNull() == true
+    var act by remember { mutableStateOf<Act?>(null) }
+    ConfirmDialog(act, { act = null }) { close(); after() }
     ModalBottomSheet(close, containerColor = cs.card) {
         Text(g.first.novelTitle, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (admin && g.jobs.any { it.status != "translating" }) TextButton({
+            act = Act("Huỷ hàng đợi truyện này?", "Huỷ toàn bộ chương ĐANG CHỜ dịch của truyện (chương đang dịch chạy nốt).", "Huỷ hàng đợi", true) { AdminApi.cancelNovelQueue(g.novelId); "Đã huỷ các chương đang chờ dịch" }
+        }, Modifier.padding(horizontal = 8.dp)) { Text("Huỷ các chương đang chờ", color = cs.error) }
         LazyColumn(Modifier.heightIn(max = 520.dp)) {
             items(items) { c ->
                 val (label, color) = when (c.status) {

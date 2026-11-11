@@ -20,6 +20,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -235,6 +242,29 @@ val Mono = FontFamily(Font(R.font.mono_medium, FontWeight.Medium))
 @Composable
 fun monoStyle(size: Int = 12, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) =
     TextStyle(fontFamily = Mono, fontSize = size.sp, letterSpacing = (-0.3).sp, color = color)
+
+/** Ô nhỏ "tới chương": gõ số rồi bấm Đi trên bàn phím. Dùng ở danh sách chương (trang truyện) và mục lục (màn đọc). */
+@Composable
+fun JumpField(hint: String, modifier: Modifier = Modifier, onJump: (Int) -> Unit) {
+    var v by remember { mutableStateOf("") }
+    val cs = MaterialTheme.colorScheme
+    val focus = LocalFocusManager.current
+    BasicTextField(
+        v, { v = it.filter(Char::isDigit).take(6) }, modifier, singleLine = true,
+        textStyle = monoStyle(13, cs.onSurface), cursorBrush = SolidColor(cs.primary),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
+        keyboardActions = KeyboardActions(onGo = { v.toIntOrNull()?.let(onJump); v = ""; focus.clearFocus() }),
+        decorationBox = { inner ->
+            Box(
+                Modifier.heightIn(min = 40.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (v.isEmpty()) Text(hint, style = monoStyle(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                inner()
+            }
+        },
+    )
+}
 
 @Composable
 fun IconStat(icon: ImageVector, value: String) = Row(verticalAlignment = Alignment.CenterVertically) {

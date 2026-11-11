@@ -147,7 +147,23 @@ private fun NewChaptersRow(list: List<Notif>, seenBefore: String, clear: () -> U
             Text("Mới dịch xong", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             TextButton(clear, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Đã xem hết", style = MaterialTheme.typography.labelMedium) }
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // chỉ một truyện: thẻ ngang đủ rộng, thay cho một bìa nhỏ lọt thỏm bên trái hàng cuộn
+        list.singleOrNull()?.let { n ->
+            val fresh = n.latestAt > seenBefore
+            PaperCard(Modifier.fillMaxWidth(), onClick = { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) }) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Cover(n.cover, 48.dp, 64.dp, label = n.title)
+                    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                        Text(n.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (n.chapters.size == 1) "Chương ${n.chapters[0]}" else "${n.chapters.size} chương mới · ${n.chapters.first()}–${n.chapters.last()}",
+                            Modifier.padding(top = 3.dp), style = MaterialTheme.typography.labelMedium, color = if (fresh) cs.primary else cs.onSurfaceVariant,
+                        )
+                    }
+                    Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
+                }
+            }
+        } ?: LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(list, key = { it.novelId }) { n ->
                 val fresh = n.latestAt > seenBefore
                 Column(Modifier.width(92.dp).bounceClick { Nav.push(Screen.Read(n.novelId, n.title, n.chapters.first())) }) {
@@ -458,13 +474,13 @@ private fun ContinueCard(n: Novel) {
     ) {
         Cover(n.cover, 84.dp, 118.dp, label = n.title)
         Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("TIẾP TỤC ĐỌC", style = MaterialTheme.typography.labelSmall, color = cs.tertiary, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
+            Text("TIẾP TỤC ĐỌC", style = MaterialTheme.typography.labelSmall, color = sub, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
             Text(n.title, style = MaterialTheme.typography.titleMedium, color = fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("Chương $cur/${n.chaptersSource}" + if (pct(n) > 0) " · ${pct(n)}%" else "", style = monoStyle(12, sub))
             LinearProgressIndicator(
                 { (cur.toFloat() / n.chaptersSource.coerceAtLeast(1)).coerceIn(.03f, 1f) },
                 Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
-                color = cs.tertiary, trackColor = Color.White.copy(.28f), gapSize = 0.dp, drawStopIndicator = {},
+                color = fg, trackColor = Color.White.copy(.28f), gapSize = 0.dp, drawStopIndicator = {},
             )
         }
         Box(

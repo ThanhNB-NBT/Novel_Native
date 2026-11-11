@@ -357,22 +357,6 @@ fun LunarScreen(tab: Boolean = false) {
                 .padding(start = 16.dp, end = 16.dp, bottom = if (tab) DockSpace else 0.dp), // tab: chừa chỗ cho dock kính nổi
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Thanh tháng: tháng dương to, dòng nhỏ ghi các tháng âm nằm trong tháng này
-            val first = toLunar(month)
-            val last = toLunar(month.withDayOfMonth(month.lengthOfMonth()))
-            val lunarSpan = if (first.month == last.month && first.leap == last.leap) first.monthName else "${first.monthName} – ${last.monthName.removePrefix("Tháng ")}"
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton({ go(-1) }) { Icon(Icons.Rounded.ChevronLeft, "Tháng trước") }
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Tháng ${month.monthValue}, ${month.year}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("$lunarSpan · ${last.yearName}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                }
-                IconButton({ go(1) }) { Icon(Icons.Rounded.ChevronRight, "Tháng sau") }
-            }
-            AnimatedVisibility(month.year != today.year || month.month != today.month, Modifier.align(Alignment.CenterHorizontally)) { // trượt ra/vào, tờ lịch không giật
-                TextButton({ month = today.withDayOfMonth(1); sel = today }) { Text("Về hôm nay") }
-            }
-
             DayHero(sel)
 
             // vuốt ngang đổi tháng chỉ trên lưới ngày; ngoài lưới thì vuốt để đổi tab (pager của dock nhận cử chỉ)
@@ -385,7 +369,22 @@ fun LunarScreen(tab: Boolean = false) {
                         }) { _, d -> drag += d }
                     },
             ) {
-                Row(Modifier.padding(bottom = 6.dp)) {
+                // Thanh tháng: tháng dương to, dòng nhỏ ghi các tháng âm nằm trong tháng này
+                val first = toLunar(month)
+                val last = toLunar(month.withDayOfMonth(month.lengthOfMonth()))
+                val lunarSpan = if (first.month == last.month && first.leap == last.leap) first.monthName else "${first.monthName} – ${last.monthName.removePrefix("Tháng ")}"
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton({ go(-1) }) { Icon(Icons.Rounded.ChevronLeft, "Tháng trước") }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Tháng ${month.monthValue}, ${month.year}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("$lunarSpan · ${last.yearName}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    }
+                    IconButton({ go(1) }) { Icon(Icons.Rounded.ChevronRight, "Tháng sau") }
+                }
+                AnimatedVisibility(month.year != today.year || month.month != today.month, Modifier.align(Alignment.CenterHorizontally)) { // trượt ra/vào, tờ lịch không giật
+                    TextButton({ month = today.withDayOfMonth(1); sel = today }) { Text("Về hôm nay") }
+                }
+                Row(Modifier.padding(top = 8.dp, bottom = 6.dp)) {
                     listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN").forEachIndexed { i, w ->
                         Text(w, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = if (i == 6) cs.error else cs.onSurfaceVariant)
                     }
@@ -412,9 +411,10 @@ fun LunarScreen(tab: Boolean = false) {
                         }
                     }
                 }
+                HorizontalDivider(Modifier.padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 12.dp), color = cs.outlineVariant.copy(.5f))
+                Legend()
             }
 
-            Legend()
             DayExtras(sel, today)
             Spacer(Modifier.height(32.dp))
         }
@@ -509,7 +509,7 @@ private fun DayHero(d: LocalDate) {
             Box(Modifier.size(10.dp).background(elementColor(e), CircleShape))
             Text("Nạp âm", Modifier.padding(start = 10.dp).width(64.dp), style = MaterialTheme.typography.labelMedium, color = soft)
             Text(napAm(l).replaceFirstChar { it.uppercase() }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = ink)
-            Text("Hành ${e.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelMedium, color = elementColor(e), fontWeight = FontWeight.SemiBold)
+            Text("Hành ${e.replaceFirstChar { it.uppercase() }}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.legible(elementColor(e)), fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -569,6 +569,7 @@ private fun TermCard(d: LocalDate) {
 }
 
 /** Đồng hồ 12 canh giờ: Tý ở đỉnh, đi theo chiều kim đồng hồ; giờ hoàng đạo tô xanh, giờ hiện tại (xem hôm nay) có vòng ngoài. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HoursCard(l: LunarDate, isToday: Boolean) {
     val cs = MaterialTheme.colorScheme
@@ -578,7 +579,7 @@ private fun HoursCard(l: LunarDate, isToday: Boolean) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.card).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Eyebrow("Giờ hoàng đạo", Modifier.weight(1f))
-            Text("${good.size} giờ tốt", style = MaterialTheme.typography.labelMedium, color = GOOD_GREEN, fontWeight = FontWeight.SemiBold)
+            Text("${good.size} giờ tốt", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.legible(GOOD_GREEN), fontWeight = FontWeight.SemiBold)
         }
         Box(Modifier.align(Alignment.CenterHorizontally).size(ringDp.dp), Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
@@ -606,15 +607,23 @@ private fun HoursCard(l: LunarDate, isToday: Boolean) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (nowIdx >= 0) {
                     Text("Bây giờ", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                    Text("Giờ ${HOURS[nowIdx].first}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = if (nowIdx in good) GOOD_GREEN else cs.onSurface)
+                    Text("Giờ ${HOURS[nowIdx].first}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = if (nowIdx in good) MaterialTheme.colorScheme.legible(GOOD_GREEN) else cs.onSurface)
                     Text(HOURS[nowIdx].second, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 } else {
-                    Text("${good.size}/12", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = GOOD_GREEN)
+                    Text("${good.size}/12", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.legible(GOOD_GREEN))
                     Text("giờ hoàng đạo", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 }
             }
         }
-        Text(good.joinToString(" · ") { "${HOURS[it].first} ${HOURS[it].second}" }, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+        val green = cs.legible(GOOD_GREEN)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            good.forEach {
+                Row(Modifier.background(if (it == nowIdx) GOOD_GREEN.copy(.2f) else cs.surfaceContainerHighest.copy(.6f), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(HOURS[it].first, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = green)
+                    Text(HOURS[it].second, Modifier.padding(start = 5.dp), style = monoStyle(11, cs.onSurfaceVariant))
+                }
+            }
+        }
     }
 }
 

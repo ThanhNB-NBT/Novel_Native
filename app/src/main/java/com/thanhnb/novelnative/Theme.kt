@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
@@ -118,33 +119,32 @@ private fun type(ink: Color, soft: Color): Typography {
     )
 }
 
-@Composable
-fun AppTheme(content: @Composable () -> Unit) {
-    val dark = when (Prefs.themeMode) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
-    val a = accents.getOrElse(Prefs.accent) { accents[0] }
-    val p = papers.getOrElse(Prefs.paper) { papers[0] }
+/** Dựng ColorScheme + màu triện từ cặp (màu nhấn, màu giấy). Hàm thuần để ThemeContrastTest quét được mọi tổ hợp. */
+fun schemeFor(a: Accent, p: Paper, dark: Boolean): Pair<ColorScheme, Color> {
     val ink = if (dark) p.dInk else p.ink
-    val soft = if (dark) p.dInkSoft else p.inkSoft
     val line = if (dark) p.dLine else p.line
+    val bg = if (dark) p.dBg else p.bg
     val card = if (dark) p.dSurface else p.surface
-    // màu nhấn mô phỏng hệ điều hành có bộ khá nhạt (xanh ngọc, cam, lục…): trên thẻ sáng kém 3:1 thì hạ sáng vừa đủ để icon/nhãn còn nhìn rõ
-    val accent = (if (dark) a.dAccent else a.accent).let {
-        if (dark) it else ensureContrast(it, card, 3f, Color.Black).let { c ->
-            // màu trung tính-sáng (cam, xanh Google…) đọc kém cả với chữ kem lẫn chữ mực: hạ thêm để chữ kem trên nút đạt 4.5:1
-            if (maxOf(contrast(c, Color(0xFFFAF5EB)), contrast(c, Color(0xFF1B1208))) < 4.5f) ensureContrast(c, Color(0xFFFAF5EB), 4.5f, Color.Black) else c
-        }
-    }
-    val seal = (if (dark) a.dSeal else a.seal).let { if (dark) it else ensureContrast(it, card, 3f, Color.Black) }
+    val alt = if (dark) p.dSurfaceAlt else p.surfaceAlt
+    val container = if (dark) a.dSoft else a.soft
+    val push = if (dark) Color.White else Color.Black
+    // Mọi màu dùng làm chữ phải đạt 4.5:1 trên mọi nền nó nằm lên; chưa đạt thì đẩy dần về đen (sáng) / trắng (tối) — giữ sắc, chỉ đổi độ sáng.
+    fun vis(c: Color, min: Float, on: List<Color>) = on.fold(c) { x, s -> ensureContrast(x, s, min, push) }
+    val soft = vis(if (dark) p.dInkSoft else p.inkSoft, 4.5f, listOf(bg, card, alt))
+    // nhãn màu nhấn hay nằm trên viên nền nhấn nhạt (primary 10–14% phủ lên nền/thẻ): nền đổi theo chính màu nhấn nên phải dò
+    fun onOwnTint(c: Color) = contrast(c, c.copy(alpha = .14f).compositeOver(bg)) >= 4.5f && contrast(c, c.copy(alpha = .14f).compositeOver(card)) >= 4.5f
+    val accent = generateSequence(vis(if (dark) a.dAccent else a.accent, 4.5f, listOf(bg, card, container))) { lerp(it, push, .05f) }.take(40).let { it.firstOrNull(::onOwnTint) ?: it.last() }
+    val seal = vis(if (dark) a.dSeal else a.seal, 3f, listOf(bg, card))
     val scheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
         primary = accent,
         onPrimary = onColor(accent, dark = if (dark) Color(0xFF2A140B) else Color(0xFF1B1208)), // chữ trên nút: kem hoặc mực, theo cái đọc rõ hơn
         primaryContainer = if (dark) a.dSoft else a.soft,
         onPrimaryContainer = if (dark) a.dAccent else a.deep,
-        secondary = a.extra.getOrNull(1) ?: if (dark) Color(0xFFF2A65A) else Color(0xFFE8913C),
+        secondary = vis(a.extra.getOrNull(1) ?: if (dark) Color(0xFFF2A65A) else Color(0xFFE8913C), 4.5f, listOf(bg, card)),
         onSecondary = Color(0xFF2B2118),
-        tertiary = a.extra.getOrNull(2) ?: if (dark) Color(0xFF3DBE76) else Color(0xFF27864D),
+        tertiary = vis(a.extra.getOrNull(2) ?: if (dark) Color(0xFF3DBE76) else Color(0xFF27864D), 4.5f, listOf(bg, card)),
         onTertiary = Color.White,
-        error = a.extra.getOrNull(0) ?: if (dark) Color(0xFFD1544A) else Color(0xFFCE493F),
+        error = vis(a.extra.getOrNull(0) ?: if (dark) Color(0xFFD1544A) else Color(0xFFCE493F), 4.5f, listOf(bg, card)),
         background = if (dark) p.dBg else p.bg,
         onBackground = ink,
         surface = if (dark) p.dBg else p.bg, // Scaffold/Surface mặc định = nền giấy
@@ -162,6 +162,15 @@ fun AppTheme(content: @Composable () -> Unit) {
         secondaryContainer = (if (dark) a.dSoft else a.soft),
         onSecondaryContainer = if (dark) a.dAccent else a.deep,
     )
+    return scheme to seal
+}
+
+@Composable
+fun AppTheme(content: @Composable () -> Unit) {
+    val dark = when (Prefs.themeMode) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
+    val (scheme, seal) = schemeFor(accents.getOrElse(Prefs.accent) { accents[0] }, papers.getOrElse(Prefs.paper) { papers[0] }, dark)
+    val ink = scheme.onBackground
+    val soft = scheme.onSurfaceVariant
     val view = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.SideEffect {
         val ctl = androidx.core.view.WindowCompat.getInsetsController((view.context as android.app.Activity).window, view)
@@ -214,3 +223,9 @@ val accentGroups = listOf(
     "macOS" to listOf("macOS Tím", "macOS Hồng", "macOS Lục", "macOS Cam", "macOS Than"),
     "Google · Material" to listOf("Google", "Material", "Material Lục", "Material Lam"),
 )
+
+/** Màu ngữ nghĩa viết cứng (ngũ hành, cát/hung, cảnh báo…) khi dùng làm chữ trên nền theme: giữ sắc, chỉnh độ sáng cho đạt 4.5:1 trên cả nền lẫn thẻ. */
+fun ColorScheme.legible(c: Color): Color {
+    val push = if (background.luminance() < .5f) Color.White else Color.Black
+    return ensureContrast(ensureContrast(c, background, 4.5f, push), card, 4.5f, push)
+}

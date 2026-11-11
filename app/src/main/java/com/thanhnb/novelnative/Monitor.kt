@@ -408,7 +408,7 @@ private const val SLOTS = 60
 @Composable
 fun levelColor(frac: Float, base: Color): Color = when {
     frac >= .85f -> MaterialTheme.colorScheme.error
-    frac >= .7f -> Color(0xFFD9962B)
+    frac >= .7f -> MaterialTheme.colorScheme.legible(Color(0xFFD9962B))
     else -> base
 }
 

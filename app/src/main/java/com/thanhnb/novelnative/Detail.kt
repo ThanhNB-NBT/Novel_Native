@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -124,25 +126,20 @@ fun DetailScreen(id: Int) {
                                 style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp), color = cs.onSurface,
                             )
                         }
-                        Column(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(20.dp, 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Fact("Tác giả", n.author)
-                                Fact("Nguồn", n.source)
-                                Fact("Mã truyện", "#${n.id}")
-                            }
-                        }
-                        HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 6.dp), color = cs.outlineVariant.copy(.5f))
-                        Column(Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Glossary(n.id)) }) {
-                            Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.Translate, null, tint = cs.primary)
-                                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                                    Text("Thuật ngữ truyện", style = MaterialTheme.typography.titleMedium)
-                                    Text("Tên người, địa danh… dịch thống nhất cả truyện", style = MaterialTheme.typography.labelMedium)
+                        // thông tin + hành động gom vào thẻ giấy với ô icon, cùng khuôn với tab Tôi
+                        Column(Modifier.padding(16.dp, 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            PaperCard(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(18.dp, 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Fact("Tác giả", n.author)
+                                    Fact("Nguồn", n.source)
+                                    Fact("Mã truyện", "#${n.id}")
                                 }
-                                Icon(Icons.Rounded.ChevronRight, null, tint = cs.onSurfaceVariant)
                             }
+                            SettingGroup(
+                                { SettingTile(Icons.Rounded.Translate, "Thuật ngữ truyện", "Tên người, địa danh… dịch thống nhất cả truyện", { Nav.push(Screen.Glossary(n.id)) }) },
+                                { OfflineCard(n) },
+                            )
                         }
-                        OfflineCard(n)
                     }
                     val bm = marks.res?.getOrNull().orEmpty()
                     if (bm.isNotEmpty()) {
@@ -166,8 +163,16 @@ fun DetailScreen(id: Int) {
                             }
                         }
                     }
-                } else LazyColumn(Modifier.fillMaxSize(), contentPadding = bottom) {
-                    item {
+                } else Column(Modifier.fillMaxSize()) {
+                    val list = rememberLazyListState()
+                    // vị trí trong LazyColumn: +1 vì mục đầu là dòng ghi chú
+                    fun pos(ch: Int) = chapterPos(chapters, ch).let { if (asc) it else chapters.lastIndex - it } + 1
+                    // mở danh sách ở chương đang đọc (một lần; vuốt qua lại tab không kéo về nữa)
+                    var placed by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(chapters.size, cur) {
+                        if (!placed && cur != null && chapters.isNotEmpty()) { placed = true; list.scrollToItem((pos(cur) - 3).coerceAtLeast(0)) }
+                    }
+                        // hàng điều khiển ghim ngoài danh sách: danh sách tự cuộn tới chương đang đọc thì vẫn bấm được
                         Row(Modifier.padding(20.dp, 8.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (selecting) {
                                 Text("Đã chọn ${sel.size}", Modifier.weight(1f), style = monoStyle(13, cs.primary))
@@ -175,7 +180,7 @@ fun DetailScreen(id: Int) {
                                 TextButton({ selecting = false }) { Text("Huỷ") }
                                 Button({ askRe = true }, enabled = sel.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Dịch lại (${sel.size})") }
                             } else {
-                                Text("${chapters.size} chương", Modifier.weight(1f), style = monoStyle(13))
+                                JumpField("Tới chương… /${chapters.size}", Modifier.weight(1f)) { n -> scope.launch { list.scrollToItem(pos(n)) } }
                                 TextButton({ if (uid == null) Nav.push(Screen.Login) else askTr = true }) {
                                     Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null, Modifier.size(18.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -192,6 +197,8 @@ fun DetailScreen(id: Int) {
                                 }
                             }
                         }
+                    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = bottom) {
+                    item {
                         when {
                             // migration 122: chapters chỉ đọc được khi đăng nhập
                             uid == null -> NeedLoginInline()
@@ -209,7 +216,9 @@ fun DetailScreen(id: Int) {
                         Row(
                             Modifier.fillMaxWidth()
                                 .bounceClick { if (!selecting) read(c.index) else if (c.done) sel = if (c.index in sel) sel - c.index else sel + c.index }
-                                .padding(20.dp, 13.dp),
+                                .padding(horizontal = 8.dp)
+                                .background(if (reading) cs.primary.copy(.1f) else Color.Transparent, RoundedCornerShape(14.dp))
+                                .padding(12.dp, 13.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             if (selecting) Checkbox(c.index in sel, null, Modifier.padding(end = 12.dp).size(20.dp), enabled = c.done)
@@ -220,13 +229,19 @@ fun DetailScreen(id: Int) {
                                 fontWeight = if (reading) FontWeight.Bold else null,
                                 color = when { reading -> cs.primary; c.done -> cs.onSurface; else -> cs.onSurfaceVariant },
                             )
+                            if (reading) Text("Đang đọc", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelSmall, color = cs.primary)
                             if (!c.done) Icon(Icons.Rounded.HourglassEmpty, "chưa dịch", Modifier.size(16.dp), cs.onSurfaceVariant.copy(.6f))
                         }
-                        HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.6f))
+                        // viên nền của chương đang đọc đã tự tách dòng, không cần gạch dưới
+                        if (!reading) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.6f))
+                    }
                     }
                 }
                 }
             }
+            // nền mờ dần sau hai nút nổi: chữ danh sách trôi xuống dưới không còn chọc qua khe giữa hai nút
+            // gần đặc ngay từ mép trên nút (≈40% chiều cao) để dòng chữ không lộ quanh nút; alpha 0 của chính màu nền, không phải đen trong suốt
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(140.dp).background(Brush.verticalGradient(0f to cs.background.copy(alpha = 0f), .4f to cs.background.copy(alpha = .92f), 1f to cs.background)))
             // hai nút nổi ở đáy như bản Flutter
             Row(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp, 0.dp, 16.dp, 14.dp)) {
                 Surface(
@@ -332,17 +347,17 @@ private fun TranslateDialog(translated: Int, source: Int, dismiss: () -> Unit, s
 }
 
 /** Đầu trang: bìa phóng to + mờ, phủ tối pha màu nhấn, tan vào nền giấy; bìa nét + tên chữ trắng. */
+private val SheetEdge = 20.dp
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Header(n: Novel, tail: Color) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.clipToBounds()) {
-        AsyncImage(Api.thumb(n.cover, 400), null, Modifier.matchParentSize().blur(10.dp), contentScale = ContentScale.Crop)
-        Box(
-            Modifier.matchParentSize().background(
-                Brush.verticalGradient(0f to Color.Black.copy(.45f), .55f to lerp(Color.Black, cs.primary, .35f).copy(.55f), .86f to lerp(Color.Black, cs.primary, .35f).copy(.5f), 1f to tail),
-            ),
-        )
+        AsyncImage(Api.thumb(n.cover, 400), null, Modifier.matchParentSize().blur(24.dp), contentScale = ContentScale.Crop)
+        // lớp phủ đậm dần xuống dưới theo màu nhấn: chữ trắng (kể cả hàng "Đã dịch" ở đáy) luôn nằm trên nền tối
+        val deep = lerp(Color.Black, cs.primary, .4f)
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(.4f), .5f to deep.copy(.62f), 1f to deep.copy(.82f))))
         Column(Modifier.statusBarsPadding()) {
             IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", tint = Color.White) }
             Row(Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp), verticalAlignment = Alignment.Bottom) {
@@ -367,14 +382,16 @@ private fun Header(n: Novel, tail: Color) {
                 }
             }
             val frac = if (n.chaptersSource > 0) (n.chaptersTranslated.toFloat() / n.chaptersSource).coerceIn(0f, 1f) else 0f
-            Column(Modifier.padding(20.dp, 12.dp, 20.dp, 18.dp)) {
+            Column(Modifier.padding(20.dp, 12.dp, 20.dp, 18.dp + SheetEdge)) {
                 Row {
                     Text("Đã dịch", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.8f))
                     Text("${n.chaptersTranslated}/${n.chaptersSource}", style = monoStyle(12, Color.White), fontWeight = FontWeight.Bold)
                 }
-                LinearProgressIndicator({ frac }, Modifier.padding(top = 5.dp).fillMaxWidth().height(5.dp).clip(CircleShape), color = cs.tertiary, trackColor = Color.White.copy(.22f), gapSize = 0.dp, drawStopIndicator = {})
+                LinearProgressIndicator({ frac }, Modifier.padding(top = 5.dp).fillMaxWidth().height(5.dp).clip(CircleShape), color = Color.White, trackColor = Color.White.copy(.22f), gapSize = 0.dp, drawStopIndicator = {})
             }
         }
+        // mép trang giấy bo tròn đè lên ảnh: pha dần từ ảnh tối sang giấy sáng luôn ra một dải xám đục
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(SheetEdge).background(tail, RoundedCornerShape(topStart = SheetEdge, topEnd = SheetEdge)))
     }
 }
 

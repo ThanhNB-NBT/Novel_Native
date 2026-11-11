@@ -22,6 +22,7 @@ import java.net.URLEncoder
 import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 
@@ -50,6 +51,9 @@ class Term(
 /** Job vá chương cũ gần nhất: [status] pending/running/done/failed, [result] "N/M chương". */
 class PatchJob(val status: String, val result: String?)
 data class ChapterRef(val index: Int, val title: String, val done: Boolean)
+/** Vị trí trong mục lục (xếp tăng dần) của chương [n]; không có thì lấy chương kế sau, quá cuối thì chương cuối. */
+fun chapterPos(chapters: List<ChapterRef>, n: Int) =
+    chapters.indexOfFirst { it.index >= n }.let { if (it < 0) chapters.lastIndex else it }.coerceAtLeast(0)
 data class Chapter(val index: Int, val title: String, val status: String, val paragraphs: List<String>)
 data class Bookmark(val id: Int, val chapter: Int, val percent: Double, val excerpt: String?)
 data class Notif(val novelId: Int, val title: String, val cover: String?, val chapters: List<Int>, val latestAt: String)
@@ -149,7 +153,9 @@ object Session {
 
     fun signOut() {
         user = null; token = null; refreshToken = null
-        Prefs.sp.edit().remove("auth_uid").remove("auth_email").remove("auth_access").remove("auth_refresh").remove("auth_exp").apply()
+        Prefs.sp.edit().remove("auth_uid").remove("auth_email").remove("auth_access").remove("auth_refresh").remove("auth_exp")
+            .apply { Prefs.sp.all.keys.filter { it.startsWith("dirty_") }.forEach(::remove) } // tiến độ chưa đẩy của người cũ không được lên tài khoản người sau
+            .apply()
     }
 
     suspend fun signIn(email: String, password: String) = save(
@@ -205,7 +211,7 @@ object Api {
                 val code = resp.code
                 if (code == 401 && auth && retry && Session.token != null) {
                     Session.refresh(force = true, stale = sent)
-                    return@withContext raw(method, path, body, prefer, auth, retry = false)
+                    return@withContext raw(method, path, body, prefer, auth, retry = false, headerOut = headerOut)
                 }
                 val text = resp.body?.string().orEmpty()
                 if (code !in 200..299) throw ApiError(code, text)
@@ -326,19 +332,25 @@ object Api {
         return ids.mapNotNull { byId[it] }
     }
 
-    suspend fun search(f: Filter): List<Novel> {
+    const val SEARCH_PAGE = 60
+
+    suspend fun search(f: Filter, offset: Int = 0): List<Novel> {
         val p = StringBuilder("novels?select=$COLS&$VISIBLE")
         if (f.q.isNotBlank()) p.append("&search_norm=ilike.").append(enc("*${boDau(f.q.trim()).replace(',', ' ')}*"))
         if (f.minChapters > 0) p.append("&chapter_count_source=gte.${f.minChapters}")
         f.status?.let { p.append("&status=eq.$it") }
         f.genre?.let { p.append("&genres=cs.").append(enc("{\"$it\"}")) }
         if (f.sources.isNotEmpty()) p.append("&source_id=in.(${f.sources.joinToString(",")})")
-        return get("$p&order=last_chapter_at.desc.nullslast&limit=60").objs().map(::novel)
+        // id.desc phá thế hoà (last_chapter_at trùng/null) để các trang không lặp hay sót truyện
+        return get("$p&order=last_chapter_at.desc.nullslast,id.desc&limit=$SEARCH_PAGE&offset=$offset").objs().map(::novel)
     }
 
-    suspend fun genres(): List<String> = get("novels?select=genres&genres=not.is.null&limit=300").objs()
-        .flatMap { o -> o.optJSONArray("genres")?.let { a -> List(a.length()) { a.getString(it).trim() } }.orEmpty() }
-        .filter { it.isNotEmpty() }.toSortedSet().toList()
+    /** Thể loại có ≥ 20 truyện, phổ biến trước (RPC genre_list, mig 148). Server chưa có RPC → lấy mẫu 300 truyện như cũ (thiếu nhiều thể loại). */
+    suspend fun genres(): List<String> = runCatching { JSONArray(rpc("genre_list")).let { a -> List(a.length()) { a.getString(it) } } }.getOrElse {
+        get("novels?select=genres&genres=not.is.null&limit=300").objs()
+            .flatMap { o -> o.optJSONArray("genres")?.let { a -> List(a.length()) { a.getString(it).trim() } }.orEmpty() }
+            .filter { it.isNotEmpty() }.toSortedSet().toList()
+    }
 
     suspend fun sources(): List<Pair<Int, String>> =
         get("sources?select=id,name,label&enabled=eq.true&order=name").objs().map { it.getInt("id") to sourceLabel(it) }
@@ -391,8 +403,10 @@ object Api {
 
     /** Mở đọc = tín hiệu đọc thật → crawler tải mục lục đầy đủ cho truyện "lười". No-op nếu đã có. */
     suspend fun requestToc(novelId: Int) = rpc("request_toc", "p_novel_id" to novelId)
-    suspend fun requestTranslation(novelId: Int, upTo: Int, priority: Int = 5) =
-        rpc("request_translation", "p_novel_id" to novelId, "p_up_to" to upTo, "p_priority" to priority)
+    /** Xếp hàng dịch chương chưa dịch trong [from, upTo]. from ≤ 1 dùng RPC cũ; lớn hơn dùng request_translation_range (mig 139) để nhảy cóc không kéo theo cả đoạn giữa. */
+    suspend fun requestTranslation(novelId: Int, upTo: Int, priority: Int = 5, from: Int = 1) =
+        if (from <= 1) rpc("request_translation", "p_novel_id" to novelId, "p_up_to" to upTo, "p_priority" to priority)
+        else rpc("request_translation_range", "p_novel_id" to novelId, "p_from" to from, "p_to" to upTo, "p_priority" to priority)
     private var aheadAt = 0L
     private var aheadN = 15
     /** Số chương dịch sẵn do admin đặt (RPC translate_ahead, mig 138). Nhớ 10 phút; server chưa có RPC → 15 như bản cũ. */
@@ -496,6 +510,7 @@ object Api {
     /** Tủ truyện = truyện theo dõi (library) ∪ đang đọc (reading_progress), mới động tới nhất lên đầu. */
     suspend fun library(): List<Novel> = coroutineScope {
         val u = uid() ?: return@coroutineScope emptyList()
+        flushProgress(u) // "Tiếp tục đọc" lấy chương từ server → đẩy bù tiến độ offline trước
         // Hai truy vấn độc lập: chạy song song, chờ bằng cái chậm hơn thay vì cộng dồn
         val lib = async { get("library?select=added_at,novels($COLS)&user_id=eq.$u") }
         val prog = async { get("reading_progress?select=chapter_index,updated_at,novels($COLS)&user_id=eq.$u") }
@@ -523,7 +538,8 @@ object Api {
 
     /** Xoá khỏi tủ = bỏ theo dõi + xoá tiến độ (cả vị trí cuộn lưu máy). */
     suspend fun removeReading(novelId: Int) {
-        Prefs.sp.edit().apply { Prefs.sp.all.keys.filter { it.startsWith("rp_${novelId}_") }.forEach(::remove) }.apply()
+        Prefs.sp.edit().apply { Prefs.sp.all.keys.filter { it.startsWith("rp_${novelId}_") }.forEach(::remove) }
+            .remove("last_$novelId").remove("dirty_$novelId").apply()
         val u = uid() ?: return
         delete("reading_progress?user_id=eq.$u&novel_id=eq.$novelId")
         delete("library?user_id=eq.$u&novel_id=eq.$novelId")
@@ -574,6 +590,25 @@ object Api {
         return Queue(active, recent, total)
     }
 
+    /**
+     * Dòng phụ ở màn chờ dịch: "Còn N chương phía trước · khoảng M phút".
+     * null = không thấy job trong 200 job chờ đầu (đã được worker nhận, hoặc xếp quá xa).
+     */
+    suspend fun queueEta(novelId: Int, index: Int): String? = coroutineScope {
+        val pending = async {
+            sortLikeClaim(
+                get("translation_jobs?select=priority,novel_id,created_at,chapters(chapter_index)&type=eq.chapter&status=eq.pending&order=priority.asc,created_at.asc&limit=200").objs(),
+            )
+        }
+        val since = Instant.now().minus(1, ChronoUnit.HOURS).toString() // cùng cửa sổ 1 giờ với queue()
+        val done = async {
+            get("chapters?select=translated_at&translation_status=eq.done&translated_at=gte.${enc(since)}&order=translated_at.desc&limit=12")
+                .objs().map { it.optString("translated_at") }
+        }
+        val ahead = pending.await().indexOfFirst { it.optInt("novel_id") == novelId && it.optJSONObject("chapters")?.optInt("chapter_index") == index }
+        if (ahead < 0) null else etaText(ahead, medianGapSec(done.await()))
+    }
+
     fun clearQueueDone() = Prefs.sp.edit().putString("queue_done_cleared_at", Instant.now().toString()).apply()
 
     /** Xếp y như claim_next_job (migration 117): priority → truyện có job chờ lâu nhất ở mức đó → chapter_index → created_at. MIRROR câu ORDER BY trong SQL. */
@@ -619,6 +654,9 @@ object Api {
     suspend fun progress(novelId: Int): Int? {
         val u = uid() ?: return null
         return try {
+            flushProgress(u)
+            // còn dấu = chưa đẩy được lên server → chương trên máy mới là chương đang đọc
+            if (Prefs.sp.contains("dirty_$novelId")) return Prefs.sp.getInt("last_$novelId", 0).takeIf { it > 0 }
             get("reading_progress?select=chapter_index&novel_id=eq.$novelId&user_id=eq.$u&limit=1").objs().firstOrNull()?.getInt("chapter_index")
                 ?.also { Prefs.sp.edit().putInt("last_$novelId", it).apply() }
         } catch (e: IOException) {
@@ -628,13 +666,42 @@ object Api {
 
     suspend fun saveProgress(novelId: Int, index: Int) {
         val u = uid() ?: return
-        Prefs.sp.edit().putInt("last_$novelId", index).apply()
+        val at = Instant.now().toString()
+        // dirty_ = "chưa lên server": ghi trước khi gửi, gửi hụt (mất mạng) thì flushProgress đẩy bù
+        Prefs.sp.edit().putInt("last_$novelId", index).putString("dirty_$novelId", at).apply()
         insert(
             "reading_progress",
-            mapOf("user_id" to u, "novel_id" to novelId, "chapter_index" to index, "updated_at" to Instant.now().toString()),
+            mapOf("user_id" to u, "novel_id" to novelId, "chapter_index" to index, "updated_at" to at),
             upsert = true,
         )
+        clearDirty(novelId, at)
         runCatching { rpc("touch_reading_streak") } // chuỗi ngày đọc — không chặn đọc
+    }
+
+    // chỉ xoá dấu của chính lần ghi này — lần lưu sau đó (chương mới hơn) có dấu riêng
+    private fun clearDirty(novelId: Int, at: String) {
+        if (Prefs.sp.getString("dirty_$novelId", null) == at) Prefs.sp.edit().remove("dirty_$novelId").apply()
+    }
+
+    /**
+     * Đẩy bù tiến độ lưu hụt lúc mất mạng. Điều kiện nằm ở DB (UPDATE ... WHERE updated_at < lúc đọc):
+     * máy khác đọc SAU đó thì server giữ của máy kia, không đọc-rồi-ghi trên máy.
+     */
+    private suspend fun flushProgress(u: String) {
+        for ((k, at) in Prefs.sp.all) {
+            val id = k.removePrefix("dirty_").toIntOrNull()
+            if (!k.startsWith("dirty_") || id == null || at !is String) continue
+            val idx = Prefs.sp.getInt("last_$id", 0)
+            if (idx > 0) try {
+                val row = mapOf("chapter_index" to idx, "updated_at" to at)
+                raw("PATCH", "rest/v1/reading_progress?user_id=eq.$u&novel_id=eq.$id&updated_at=lt.${enc(at)}", JSONObject(row), prefer = "return=minimal")
+                // chưa có dòng nào (truyện đọc lần đầu lúc offline) → tạo; có rồi thì bỏ qua
+                raw("POST", "rest/v1/reading_progress", JSONObject(row + mapOf("user_id" to u, "novel_id" to id)), prefer = "resolution=ignore-duplicates,return=minimal")
+            } catch (e: ApiError) {
+                if (e.code >= 500) continue // server trục trặc: giữ dấu, lần sau thử lại; 4xx (truyện đã xoá…) thì bỏ
+            }
+            clearDirty(id, at)
+        }
     }
 
     suspend fun bookmarks(novelId: Int): List<Bookmark> {
@@ -684,4 +751,22 @@ object Api {
     }
 
     fun dismiss(n: Notif) { Prefs.dismissed = Prefs.dismissed + n.chapters.map { "${n.novelId}:$it" } }
+}
+
+/**
+ * Nhịp ra chương của worker (giây/chương) = trung vị khoảng cách giữa các lần dịch xong gần nhất.
+ * Trung vị chứ không phải "số chương/giờ": worker nghỉ 50 phút rồi mới chạy thì quãng nghỉ không được kéo dài ước lượng.
+ * shortcut: hàng đợi vừa rỗng lâu thì đây là nhịp theo nhu cầu chứ không phải công suất → báo dài hơn thực tế (đo 10/11: báo 7 phút, thực ~2 phút); cần sát hơn thì đo thời lượng từng job.
+ */
+internal fun medianGapSec(doneAt: List<String>): Long? {
+    val t = doneAt.mapNotNull { runCatching { OffsetDateTime.parse(it).toEpochSecond() }.getOrNull() }.sortedDescending()
+    val gaps = t.zipWithNext { a, b -> a - b }.sorted()
+    return if (gaps.size < 3) null else gaps[gaps.size / 2] // dưới 3 khoảng: chưa đủ để tin
+}
+
+/** [ahead] = số chương xếp trước trong hàng đợi; [gapSec] null thì chỉ nói vị trí, không đoán thời gian. */
+internal fun etaText(ahead: Int, gapSec: Long?): String {
+    val pos = if (ahead == 0) "Sắp tới lượt" else "Còn $ahead chương phía trước"
+    val min = ((ahead + 1) * (gapSec ?: return pos) + 59) / 60
+    return "$pos · khoảng " + if (min < 90) "${maxOf(min, 1)} phút" else "${(min + 30) / 60} giờ"
 }

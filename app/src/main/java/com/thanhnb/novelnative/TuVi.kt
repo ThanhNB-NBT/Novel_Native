@@ -120,7 +120,7 @@ private fun DayFortune(h: HoSoSinh, d: LocalDate) {
 private fun HoaBadge(hoa: String, size: Dp = 34.dp) = Box(
     Modifier.size(size * 1.4f, size).clip(RoundedCornerShape(10.dp)).background(hoaColor(hoa).copy(alpha = .14f)), // đủ rộng cho "Quyền"
     contentAlignment = Alignment.Center,
-) { Text(hoa, color = hoaColor(hoa), fontWeight = FontWeight.Bold, fontSize = if (size < 30.dp) 9.sp else 11.sp, maxLines = 1, softWrap = false) }
+) { Text(hoa, color = MaterialTheme.colorScheme.legible(hoaColor(hoa)), fontWeight = FontWeight.Bold, fontSize = if (size < 30.dp) 9.sp else 11.sp, maxLines = 1, softWrap = false) }
 
 @Composable
 private fun CardSkeleton() = Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -268,7 +268,7 @@ private fun PalaceCell(c: JSONObject, menh: Boolean, modifier: Modifier, tap: ()
                 Text(
                     s.getString("ten") + if (hoa.isNotEmpty()) " ·$hoa" else "",
                     fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (hoa.isNotEmpty()) hoaColor(hoa) else cs.onSurface,
+                    color = if (hoa.isNotEmpty()) MaterialTheme.colorScheme.legible(hoaColor(hoa)) else cs.onSurface,
                 )
             }
         }
@@ -342,7 +342,7 @@ private fun Patterns(list: List<JSONObject>) = Column(
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(p.getString("ten"), Modifier.weight(1f, fill = false), fontWeight = FontWeight.Bold)
-                Text(label, Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = .14f)).padding(horizontal = 8.dp, vertical = 2.dp), color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(label, Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = .14f)).padding(horizontal = 8.dp, vertical = 2.dp), color = MaterialTheme.colorScheme.legible(color), fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
             Text(p.getString("mo_ta"), style = MaterialTheme.typography.bodyMedium)
         }
