@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -85,6 +86,7 @@ fun friendly(e: Throwable?): String = when {
 /** SharedPreferences + vài giá trị UI cần quan sát được (Compose state). */
 object Prefs {
     lateinit var sp: SharedPreferences
+    lateinit var cacheDir: java.io.File
     var themeMode by mutableIntStateOf(0) // 0 hệ thống · 1 sáng · 2 tối
     var notifSeenAt by mutableStateOf("")
     var accent by mutableIntStateOf(0) // chỉ số trong accents (Theme.kt)
@@ -92,6 +94,7 @@ object Prefs {
 
     fun init(c: Context) {
         sp = c.getSharedPreferences("app", Context.MODE_PRIVATE)
+        cacheDir = c.cacheDir
         themeMode = sp.getInt("theme_mode", 0)
         accent = sp.getInt("accent", 0)
         paper = sp.getInt("paper", 0)
@@ -153,6 +156,7 @@ object Session {
 
     fun signOut() {
         user = null; token = null; refreshToken = null
+        Api.clearCache() // bản lưu đĩa có dữ liệu riêng của người cũ (vài truy vấn không mang user_id trong URL)
         Prefs.sp.edit().remove("auth_uid").remove("auth_email").remove("auth_access").remove("auth_refresh").remove("auth_exp")
             .apply { Prefs.sp.all.keys.filter { it.startsWith("dirty_") }.forEach(::remove) } // tiến độ chưa đẩy của người cũ không được lên tài khoản người sau
             .apply()
@@ -182,6 +186,15 @@ object Session {
     }
 }
 
+/**
+ * Dấu "chỉ đọc bản lưu đĩa" gắn vào coroutine context: [load] chạy block một lượt với dấu này để hiện ngay
+ * dữ liệu của lần mở trước, rồi mới gọi mạng. [miss] = có request không có bản lưu (hoặc là lệnh ghi) → bỏ kết quả lượt đó.
+ */
+class CacheOnly : kotlin.coroutines.AbstractCoroutineContextElement(Key) {
+    companion object Key : kotlin.coroutines.CoroutineContext.Key<CacheOnly>
+    @Volatile var miss = false
+}
+
 /** PostgREST + RPC trần: cùng query với app Flutter (lib/data/ trong Flutter). */
 object Api {
     private const val COLS = "id,title_vi,title_zh,author_vi,author_zh,cover_url,status,chapter_count_source," +
@@ -189,26 +202,36 @@ object Api {
     private const val VISIBLE = "hidden=eq.false&is_canonical=eq.true"
 
     /** Một client cho cả app: HTTP/2 ghép nhiều truy vấn trên một kết nối TLS, pool giữ kết nối nóng giữa các màn. */
-    private val http = okhttp3.OkHttpClient.Builder()
+    private val http by lazy { okhttp3.OkHttpClient.Builder()
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .connectionPool(okhttp3.ConnectionPool(8, 5, java.util.concurrent.TimeUnit.MINUTES))
-        .build()
+        // Mọi GET 200 được lưu đĩa (LRU 30MB). Request thường vẫn luôn hỏi mạng (FORCE_NETWORK); bản lưu chỉ được đọc ở lượt CacheOnly.
+        .cache(okhttp3.Cache(java.io.File(Prefs.cacheDir, "http"), 30L * 1024 * 1024))
+        .build() }
     private val JSON = "application/json".toMediaType()
+
+    fun clearCache() { Thread { runCatching { http.cache?.evictAll() } }.start() }
 
     suspend fun raw(method: String, path: String, body: Any? = null, prefer: String? = null, auth: Boolean = true, retry: Boolean = true, headerOut: MutableMap<String, String>? = null): String =
         withContext(Dispatchers.IO) {
-            Endpoint.await()
-            if (auth) Session.refresh()
+            val cached = coroutineContext[CacheOnly]
+            if (cached != null && method != "GET") { cached.miss = true; throw IOException("chưa có bản lưu") }
+            if (cached == null) {
+                Endpoint.await()
+                if (auth) Session.refresh()
+            }
             val sent = if (auth) Session.token else null
             val req = okhttp3.Request.Builder().url("${Endpoint.url}/$path")
                 .method(method, if (method == "GET" || method == "HEAD") null else (body?.toString() ?: "").toRequestBody(JSON))
                 .header("apikey", Endpoint.anon)
                 .header("Authorization", "Bearer ${sent ?: Endpoint.anon}")
                 .apply { prefer?.let { header("Prefer", it) } }
+                .cacheControl(if (cached != null) okhttp3.CacheControl.FORCE_CACHE else okhttp3.CacheControl.FORCE_NETWORK)
                 .build()
             http.newCall(req).execute().use { resp ->
                 val code = resp.code
+                if (cached != null && code == 504) { cached.miss = true; throw IOException("chưa có bản lưu") } // 504 = OkHttp báo không có trong cache
                 if (code == 401 && auth && retry && Session.token != null) {
                     Session.refresh(force = true, stale = sent)
                     return@withContext raw(method, path, body, prefer, auth, retry = false, headerOut = headerOut)
@@ -307,7 +330,13 @@ object Api {
         if (s == Section.Latest || s == Section.Completed) {
             return get("novels?select=$COLS&$f&order=last_chapter_at.desc.nullslast,id.desc&offset=$offset&limit=$limit").objs().map(::novel)
         }
-        // Nổi bật/Đề cử: lấy "hồ" cột tối thiểu, trộn nguồn round-robin, xoay theo ngày (xem novels.dart)
+        // Nổi bật/Đề cử: server trộn nguồn + xoay ngày và trả đủ cột trong một vòng mạng (RPC section_mixed, mig 149)
+        try {
+            return get("rpc/section_mixed?p_ongoing=${s == Section.Recommended}&p_offset=$offset&p_limit=$limit").objs().map(::novel)
+        } catch (e: ApiError) {
+            if (e.code != 404) throw e // server chưa có RPC → tự làm hai vòng như cũ
+        }
+        // lấy "hồ" cột tối thiểu, trộn nguồn round-robin, xoay theo ngày (xem novels.dart)
         val pool = get("novels?select=id,source_id,source_rank,last_chapter_at&$f&order=source_rank.asc.nullslast,last_chapter_at.desc.nullslast,id.desc&limit=240").objs()
         var mixed = roundRobin(pool)
         if (mixed.size > 6) {
@@ -387,7 +416,7 @@ object Api {
             get("chapters?select=chapter_index,title_vi,content_vi,translation_status,updated_at&novel_id=eq.$novelId&chapter_index=eq.$index&limit=1")
                 .objs().firstOrNull()
                 // truyện đã tải: chương vừa đọc online (có thể đã sửa/vá) đè xuống bản offline
-                ?.also { if (it.optString("translation_status") == "done" && Offline.has(novelId)) Offline.save(novelId, listOf(it)) }
+                ?.also { if (it.optString("translation_status") == "done" && Offline.has(novelId) && kotlin.coroutines.coroutineContext[CacheOnly] == null) Offline.save(novelId, listOf(it)) }
         } catch (e: IOException) {
             Offline.chapter(novelId, index) ?: throw e
         }
@@ -726,13 +755,14 @@ object Api {
 
     suspend fun notifications(): List<Notif> {
         val u = uid() ?: return emptyList()
-        val followed = (get("library?select=novel_id&user_id=eq.$u").objs() + get("reading_progress?select=novel_id&user_id=eq.$u").objs())
-            .map { it.getInt("novel_id") }.toSet()
+        val followed = coroutineScope {
+            listOf("library", "reading_progress").map { async { get("$it?select=novel_id&user_id=eq.$u").objs() } }.awaitAll().flatten()
+        }.map { it.getInt("novel_id") }.toSet()
         // chương mình bấm dịch lại (notify_mine) hiện cả khi truyện nằm ngoài tủ
         val mine = Notify.mine()
         val ids = followed + mine.mapNotNull { it.substringBefore(':').toIntOrNull() }
         if (ids.isEmpty()) return emptyList()
-        val since = Instant.now().minus(7, ChronoUnit.DAYS).toString()
+        val since = Instant.now().minus(7, ChronoUnit.DAYS).truncatedTo(ChronoUnit.DAYS).toString() // tròn ngày: URL không đổi từng giây → dùng lại được bản lưu
         val dismissed = Prefs.dismissed
         return get(
             "chapters?select=chapter_index,translated_at,novel_id,novels(title_vi,title_zh,cover_url)" +

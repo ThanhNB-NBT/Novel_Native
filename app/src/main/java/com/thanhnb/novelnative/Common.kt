@@ -109,6 +109,11 @@ fun <T> load(vararg keys: Any?, block: suspend () -> T): Loader<T> {
     var tick by remember(key) { mutableIntStateOf(0) }
     var res by remember(key) { mutableStateOf(if (key in memo) Result.success(memo[key] as T) else null) }
     LaunchedEffect(key, tick) {
+        // Chưa có gì để hiện (lần đầu của tiến trình): lấy bản lưu đĩa của lần mở trước, chỉ nhận khi mọi request của block đều có bản lưu
+        if (res == null) {
+            val c = CacheOnly()
+            runCatching { kotlinx.coroutines.withContext(c) { block() } }.onSuccess { if (!c.miss) res = Result.success(it) }
+        }
         val r = runCatching { block() }
         r.onSuccess { memo[key] = it }
         if (r.isSuccess || res?.isSuccess != true) res = r
@@ -125,6 +130,9 @@ suspend fun <T : Any> prefetch(vararg keys: Any?, block: suspend () -> T?): T? {
     if (v != null) memo[key] = v
     return v
 }
+
+/** Mở trang truyện từ một dòng danh sách: nhớ sẵn phần đã biết (tên, bìa, số chương) để trang hiện ngay, phần còn thiếu tải về sau. */
+fun openNovel(n: Novel) { memo.getOrPut(listOf("novel", n.id)) { n }; Nav.push(Screen.Detail(n.id)) }
 
 /** Đọc bộ nhớ của [load]/[prefetch] mà không tải gì. */
 @Suppress("UNCHECKED_CAST")
@@ -309,7 +317,7 @@ fun SourceBadge(name: String, modifier: Modifier = Modifier) = Text(
 
 /** Một dòng truyện liền mạch: bìa 76 + tên, tác giả, thể loại, số chương/nguồn ngang chân bìa. */
 @Composable
-fun NovelRow(n: Novel, sub: String? = null, onClick: () -> Unit = { Nav.push(Screen.Detail(n.id)) }, trailing: @Composable () -> Unit = {}) =
+fun NovelRow(n: Novel, sub: String? = null, onClick: () -> Unit = { openNovel(n) }, trailing: @Composable () -> Unit = {}) =
     Row(Modifier.fillMaxWidth().bounceClick(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp)) {
         val t = MaterialTheme.typography
         val cs = MaterialTheme.colorScheme

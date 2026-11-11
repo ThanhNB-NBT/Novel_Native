@@ -448,7 +448,7 @@ private fun ShelfMenu(show: Boolean, dismiss: () -> Unit, n: Novel, remove: () -
     val cur = n.curChapter
     DropdownMenu(show, dismiss) {
         DropdownMenuItem({ Text(if (cur == null) "Đọc từ chương 1" else "Đọc tiếp chương $cur") }, { dismiss(); Nav.push(Screen.Read(n.id, n.title, cur ?: 1)) })
-        DropdownMenuItem({ Text("Thông tin truyện") }, { dismiss(); Nav.push(Screen.Detail(n.id)) })
+        DropdownMenuItem({ Text("Thông tin truyện") }, { dismiss(); openNovel(n) })
         DropdownMenuItem({ Text("Xoá khỏi tủ") }, { dismiss(); remove() })
     }
 }
@@ -469,7 +469,7 @@ private fun ContinueCard(n: Novel) {
                 androidx.compose.ui.graphics.lerp(cs.primary, Color.Black, if (dark) .55f else 0f),
                 androidx.compose.ui.graphics.lerp(cs.primary, Color.Black, if (dark) .8f else .42f),
             )))
-            .bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(14.dp),
+            .bounceClick { openNovel(n) }.padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Cover(n.cover, 84.dp, 118.dp, label = n.title)
@@ -497,7 +497,7 @@ private fun ContinueCard(n: Novel) {
 private fun ShelfTile(n: Novel, remove: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     var menu by remember { mutableStateOf(false) }
-    Column(Modifier.combinedClickable(onClick = { Nav.push(Screen.Detail(n.id)) }, onLongClick = { menu = true })) {
+    Column(Modifier.combinedClickable(onClick = { openNovel(n) }, onLongClick = { menu = true })) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val w = maxWidth
             Cover(n.cover, w, w * 1.45f, label = n.title)
@@ -520,7 +520,7 @@ private fun ShelfRow(n: Novel, remove: () -> Unit) {
     val cur = n.curChapter
     var menu by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().bounceClick { Nav.push(Screen.Detail(n.id)) }.padding(top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().bounceClick { openNovel(n) }.padding(top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Cover(n.cover, 48.dp, 67.dp, label = n.title, flat = true)

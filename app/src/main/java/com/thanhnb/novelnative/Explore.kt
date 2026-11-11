@@ -59,7 +59,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlin.math.absoluteValue
 
-private fun open(n: Novel) = Nav.push(Screen.Detail(n.id))
+private fun open(n: Novel) = openNovel(n)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -349,7 +349,7 @@ fun SearchScreen() {
                 if (q.isNotBlank()) OutlinedButton({ if (Session.user == null) Nav.push(Screen.Login) else reqQuery = q.trim() }) { Text("Yêu cầu tìm truyện này") }
             }
             else -> LazyColumn(contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
-                items(r.getOrThrow(), key = { it.id }) { n -> NovelRow(n, onClick = { if (q.isNotBlank()) history = SearchHistory.add(q); Nav.push(Screen.Detail(n.id)) }) }
+                items(r.getOrThrow(), key = { it.id }) { n -> NovelRow(n, onClick = { if (q.isNotBlank()) history = SearchHistory.add(q); openNovel(n) }) }
                 if (more) item {
                     if (moreErr != null) Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(friendly(moreErr), style = MaterialTheme.typography.bodyMedium)
