@@ -92,7 +92,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("dev.chrisbanes.haze:haze:1.7.1") // làm mờ nền sau dock kính
+    implementation("dev.chrisbanes.haze:haze-glass:2.1.0") // dock kính lỏng (kéo theo haze)
     implementation("io.coil-kt.coil3:coil-compose:3.1.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.1.0")
     implementation("com.squareup.okhttp3:okhttp:5.3.2") // 5.x: thử song song nhiều IP khi bắt tay (fastFallback) — mạng rớt gói đỡ khựng 1s

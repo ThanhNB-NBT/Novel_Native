@@ -26,18 +26,27 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.IntOffset
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.glass.GlassStyle
+import dev.chrisbanes.haze.glass.OpticalSizeValue
+import dev.chrisbanes.haze.glass.hazeGlass
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.activity.ComponentActivity
-import kotlin.math.roundToInt
-import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.layout.layout
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -170,12 +179,12 @@ class MainActivity : ComponentActivity() {
         ReaderKeys.handler?.invoke(event) == true || super.dispatchKeyEvent(event)
 }
 
-private class TabItem(val label: String, val on: ImageVector, val off: ImageVector, val iconOnly: Boolean = false)
+private class TabItem(val label: String, val on: ImageVector, val off: ImageVector, val orb: Boolean = false)
 
 private val tabs = listOf(
     TabItem("Tủ truyện", Icons.Rounded.Bookmarks, Icons.Outlined.Bookmarks),
     TabItem("Khám phá", Icons.Rounded.Explore, Icons.Outlined.Explore),
-    TabItem("Tu Tiên", Icons.Rounded.SelfImprovement, Icons.Rounded.SelfImprovement, iconOnly = true), // người ngồi thiền; cố định chỉ icon
+    TabItem("Tu Tiên", Icons.Rounded.SelfImprovement, Icons.Rounded.SelfImprovement, orb = true), // người ngồi thiền; vẽ thành viên nổi giữa dock
     TabItem("Lịch âm", Icons.Rounded.CalendarMonth, Icons.Outlined.CalendarMonth),
     TabItem("Tôi", Icons.Rounded.Person, Icons.Outlined.Person),
 )
@@ -217,66 +226,113 @@ private fun Tabs() {
     }
 }
 
+private val DockH = 64.dp
+private val OrbSize = 46.dp // + vầng linh khí và lúc nở khi chọn vẫn nằm gọn trong dock
+private const val Mid = 2 // vị trí tab Tu Tiên
+
 /**
- * Dock kính mờ: viên thuốc nổi, nền làm mờ (Haze) + vệt sáng mảnh ở viền. Viên nhấn bám THEO VỊ TRÍ LIÊN TỤC của pager
- * ([pos] = trang hiện tại + phần lẻ khi đang vuốt): ngón tay kéo tới đâu, viên nhấn trượt/nở/co tới đó, thả tay thì lò xo của pager
- * kéo nốt — không còn nhảy một phát khi qua nửa màn. Tab ở gần [pos] nở ra kèm tên, các tab khác co lại chỉ còn icon.
+ * Dock kính lỏng (haze-glass: khúc xạ + làm nhoè nội dung phía sau; máy dưới Android 13 tự lùi về kính mờ).
+ * Thấu kính bám THEO VỊ TRÍ LIÊN TỤC của pager ([pos] = trang hiện tại + phần lẻ khi đang vuốt): ngón tay kéo tới đâu nó trượt tới đó,
+ * giãn ra giữa hai tab như giọt nước rồi co lại; tới ô giữa thì tan đi, nhường cho viên Tu Tiên sáng lên.
  */
 @Composable
 private fun Dock(unread: Int, glass: HazeState, pos: () -> Float, modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
     val dark = cs.background.luminance() < .5f
-    val shape = RoundedCornerShape(32.dp)
+    val shape = RoundedCornerShape(DockH / 2)
+    // đủ đục để nhãn tab đạt tương phản cả khi bìa truyện tối/sặc sỡ trượt qua phía sau
+    val tint = cs.background.copy(alpha = if (dark) .58f else .6f)
+    // nhoè mạnh hơn mặc định: bìa truyện và chữ phía sau không tranh với nhãn tab
+    val style = remember(tint) { GlassStyle { shape(shape); tint(tint); optics { copy(blurRadius = OpticalSizeValue.Fixed(16.dp)) } } }
+    val lens = cs.primary.copy(alpha = if (dark) .26f else .14f)
+    // viền sáng trên, mờ dưới: ánh đèn hắt vào mép kính
+    val rim = remember(dark) { Brush.verticalGradient(listOf(Color.White.copy(if (dark) .28f else .9f), Color.White.copy(if (dark) .04f else .2f))) }
+    // Dock KHÔNG đọc pos() lúc dựng: vuốt tab chỉ chạy lại pha vẽ (thấu kính, viên Tu Tiên), không dựng lại cả hàng mỗi khung hình.
     Row(
-        modifier.navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 10.dp).fillMaxWidth().height(64.dp)
+        modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 10.dp).fillMaxWidth().height(DockH)
             .shadow(20.dp, shape, ambientColor = cs.primary.copy(.16f), spotColor = Color.Black.copy(.22f))
-            .clip(shape)
-            .hazeEffect(glass) {
-                blurRadius = 30.dp
-                noiseFactor = 0f
-                backgroundColor = cs.background
-                tints = listOf(HazeTint(cs.background.copy(alpha = if (dark) .5f else .6f)))
-            }
-            .background(Brush.verticalGradient(listOf(Color.White.copy(if (dark) .12f else .42f), Color.White.copy(if (dark) .03f else .10f))))
-            .border(.6.dp, Color.White.copy(if (dark) .14f else .6f), shape)
-            .padding(6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .hazeGlass(HazeInput.Sources(glass), style)
+            .background(cs.background.copy(alpha = .34f), shape) // lớp nền mỏng dưới chữ: nhãn vẫn đọc được khi bìa sặc sỡ nằm sau kính
+            .border(.8.dp, rim, shape)
+            .padding(6.dp)
+            .drawBehind { // đọc pos() ở pha vẽ: vuốt chỉ vẽ lại thấu kính
+                val x = pos(); val f = x - kotlin.math.floor(x)
+                val w = size.width / tabs.size
+                val lw = w * (1f + 1.2f * f * (1f - f)) // rộng nhất khi ở giữa hai tab
+                val a = kotlin.math.abs(x - Mid).coerceAtMost(1f)
+                val o = Offset((x + .5f) * w - lw / 2, 0f); val sz = Size(lw, size.height); val r = CornerRadius(size.height / 2)
+                drawRoundRect(lens, o, sz, r, alpha = a)
+                drawRoundRect(rim, o, sz, r, alpha = a, style = Stroke(1.dp.toPx()))
+            },
     ) {
-        val p = pos()
         tabs.forEachIndexed { i, t ->
-            // mức "đang chọn" liên tục: 1 khi pager nằm đúng tab i, giảm tuyến tính về 0 khi lệch một trang
-            DockItem(t, (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f), if (i == 0) unread else 0) { Nav.tab = i }
+            if (t.orb) Box(Modifier.weight(1f).fillMaxHeight(), Alignment.Center) { CultivationOrb({ (1f - kotlin.math.abs(pos() - i)).coerceIn(0f, 1f) }) { Nav.tab = i } }
+            else DockItem(t, i, pos, if (i == 0) unread else 0) { Nav.tab = i }
         }
     }
 }
 
 @Composable
-private fun RowScope.DockItem(t: TabItem, sel: Float, badge: Int, onClick: () -> Unit) {
+private fun RowScope.DockItem(t: TabItem, i: Int, pos: () -> Float, badge: Int, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val dark = cs.background.luminance() < .5f
-    val color = androidx.compose.ui.graphics.lerp(cs.onSurfaceVariant, cs.primary, sel)
+    // chỉ dựng lại khi pager đi qua nửa đường tới/khỏi tab này; phần chuyển động liên tục đã có thấu kính lo
+    val on by remember(i, pos) { derivedStateOf { kotlin.math.abs(pos() - i) < .5f } }
+    val color by animateColorAsState(if (on) cs.primary else cs.onSurfaceVariant, tween(160), label = "màu tab")
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .9f else 1f, spring(.55f, 520f), label = "s")
+    Column(
+        Modifier.weight(1f).fillMaxHeight().graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(26.dp)).clickable(src, null, onClick = onClick),
+        Arrangement.Center, Alignment.CenterHorizontally,
+    ) {
+        BadgedBox({ if (badge > 0 && !on) Badge { Text("$badge") } }) { Icon(if (on) t.on else t.off, null, Modifier.size(24.dp), color) }
+        Text(
+            t.label, color = color, fontSize = 10.5.sp, lineHeight = 14.sp, fontFamily = Jakarta,
+            fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1, softWrap = false,
+        )
+    }
+}
+
+/**
+ * Nút Tu Tiên: viên ngọc nạm giữa dock, không nhãn. [sel] chạy theo pager: càng tới gần tab Tu Tiên viên càng nở,
+ * quầng sáng càng đậm và vầng linh khí (hai vệt sáng đuổi nhau quanh vành) hiện dần.
+ * Màu lấy thẳng từ bảng màu nhấn (accent/deep/dAccent) chứ không qua colorScheme: primary ở giao diện tối bị đẩy sáng cho đủ tương phản
+ * với nền, tô lên viên sẽ thành nhạt; ba tông gốc thì đậm như nhau ở cả sáng lẫn tối, đổi màu nhấn là viên đổi theo.
+ */
+@Composable
+private fun CultivationOrb(sel: () -> Float, onClick: () -> Unit) {
+    val a = accents.getOrElse(Prefs.accent) { accents[0] }
+    val light = if (MaterialTheme.colorScheme.background.luminance() < .5f) a.dAccent else a.accent // tông nổi trên nền hiện tại
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val press by animateFloatAsState(if (pressed) .9f else 1f, spring(.5f, 500f), label = "orb")
+    // vầng linh khí chỉ quay khi đang ở (hoặc đang vuốt tới) tab Tu Tiên: ở tab khác không tốn khung hình nào
+    val active by remember(sel) { derivedStateOf { sel() > 0f } }
+    val spin = if (active) rememberInfiniteTransition(label = "khí").animateFloat(0f, 360f, infiniteRepeatable(tween(8000, easing = LinearEasing)), label = "quay") else null
+    val aura = remember(light) { Brush.sweepGradient(0f to Color.Transparent, .22f to light, .25f to Color.Transparent, .5f to Color.Transparent, .72f to light, .75f to Color.Transparent) }
     Box(
-        Modifier.weight(if (t.iconOnly) 1f else 1f + 1.15f * sel).fillMaxHeight().graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(26.dp))
-            .background(cs.primary.copy(alpha = (if (dark) .26f else .15f) * sel))
+        Modifier.size(OrbSize).graphicsLayer { val s = press * (1f + .08f * sel()); scaleX = s; scaleY = s }
+            .drawBehind {
+                val r = size.minDimension / 2
+                drawCircle(Brush.radialGradient(listOf(light.copy(alpha = .26f + .26f * sel()), Color.Transparent), radius = r * 1.45f), r * 1.45f)
+                if (spin != null) rotate(spin.value) { drawCircle(aura, r + 3.5.dp.toPx(), alpha = sel(), style = Stroke(2.dp.toPx())) }
+            }
+            .shadow(8.dp, CircleShape, ambientColor = a.deep, spotColor = a.deep)
+            .clip(CircleShape)
+            .drawWithCache {
+                val w = size.width; val bw = 2.5.dp.toPx()
+                // khối cầu: sáng ở góc trên trái, sẫm dần về mép dưới phải
+                val body = Brush.radialGradient(listOf(lerp(a.accent, Color.White, .45f), a.accent, a.deep), Offset(w * .36f, w * .3f), w * .8f)
+                val gloss = Brush.verticalGradient(listOf(Color.White.copy(.5f), Color.Transparent), endY = w * .46f)
+                val bezel = Brush.verticalGradient(listOf(lerp(a.dAccent, Color.White, .55f), a.deep)) // vành nạm: sáng trên, sẫm dưới
+                onDrawBehind {
+                    drawCircle(body)
+                    drawOval(gloss, Offset(w * .2f, bw + w * .03f), Size(w * .6f, w * .4f))
+                    drawCircle(bezel, w / 2 - bw / 2, style = Stroke(bw))
+                }
+            }
             .clickable(src, null, onClick = onClick),
         Alignment.Center,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val on = sel > .5f
-            BadgedBox({ if (badge > 0 && !on) Badge { Text("$badge") } }) { Icon(if (on) t.on else t.off, t.label, Modifier.size(25.dp), color) }
-            // tên tab: bề rộng và độ đậm chạy theo sel — nở dần ra thay vì bật lên
-            if (!t.iconOnly) Text(
-                t.label,
-                Modifier.padding(start = (7 * sel).dp).layout { m, c ->
-                    val pl = m.measure(c.copy(minWidth = 0, maxWidth = Constraints.Infinity))
-                    layout((pl.width * sel).roundToInt(), pl.height) { pl.placeRelative(0, 0) }
-                }.graphicsLayer { alpha = ((sel - .25f) / .75f).coerceIn(0f, 1f) },
-                color = color, fontSize = 13.5.sp, fontFamily = Jakarta, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
-            )
-        }
-    }
+    ) { Icon(Icons.Rounded.SelfImprovement, "Tu Tiên", Modifier.size(27.dp), Color(0xFFFFF4E6)) }
 }
