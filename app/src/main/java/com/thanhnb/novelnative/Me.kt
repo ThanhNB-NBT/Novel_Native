@@ -119,7 +119,7 @@ fun LibraryTab() {
                 confirmButton = {
                     TextButton({
                         confirm = null
-                        scope.launch { runCatching { Api.removeReading(n.id) }; l.reload() }
+                        scope.launch { runCatching { Api.removeReading(n.id) }.onSuccess { Mascot.react(OrbMood.Sad) }; l.reload() }
                     }) { Text("Xoá") }
                 },
                 dismissButton = { TextButton({ confirm = null }) { Text("Huỷ") } },
@@ -428,7 +428,7 @@ fun LoginScreen() {
                         busy = true
                         scope.launch {
                             runCatching { Session.signIn(email.trim(), pw) }
-                                .onSuccess { Nav.tab = 0; Nav.pop() }
+                                .onSuccess { Nav.tab = 0; Nav.pop(); Mascot.say("Chào mừng bạn quay lại!", OrbMood.Cheer) }
                                 .onFailure { err = friendly(it) }
                             busy = false
                         }

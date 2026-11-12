@@ -151,6 +151,7 @@ fun <T> Loaded(l: Loader<T>, topInset: Boolean = false, loading: @Composable () 
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            LaunchedEffect(Unit) { Mascot.react(OrbMood.Sad) } // một lần khi màn lỗi hiện ra, không bắn lại theo mỗi lần dựng
             Text(friendly(res.exceptionOrNull()), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(16.dp))
             Button(l.reload) { Text("Thử lại") }

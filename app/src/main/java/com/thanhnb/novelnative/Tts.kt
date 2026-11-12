@@ -155,7 +155,7 @@ object TtsPlayer {
         stop()
         this.novelId = novelId
         this.chapter = chapter
-        playing = true
+        playing = true; Mascot.listening = true
         launchLoop(novelId, chapter, from, seed, title, null)
         sync()
         return warn
@@ -165,7 +165,7 @@ object TtsPlayer {
         if (!active) return
         job?.cancel()
         tts?.stop()
-        playing = false
+        playing = false; Mascot.listening = false
         paused = true
         sync()
     }
@@ -174,7 +174,7 @@ object TtsPlayer {
         val n = novelId ?: return
         if (!paused) return
         paused = false
-        playing = true
+        playing = true; Mascot.listening = true
         launchLoop(n, chapter, 0, null, null, at)
         sync()
     }
@@ -184,7 +184,7 @@ object TtsPlayer {
         job?.cancel()
         tts?.stop()
         novelId = null
-        playing = false
+        playing = false; Mascot.listening = false
         paused = false
         paraAt = -1
         ctx?.let { it.stopService(Intent(it, TtsService::class.java)) }

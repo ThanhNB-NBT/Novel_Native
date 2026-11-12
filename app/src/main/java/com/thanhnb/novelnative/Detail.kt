@@ -262,7 +262,7 @@ fun DetailScreen(id: Int) {
                         busy = true
                         scope.launch {
                             runCatching { Api.setInLibrary(n.id, !followed) }
-                                .onSuccess { msg = if (followed) "Đã bỏ theo dõi" else "Đã thêm vào Tủ truyện" }
+                                .onSuccess { msg = if (followed) "Đã bỏ theo dõi" else "Đã thêm vào Tủ truyện"; Mascot.react(if (followed) OrbMood.Sad else OrbMood.Love) }
                                 .onFailure { msg = friendly(it) }
                             inLib.reload(); busy = false
                         }
@@ -282,7 +282,7 @@ fun DetailScreen(id: Int) {
                 askTr = false
                 scope.launch {
                     runCatching { Api.requestTranslation(n.id, to, priority = 50) }
-                        .onSuccess { msg = "Đã xếp chương vào hàng đợi dịch (tới chương $to)" }
+                        .onSuccess { msg = "Đã xếp chương vào hàng đợi dịch (tới chương $to)"; Mascot.say("Đã xếp hàng dịch", OrbMood.Wink) }
                         .onFailure { msg = friendly(it) }
                     nl.reload(); toc.reload()
                 }

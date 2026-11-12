@@ -4,6 +4,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.SystemClock
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import android.os.Bundle
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
@@ -93,9 +100,30 @@ class MainActivity : ComponentActivity() {
         if (id > 0 && i!!.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) Nav.push(Screen.Detail(id))
     }
 
+    // lắc máy (> ~2,7 g, tối đa 3 giây một lần) → linh vật chóng mặt; chỉ nghe cảm biến khi app đang hiện, máy không có thì bỏ qua
+    private fun watchShake() {
+        val sm = getSystemService(SensorManager::class.java) ?: return
+        val acc = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+        var last = 0L
+        val l = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                val g = Math.sqrt((e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2]).toDouble()) / SensorManager.GRAVITY_EARTH
+                val now = SystemClock.elapsedRealtime()
+                if (g > 2.7 && now - last > 3000) { last = now; Mascot.react(OrbMood.Dizzy) }
+            }
+            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+        }
+        lifecycle.addObserver(LifecycleEventObserver { _, ev ->
+            if (ev == Lifecycle.Event.ON_START) sm.registerListener(l, acc, SensorManager.SENSOR_DELAY_UI)
+            else if (ev == Lifecycle.Event.ON_STOP) sm.unregisterListener(l)
+        })
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        Mascot.tier = Prefs.sp.getInt("mascot_tier", 0) // giữ bậc tiến hoá qua các lần mở app
+        watchShake()
         Endpoint.start(kotlinx.coroutines.MainScope())
         AppErrorLog.install()
         Offline.init(this)
@@ -113,6 +141,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AppTheme {
+                LaunchedEffect(Unit) { snapshotFlow { Mascot.tier }.collect { Prefs.sp.edit().putInt("mascot_tier", it).apply() } }
+                LaunchedEffect(Unit) { greetOnce() }
                 // Giữ trạng thái cuộn (rememberSaveable) của từng màn trong ngăn xếp khi màn trên đè lên
                 val holder = rememberSaveableStateHolder()
                 // Khoá theo cả vị trí lẫn màn: đổi chương (replace) phải ra state mới, không mang vị trí cuộn chương cũ
@@ -177,6 +207,32 @@ class MainActivity : ComponentActivity() {
     // Phím âm lượng lật trang khi màn đọc bật tuỳ chọn này
     override fun dispatchKeyEvent(event: android.view.KeyEvent) =
         ReaderKeys.handler?.invoke(event) == true || super.dispatchKeyEvent(event)
+}
+
+private var greeted = false // cả tiến trình: xoay màn dựng lại Activity cũng không chào lần nữa
+
+/** Lời chào theo giờ, kèm chuỗi ngày đọc (dùng chung bộ nhớ với tab Tôi nên thường không tốn thêm request); lỗi mạng thì chào không chuỗi. */
+private suspend fun greetOnce() {
+    if (greeted) return
+    greeted = true
+    kotlinx.coroutines.delay(2500) // chờ màn chào đóng
+    val p = if (Session.user != null) runCatching { prefetch("profile", Session.user?.id) { Api.profile() } }.getOrNull() else null
+    val streak = Api.liveStreak(p)
+    Mascot.evolve(streak = streak)
+    val hello = when (java.time.LocalTime.now().hour) {
+        in 5..10 -> "Chào buổi sáng!"
+        in 11..13 -> "Buổi trưa vui nhé!"
+        in 14..17 -> "Chào buổi chiều!"
+        in 18..22 -> "Chào buổi tối!"
+        else -> "Khuya rồi nhé!"
+    }
+    val last = p?.lastRead?.let { runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() }
+    val atRisk = streak > 0 && last != null && java.time.temporal.ChronoUnit.DAYS.between(last, java.time.LocalDate.now()) == 1L
+    when {
+        atRisk -> Mascot.say("Đọc chút để giữ chuỗi $streak ngày nhé!", OrbMood.Wink)
+        streak >= 2 -> Mascot.say("$hello Chuỗi $streak ngày rồi đó!", OrbMood.Happy)
+        else -> Mascot.say(hello, OrbMood.Happy)
+    }
 }
 
 private class TabItem(val label: String, val on: ImageVector, val off: ImageVector, val orb: Boolean = false)

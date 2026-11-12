@@ -265,6 +265,7 @@ fun CultivationScreen(tab: Boolean = false) {
             }
             val ascended = s.strOrNull("ascended_at") != null
             val realm = s.optInt("realm", 1)
+            LaunchedEffect(realm, ascended) { Mascot.evolve(realm = realm, ascended = ascended) }
             val req = s.optDouble("req", 1.0).coerceAtLeast(1.0)
             val rate = s.optDouble("rate", 0.0)
             val exp0 = s.optDouble("exp", 0.0)

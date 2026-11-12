@@ -118,6 +118,7 @@ object Notify {
                         .setContentIntent(open).setAutoCancel(true).build(),
                 )
             }
+            if (done.isNotEmpty()) Mascot.say("Có ${done.size} chương mới dịch xong", OrbMood.Cheer)
             removeMine(done) // đã báo thì thôi, khỏi giữ mãi
             mark()
         }

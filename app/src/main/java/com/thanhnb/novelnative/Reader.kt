@@ -208,7 +208,7 @@ fun ReaderScreen(s: Screen.Read) {
     var offerPatch by remember { mutableStateOf(false) } // vừa sửa một TÊN RIÊNG → mời "Áp cả truyện" (từ thường không có gì để áp, vá chỉ tổ nhầm)
     LaunchedEffect(msg) { delay(if (offerPatch) 6000 else 2500); msg = null; offerPatch = false }
     val patchScope = rememberCoroutineScope()
-    val go = { i: Int -> if (i >= 1) Nav.replace(s.copy(index = i)) }
+    val go = { i: Int -> if (i >= 1) { if (i > s.index) Mascot.react(OrbMood.Happy); Nav.replace(s.copy(index = i)) } }
     // lật trang sang chương kế: chương sau mở ở trang đầu, chương trước mở ở trang cuối (đúng trang vừa lướt thấy)
     val goPaged = { i: Int -> Prefs.setPercent(s.novelId, i, if (i > s.index) 0f else 1f); go(i) }
     val claims = load("gift_claims", s.novelId) { Gift.claimed(s.novelId) }
@@ -250,6 +250,15 @@ fun ReaderScreen(s: Screen.Read) {
             while (true) { delay(5000); l.reload() }
         }
     }
+    // chờ dịch: Think một lần khi bắt đầu chờ, Cheer + nói khi chương vừa chờ xong (không bắn lại theo mỗi lần poll)
+    var waited by remember(s.novelId, s.index) { mutableStateOf(false) }
+    LaunchedEffect(loaded, ch?.status, asking) {
+        if (loaded && ch?.status != "done" && (ch != null || Session.user != null)) { if (!waited) { waited = true; Mascot.react(OrbMood.Think) } }
+        else if (waited && ch?.status == "done") { waited = false; Mascot.say("Chương ${s.index} dịch xong rồi!", OrbMood.Cheer) }
+    }
+    val shown = ch?.status == "done" && ch.paragraphs.isNotEmpty()
+    // đổi chương (Nav.replace) dựng bản mới trước khi bản cũ bị huỷ → chỉ tắt khi đỉnh ngăn xếp không còn là màn đọc
+    DisposableEffect(shown) { Mascot.reading = shown; onDispose { if (Nav.stack.last() !is Screen.Read) Mascot.reading = false } }
     val terms = if (st.gloss) load("gloss", s.novelId) { Api.glossary(s.novelId) }.res?.getOrNull().orEmpty() else emptyList()
 
     var pct by remember { mutableFloatStateOf(Prefs.percent(s.novelId, s.index)) }
@@ -436,7 +445,7 @@ fun ReaderScreen(s: Screen.Read) {
                     }
                     c.status != "done" -> Waiting(if (asking && c.status != "queued" && c.status != "translating") "asking" else c.status, fg, s) {
                         scope.launch {
-                            runCatching { Api.requestTranslation(s.novelId, s.index + 10, from = s.index) }.onFailure { msg = friendly(it) }
+                            runCatching { Api.requestTranslation(s.novelId, s.index + 10, from = s.index) }.onFailure { msg = friendly(it); Mascot.react(OrbMood.Sad) }
                             l.reload()
                         }
                     }
@@ -444,7 +453,7 @@ fun ReaderScreen(s: Screen.Read) {
                         Text("Chương này chưa có nội dung dịch — bản cũ có thể bị lỗi.", textAlign = TextAlign.Center)
                         Spacer(Modifier.height(12.dp))
                         Button({
-                            scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it) }; l.reload() }
+                            scope.launch { runCatching { Api.retranslate(s.novelId, s.index) }.onFailure { msg = friendly(it); Mascot.react(OrbMood.Sad) }; l.reload() }
                         }) { Text("Dịch lại chương") }
                     }
                     else -> {
@@ -475,7 +484,7 @@ fun ReaderScreen(s: Screen.Read) {
                     TextButton({
                         offerPatch = false
                         msg = "Đang vá cả truyện ở chế độ nền…"
-                        patchScope.launch { runCatching { Api.requestPatch(s.novelId) }.onFailure { msg = friendly(it) } }
+                        patchScope.launch { runCatching { Api.requestPatch(s.novelId) }.onFailure { msg = friendly(it); Mascot.react(OrbMood.Sad) } }
                     }) { Text("Áp cả truyện") }
                 }),
             ) { Text(it) }
@@ -500,7 +509,7 @@ fun ReaderScreen(s: Screen.Read) {
     if (report) ReportDialog(reportCtx, { report = false }) { reason ->
         report = false
         scope.launch {
-            runCatching { Api.report(s.novelId, s.index, reason) }.onSuccess { msg = "Đã gửi báo lỗi" }.onFailure { msg = friendly(it) }
+            runCatching { Api.report(s.novelId, s.index, reason) }.onSuccess { msg = "Đã gửi báo lỗi" }.onFailure { msg = friendly(it); Mascot.react(OrbMood.Sad) }
         }
     }
 }
