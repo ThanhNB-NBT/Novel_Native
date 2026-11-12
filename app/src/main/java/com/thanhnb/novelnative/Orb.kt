@@ -708,30 +708,48 @@ private fun DrawScope.drawTierBack(c: Offset, r: Float, te: Float, tier: Int, bo
     val rx = r * BODY_RX
     val ry = r * BODY_RY
     val fire = if (tier >= 4) Color(0xFFFFC400) else Color(0xFF6EC6FF)
-    if (tier >= 3) {
-        val k = .8f + .2f * sin(te * 2.4f)
-        for (i in 0..2) {
-            val m = 1.04f + .06f * i
-            drawOval(fire.copy(alpha = .13f * k), Offset(c.x - rx * m, c.y - ry * m), Size(rx * 2f * m, ry * 2f * m), style = Stroke(r * .07f))
-        }
-        val tip = Offset(c.x + rx * .7f + r * .45f, c.y + ry * .5f - r * .3f + sin(te * 8f) * r * .2f)
-        scratch.rewind()
-        scratch.moveTo(c.x + rx * .7f, c.y + ry * .5f)
-        scratch.quadraticTo(c.x + rx * .7f + r * .5f, c.y + ry * .5f + r * .15f, tip.x, tip.y)
-        drawPath(scratch, rim, style = Stroke(r * .17f, cap = StrokeCap.Round))
-        drawPath(scratch, body, style = Stroke(r * .09f, cap = StrokeCap.Round))
-        drawCircle(fire, r * .08f, tip)
-    }
     if (tier >= 4) {
-        val hy = c.y - ry * 1.02f + sin(te * 2f) * r * .02f
-        drawOval(Color(0xFFFFD54F).copy(alpha = .9f), Offset(c.x - r * .5f, hy - r * .09f), Size(r, r * .18f), style = Stroke(r * .05f))
+        // bối quang: đĩa sáng sau lưng kiểu tranh tiên, viền kim và chuỗi hạt xoay chậm
+        val hc = Offset(c.x, c.y - ry * .3f)
+        val hr = r * 1.42f
+        drawCircle(Brush.radialGradient(listOf(Color(0x66FFE082), Color(0x22FFD54F), Color.Transparent), hc, hr * 1.15f), hr * 1.15f, hc)
+        drawCircle(Color(0xFFFFC94D), hr, hc, style = Stroke(r * .055f))
+        drawCircle(Color(0x99FFE9A8), hr * .86f, hc, style = Stroke(r * .025f))
+        for (i in 0 until 8) {
+            val a = te * .35f + i * PI.toFloat() / 4f
+            drawCircle(Color(0xFFFFF3C4), r * .05f, Offset(hc.x + cos(a) * hr, hc.y + sin(a) * hr))
+        }
+    } else if (tier >= 3) {
+        // linh khí toả mềm quanh thân, thở theo nhịp
+        val k = .8f + .2f * sin(te * 2.4f)
+        drawCircle(Brush.radialGradient(listOf(fire.copy(alpha = .55f * k), fire.copy(alpha = .22f * k), Color.Transparent), c, r * 1.75f), r * 1.75f, c)
     }
-    for (i in 0..1) {
-        val side = i * 2 - 1
-        val b = Offset(c.x + side * rx * .5f, c.y - ry * .8f)
-        val tip = Offset(b.x + side * r * .28f, b.y - r * .42f)
-        drawLine(rim, b, tip, r * .2f, StrokeCap.Round)
-        drawLine(Color(0xFFFFF3D6), b, tip, r * .11f, StrokeCap.Round)
+    if (tier >= 3) {
+        // đuôi thon vẫy, chóp là đốm lửa có quầng
+        val root = Offset(c.x + rx * .62f, c.y + ry * .74f)
+        val tip = Offset(root.x + r * .66f, root.y - r * .5f + sin(te * 5f) * r * .14f)
+        scratch.rewind()
+        scratch.moveTo(root.x, root.y)
+        scratch.quadraticTo(root.x + r * .72f, root.y + r * .2f, tip.x, tip.y)
+        drawPath(scratch, rim, style = Stroke(r * .26f, cap = StrokeCap.Round))
+        drawPath(scratch, body, style = Stroke(r * .15f, cap = StrokeCap.Round))
+        drawCircle(Brush.radialGradient(listOf(fire.copy(alpha = .6f), Color.Transparent), tip, r * .32f), r * .32f, tip)
+        drawCircle(fire, r * .13f, tip)
+        drawCircle(Color.White.copy(alpha = .85f), r * .06f, tip)
+    }
+    // sừng non: thuôn cong ra ngoài, ngà ở chóp và hổ phách ở gốc
+    for (side in intArrayOf(-1, 1)) {
+        val b = Offset(c.x + side * rx * .5f, c.y - ry * .7f)
+        val tip = Offset(b.x + side * r * .3f, b.y - r * .52f)
+        val wd = r * .15f
+        val horn = Path().apply {
+            moveTo(b.x - side * wd, b.y)
+            quadraticTo(b.x - side * wd * .1f, b.y - r * .4f, tip.x, tip.y)
+            quadraticTo(b.x + side * r * .42f, b.y - r * .16f, b.x + side * wd * 1.4f, b.y + r * .08f)
+            close()
+        }
+        drawPath(horn, Brush.verticalGradient(listOf(Color(0xFFFFF8E1), Color(0xFFE2A862)), startY = tip.y, endY = b.y))
+        drawPath(horn, rim, style = Stroke(r * .06f, join = StrokeJoin.Round))
     }
 }
 
@@ -754,6 +772,7 @@ private fun DrawScope.drawFlame(c: Offset, r: Float, t: Float, sway: Float, k: F
     val core = when { tier >= 4 -> Color(0xFFFFFDE7); tier >= 1 -> Color(0xFFF1FBFF); else -> Color(0xFFFFF6D6) }
     val outer = lerp(o0, Color(0xFFE53935), angry)
     val mid = lerp(m0, Color(0xFFFF7043), angry)
+    if (tier >= 1) (base - Offset(0f, r * .35f * k)).let { g -> drawCircle(Brush.radialGradient(listOf(mid.copy(alpha = .55f), Color.Transparent), g, r * .75f * k), r * .75f * k, g) }
     flame(r * .9f * k, r * .24f * k, Brush.verticalGradient(listOf(mid, outer), startY = base.y - r * .9f * k, endY = base.y))
     flame(r * .5f * k, r * .12f * k, Brush.verticalGradient(listOf(core, mid), startY = base.y - r * .5f * k, endY = base.y))
 }
