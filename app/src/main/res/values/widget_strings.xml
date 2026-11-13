@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_continue_label">Đọc tiếp</string>
+    <string name="widget_continue_desc">Mở thẳng chương đang đọc dở trong Gác Truyện</string>
+    <string name="widget_continue_empty">Mở Gác Truyện để đọc tiếp</string>
+    <color name="widget_bg">#FAF5EB</color>
+    <color name="widget_text">#2B2118</color>
+    <color name="widget_sub">#6E5A48</color>
+    <color name="widget_accent">#9A3B26</color>
+    <color name="widget_track">#E2D5BD</color>
+</resources>

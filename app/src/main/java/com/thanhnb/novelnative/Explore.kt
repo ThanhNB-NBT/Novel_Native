@@ -64,6 +64,11 @@ private fun open(n: Novel) = openNovel(n)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExploreTab() {
+    // dải gợi ý theo thể loại hay đọc: chưa đăng nhập, tủ rỗng hay lỗi thì không có gì để hiện
+    val uid = Session.user?.id
+    val shelf = load("library", uid) { Api.library() }.res?.getOrNull().orEmpty()
+    val top = Api.topGenres(shelf, 2).map { it.first }
+    val forYou = load("forYou", uid, top) { if (top.isEmpty()) emptyList() else Api.forGenres(top, shelf) }.res?.getOrNull().orEmpty()
     val l = load("home") { coroutineScope { Section.entries.map { async { Api.section(it, 0, 15) } }.awaitAll() } }
     Loaded(l, topInset = true) { lists ->
         val (latest, featured, recommended, completed) = lists
@@ -77,7 +82,8 @@ fun ExploreTab() {
                     }
                 }
                 if (latest.isNotEmpty()) item("latest") { Spotlight(Section.Latest, latest.take(8)) }
-                if (recommended.size > 1) item("rec") { Rail(Section.Recommended, recommended.drop(1)) }
+                if (recommended.size > 1) item("rec") { Rail(Section.Recommended.title, { Nav.push(Screen.More(Section.Recommended)) }, recommended.drop(1)) }
+                forYou.forEach { (g, list) -> item("for_$g") { Rail("Vì bạn đọc $g", null, list) } }
                 if (featured.isNotEmpty()) item("feat") { Ranking(Section.Featured, featured.take(6)) }
                 if (completed.isNotEmpty()) item("done") { PosterRail(Section.Completed, completed) }
             }
@@ -190,8 +196,8 @@ private fun Spotlight(s: Section, items: List<Novel>) = Column {
 
 /** "Đề cử": thẻ dọc 132 — số chương ở chân bìa, nguồn ở góc. */
 @Composable
-private fun Rail(s: Section, items: List<Novel>) = Column {
-    SectionHeader(s.title) { Nav.push(Screen.More(s)) }
+private fun Rail(title: String, onMore: (() -> Unit)?, items: List<Novel>) = Column {
+    SectionHeader(title, onMore)
     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         items(items, key = { it.id }) { n ->
             Column(Modifier.width(132.dp).bounceClick { open(n) }) {

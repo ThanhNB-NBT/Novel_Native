@@ -43,10 +43,10 @@ fun Avatar(emoji: String?, name: String, size: Dp) {
 
 /** Số liệu đọc: ba con số cạnh nhau ngay trên nền, không khung, không vạch. */
 @Composable
-fun StatsCard(novels: Int, chapters: Int, streak: Int) {
+fun StatsCard(novels: Int, chapters: Int, streak: Int, onClick: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     val hot = streak > 0
-    Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().let { if (onClick != null) it.bounceClick(onClick = onClick) else it }.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Stat("$streak", "NGÀY LIÊN TIẾP", if (hot) cs.secondary else cs.onSurface, Modifier.weight(1f), fire = true, fireColor = if (hot) cs.secondary else cs.onSurfaceVariant)
         Stat("$novels", "ĐANG ĐỌC", cs.onSurface, Modifier.weight(1f))
         Stat("$chapters", "CHƯƠNG ĐÃ ĐỌC", cs.onSurface, Modifier.weight(1f))

@@ -216,10 +216,11 @@ fun AccountTab() {
                             Text(nm, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(u.email, Modifier.padding(top = 2.dp), style = monoStyle(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        IconButton(Session::signOut) { Icon(Icons.AutoMirrored.Rounded.Logout, "Đăng xuất", tint = cs.onSurfaceVariant) }
+                        val wctx = androidx.compose.ui.platform.LocalContext.current
+                        IconButton({ Session.signOut(); ContinueWidget.clear(wctx) }) { Icon(Icons.AutoMirrored.Rounded.Logout, "Đăng xuất", tint = cs.onSurfaceVariant) }
                     }
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.5f))
-                    StatsCard(stats?.first ?: 0, stats?.second ?: 0, Api.liveStreak(prof))
+                    StatsCard(stats?.first ?: 0, stats?.second ?: 0, Api.liveStreak(prof)) { Nav.push(Screen.Stats) }
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = cs.outlineVariant.copy(.5f))
                     Box(Modifier.padding(16.dp, 12.dp)) { LunarCard() }
                 }
@@ -270,6 +271,7 @@ fun AccountTab() {
 
             SectionLabel("Ứng dụng")
             SettingGroup(
+                { SettingTile(Icons.Rounded.Bookmarks, "Trích dẫn và ghi chú", "Các đoạn bạn đã lưu khi đọc", { Nav.push(Screen.NotesList) }) },
                 { SettingTile(Icons.Rounded.Lightbulb, "Hướng dẫn sử dụng", "Mẹo đọc, lưu và yêu cầu dịch", { Nav.push(Screen.Guide) }) },
                 { SettingTile(Icons.Rounded.NewReleases, "Có gì mới", "Ghi chú các bản phát hành gần nhất", { Nav.push(Screen.Changelog) }) },
                 { SettingTile(Icons.Rounded.Speed, "Theo dõi máy", "CPU, RAM, pin, mạng, nhiệt độ", { Nav.push(Screen.Monitor) }) },

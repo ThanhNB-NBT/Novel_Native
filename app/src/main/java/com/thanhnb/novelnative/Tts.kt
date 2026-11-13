@@ -5,11 +5,22 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.compose.foundation.background
@@ -25,8 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.*
 import java.util.Locale
 
@@ -67,6 +78,40 @@ object TtsPlayer {
     private var waiting: CompletableDeferred<Boolean>? = null
     private var curId = ""
     private var seq = 0
+    private val main = Handler(Looper.getMainLooper())
+    private var session: MediaSession? = null
+    // Phím tai nghe được giao cho app vừa phát tiếng, mà tiếng đọc lại phát từ tiến trình của máy đọc hệ thống → app tự phát một đoạn im lặng lặp để được nhận phím
+    private var hush: AudioTrack? = null
+    private fun hush() {
+        if (hush != null) return
+        hush = runCatching {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(8000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(8000).build()
+                .apply { write(ByteArray(8000), 0, 8000); setLoopPoints(0, 4000, -1); play() }
+        }.getOrNull()
+    }
+    val token: MediaSession.Token? get() = session?.sessionToken
+    private var lostTransient = false // mất focus tạm (cuộc gọi, thông báo thoại) → được trả lại thì tự đọc tiếp
+
+    private val focusReq by lazy {
+        AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            .setOnAudioFocusChangeListener({ f ->
+                when (f) {
+                    AudioManager.AUDIOFOCUS_GAIN -> if (lostTransient) { lostTransient = false; resume() }
+                    AudioManager.AUDIOFOCUS_LOSS -> pause()
+                    else -> if (playing) { pause(); lostTransient = true } // ducking cũng tạm dừng: giọng đọc bị nhỏ đi là không nghe được
+                }
+            }, main).build()
+    }
+    private fun focus() { ctx?.getSystemService(AudioManager::class.java)?.requestAudioFocus(focusReq); hush() }
+
+    // Rút tai nghe / ngắt Bluetooth → tránh phát lộ ra loa ngoài
+    private val noisy = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) { pause() }
+    }
 
     fun changeRate(r: Float) {
         rate = r
@@ -156,6 +201,18 @@ object TtsPlayer {
         this.novelId = novelId
         this.chapter = chapter
         playing = true; Mascot.listening = true
+        session = MediaSession(c.applicationContext, "tts").apply {
+            setCallback(object : MediaSession.Callback() {
+                override fun onPlay() { resume() }
+                override fun onPause() { pause() }
+                override fun onStop() { stop() }
+                override fun onSkipToNext() { skip(1) }
+                override fun onSkipToPrevious() { skip(-1) }
+            }, main)
+            isActive = true
+        }
+        ContextCompat.registerReceiver(c.applicationContext, noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED)
+        focus()
         launchLoop(novelId, chapter, from, seed, title, null)
         sync()
         return warn
@@ -163,6 +220,7 @@ object TtsPlayer {
 
     fun pause() {
         if (!active) return
+        lostTransient = false
         job?.cancel()
         tts?.stop()
         playing = false; Mascot.listening = false
@@ -175,7 +233,20 @@ object TtsPlayer {
         if (!paused) return
         paused = false
         playing = true; Mascot.listening = true
+        focus()
         launchLoop(n, chapter, 0, null, null, at)
+        sync()
+    }
+
+    /** Nhảy [d] chương (±1) từ nút thông báo / màn khoá / tai nghe; chương đích chưa dịch thì loop() tự dừng như khi hết chương. */
+    fun skip(d: Int) {
+        val n = novelId ?: return
+        if (chapter + d < 1) return
+        paused = false; lostTransient = false
+        playing = true; Mascot.listening = true
+        tts?.stop()
+        focus()
+        launchLoop(n, chapter + d, 0, null, null, null)
         sync()
     }
 
@@ -187,6 +258,12 @@ object TtsPlayer {
         playing = false; Mascot.listening = false
         paused = false
         paraAt = -1
+        lostTransient = false
+        runCatching { ctx?.unregisterReceiver(noisy) } // chưa đăng ký (stop() đầu start) → bỏ qua
+        ctx?.getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(focusReq)
+        session?.run { isActive = false; release() }
+        hush?.run { runCatching { stop() }; release() }; hush = null
+        session = null
         ctx?.let { it.stopService(Intent(it, TtsService::class.java)) }
     }
 
@@ -276,6 +353,15 @@ object TtsPlayer {
 
     private fun sync() {
         val c = ctx ?: return
+        session?.run {
+            val acts = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP or
+                PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
+            setPlaybackState(PlaybackState.Builder().setActions(acts)
+                .setState(if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, if (playing) rate else 0f).build())
+            setMetadata(MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, if (lead == 1) paras[0] else "Chương $chapter")
+                .putString(MediaMetadata.METADATA_KEY_ALBUM, "Gác Truyện · chương $chapter").build())
+        }
         runCatching { c.startForegroundService(Intent(c, TtsService::class.java)) } // gọi lại = cập nhật thông báo
     }
 }
@@ -288,20 +374,28 @@ class TtsService : Service() {
         when (i?.action) {
             "pause" -> TtsPlayer.pause()
             "resume" -> TtsPlayer.resume()
+            "prev" -> TtsPlayer.skip(-1)
+            "next" -> TtsPlayer.skip(1)
             "stop" -> { TtsPlayer.stop(); stopSelf(); return START_NOT_STICKY }
         }
         if (!TtsPlayer.active) { stopSelf(); return START_NOT_STICKY }
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("tts", "Nghe truyện", NotificationManager.IMPORTANCE_LOW))
-        fun act(a: String) = PendingIntent.getService(this, a.hashCode(), Intent(this, TtsService::class.java).setAction(a), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        fun act(a: String, icon: Int, label: String) = Notification.Action.Builder(
+            android.graphics.drawable.Icon.createWithResource(this, icon), label,
+            PendingIntent.getService(this, a.hashCode(), Intent(this, TtsService::class.java).setAction(a), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+        ).build()
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
-        val n: Notification = NotificationCompat.Builder(this, "tts")
+        val n: Notification = Notification.Builder(this, "tts")
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
             .setContentTitle("Gác Truyện · đang nghe truyện")
             .setContentText("Chương ${TtsPlayer.chapter}" + if (TtsPlayer.paused) " · tạm dừng" else "")
-            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setSilent(true)
-            .addAction(0, if (TtsPlayer.paused) "Tiếp tục" else "Tạm dừng", act(if (TtsPlayer.paused) "resume" else "pause"))
-            .addAction(0, "Dừng", act("stop"))
+            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PUBLIC)
+            .addAction(act("prev", android.R.drawable.ic_media_previous, "Chương trước"))
+            .addAction(if (TtsPlayer.paused) act("resume", android.R.drawable.ic_media_play, "Tiếp tục") else act("pause", android.R.drawable.ic_media_pause, "Tạm dừng"))
+            .addAction(act("next", android.R.drawable.ic_media_next, "Chương sau"))
+            .addAction(act("stop", android.R.drawable.ic_menu_close_clear_cancel, "Dừng"))
+            .setStyle(Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2).also { st -> TtsPlayer.token?.let { st.setMediaSession(it) } })
             .build()
         ServiceCompat.startForeground(this, 71, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         return START_NOT_STICKY

@@ -51,6 +51,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -203,6 +204,7 @@ fun ReaderScreen(s: Screen.Read) {
     var report by remember { mutableStateOf(false) }
     var reportCtx by remember { mutableStateOf<Pair<String, String>?>(null) } // (từ đang chọn, đoạn chứa nó) nếu báo từ form sửa
     var editing by remember { mutableStateOf<String?>(null) } // đoạn đang sửa bản dịch
+    var menuPara by remember { mutableStateOf<String?>(null) } // đoạn đang mở menu giữ-lâu (sửa dịch · trích dẫn · ghi chú)
     var hitAt by remember { mutableIntStateOf(-1) } // vị trí ký tự bị nhấn giữ trong đoạn (-1 = không biết)
     var msg by remember { mutableStateOf<String?>(null) }
     var offerPatch by remember { mutableStateOf(false) } // vừa sửa một TÊN RIÊNG → mời "Áp cả truyện" (từ thường không có gì để áp, vá chỉ tổ nhầm)
@@ -239,7 +241,12 @@ fun ReaderScreen(s: Screen.Read) {
     val ch = l.res?.getOrNull()
     // chỉ ghi tiến độ khi chương có thật: lướt quá chương cuối không đẩy tiến độ vượt mục lục
     LaunchedEffect(s.novelId, s.index, ch != null) {
-        if (ch != null && Session.user != null) runCatching { Api.saveProgress(s.novelId, s.index) }
+        if (ch != null && Session.user != null) {
+            val n = peek<Novel>("novel", s.novelId) ?: peek<List<Novel>>("library", Session.user?.id)?.find { it.id == s.novelId } // không có cả hai (vào từ thông báo) → widget chỉ ẩn thanh tiến độ
+            ContinueWidget.update(view.context, s.novelId, s.title, s.index, n?.chaptersSource ?: 0, n?.cover)
+            runCatching { Api.saveProgress(s.novelId, s.index) }
+            Mascot.fedChanged()
+        }
     }
     // Chưa dịch xong → hỏi lại mỗi 5s tới khi 'done' (Flutter dùng realtime, ở đây poll cho gọn)
     // Chương chưa có (truyện "lười" đang được crawler tải mục lục) cũng poll như vậy
@@ -462,8 +469,8 @@ fun ReaderScreen(s: Screen.Read) {
                         val giftUi: (@Composable () -> Unit)? = if (after < 0 || c.index in (claims.res?.getOrNull().orEmpty() + claimedNow)) null else ({
                             GiftButton(s.novelId, c.index, fg) { claimedNow = claimedNow + c.index; claims.reload() }
                         })
-                        if (st.page) PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, goPaged, prev, next, hl, { p, off -> hitAt = off; editing = p }, giftUi) {}
-                        else ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go, giftUi?.let { after to it }, prev, next, { k, off -> scrollCarry = k to off; autoCarry = auto; go(s.index + 1) }, { k, off -> scrollCarry = k to off; go(s.index - 1) }) { p, off -> hitAt = off; editing = p }
+                        if (st.page) PagedChapter(c, st, body, title, terms, fg, insets, pageTurn, { pct }, setPct, goPaged, prev, next, hl, { p, off -> hitAt = off; menuPara = p }, giftUi) {}
+                        else ScrollChapter(c, st, body, title, terms, fg, insets, list, hl, go, giftUi?.let { after to it }, prev, next, { k, off -> scrollCarry = k to off; autoCarry = auto; go(s.index + 1) }, { k, off -> scrollCarry = k to off; go(s.index - 1) }, Notes.all(ctx).filter { it.novelId == s.novelId && it.chapter == s.index }.map { it.idx }.toSet()) { p, off -> hitAt = off; menuPara = p }
                     }
                 }
             }
@@ -496,6 +503,7 @@ fun ReaderScreen(s: Screen.Read) {
         else if (sheet == 3) TtsSheet()
         else StyleSheet(st, dark) { sheet = 0; auto = true }
     }
+    menuPara?.let { p -> ParaSheet(s.novelId, s.title, s.index, paras.indexOf(p), p, { menuPara = null; editing = p }, { menuPara = null }) { msg = it } }
     editing?.let { p ->
         ModalBottomSheet({ editing = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.card) {
             // câu gốc chỉ dùng được khi số dòng Trung khớp số đoạn Việt (dịch 1-1)
@@ -523,7 +531,7 @@ fun ReaderScreen(s: Screen.Read) {
 private fun ScrollChapter(
     c: Chapter, st: Style, body: TextStyle, title: TextStyle, terms: List<String>, fg: Color, insets: WindowInsets, list: LazyListState, hl: Int,
     go: (Int) -> Unit, gift: Pair<Int, @Composable () -> Unit>?, prev: Chapter?, next: Chapter?,
-    enterNext: (Int, Int) -> Unit, enterPrev: (Int, Int) -> Unit, onEdit: (String, Int) -> Unit,
+    enterNext: (Int, Int) -> Unit, enterPrev: (Int, Int) -> Unit, saved: Set<Int>, onEdit: (String, Int) -> Unit,
 ) {
     val limit = with(LocalDensity.current) { 72.dp.toPx() }
     var over by remember { mutableFloatStateOf(0f) } // >0 kéo quá đáy · <0 kéo quá đỉnh
@@ -570,7 +578,7 @@ private fun ScrollChapter(
             }
             item(key = "t") { ChapterTitle(c.title, title, st.margin) }
             itemsIndexed(c.paragraphs, key = { i, _ -> "p$i" }) { i, p ->
-                Para(p, st, body, terms, fg, i == hl, onEdit)
+                Para(p, st, body, terms, fg, i == hl, onEdit, i in saved)
                 // quà nằm NGAY DƯỚI đoạn của nó, cùng một item để chỉ số đoạn (tiến độ, TTS) không lệch
                 if (gift != null && gift.first == i) gift.second()
             }
@@ -623,8 +631,9 @@ private const val PREVIEW_PARAS = 16
 
 /** Một đoạn văn; nhấn giữ → sửa bản dịch (thay cho bôi chọn chữ của hệ thống). [onEdit] null = chỉ xem (đoạn của chương sau). */
 @Composable
-private fun Para(p: String, st: Style, body: TextStyle, terms: List<String>, fg: Color, hi: Boolean, onEdit: ((String, Int) -> Unit)?) {
+private fun Para(p: String, st: Style, body: TextStyle, terms: List<String>, fg: Color, hi: Boolean, onEdit: ((String, Int) -> Unit)?, saved: Boolean = false) {
     val haptic = LocalHapticFeedback.current
+    val bar = MaterialTheme.colorScheme.primary
     var lay by remember(p) { mutableStateOf<TextLayoutResult?>(null) }
     Text(
         marked(p, terms),
@@ -634,8 +643,9 @@ private fun Para(p: String, st: Style, body: TextStyle, terms: List<String>, fg:
             detectTapGestures(onLongPress = { o ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onEdit(p, lay?.getOffsetForPosition(o - pad)?.coerceIn(0, p.length) ?: -1)
-            })
+            }, onTap = if (saved) ({ onEdit(p, -1) }) else null) // chạm lại đoạn đã lưu → mở menu bỏ lưu/sửa ghi chú
         })
+            .drawBehind { if (saved) drawRect(bar, androidx.compose.ui.geometry.Offset(st.margin.dp.toPx() / 3, 6.dp.toPx()), androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height - 12.dp.toPx())) } // vạch mảnh bên lề
             .background(if (hi) fg.copy(alpha = 0.10f) else Color.Transparent) // đoạn đang được đọc
             .padding(st.margin.dp, (st.size * 0.45f).dp),
         onTextLayout = { lay = it }, style = body,

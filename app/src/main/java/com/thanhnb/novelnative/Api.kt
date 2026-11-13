@@ -554,6 +554,17 @@ object Api {
         byId.values.sortedByDescending { it.second }.map { it.first }
     }
 
+    /** Thể loại xuất hiện nhiều nhất trong [novels]: (tên, số truyện), nhiều trước. */
+    fun topGenres(novels: List<Novel>, n: Int): List<Pair<String, Int>> =
+        novels.flatMap { it.genres.map(String::trim).filter(String::isNotEmpty).distinct() }.groupingBy { it }.eachCount().entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }).take(n).map { it.key to it.value }
+
+    /** Gợi ý theo thể loại hay đọc: mỗi thể loại một lần tìm có LIMIT sẵn của [search], bỏ truyện đã ở trong tủ, tối đa 12. */
+    suspend fun forGenres(genres: List<String>, shelf: List<Novel>): List<Pair<String, List<Novel>>> = coroutineScope {
+        val have = shelf.map { it.id }.toSet()
+        genres.map { g -> async { g to search(Filter(genre = g)).filter { it.id !in have }.take(12) } }.awaitAll().filter { it.second.isNotEmpty() }
+    }
+
     suspend fun inLibrary(novelId: Int): Boolean {
         val u = uid() ?: return false
         return get("library?select=novel_id&novel_id=eq.$novelId&user_id=eq.$u&limit=1").length() > 0
@@ -698,6 +709,7 @@ object Api {
         val at = Instant.now().toString()
         // dirty_ = "chưa lên server": ghi trước khi gửi, gửi hụt (mất mạng) thì flushProgress đẩy bù
         Prefs.sp.edit().putInt("last_$novelId", index).putString("dirty_$novelId", at).apply()
+        ReadLog.bump(novelId, index) // shortcut: chỉ ghi trên máy từ bản này, server không lưu từng ngày; cần lịch sử đa thiết bị thì thêm bảng server
         insert(
             "reading_progress",
             mapOf("user_id" to u, "novel_id" to novelId, "chapter_index" to index, "updated_at" to at),

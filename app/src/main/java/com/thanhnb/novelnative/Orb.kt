@@ -1,6 +1,8 @@
 package com.thanhnb.novelnative
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
@@ -9,6 +11,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -92,7 +95,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-/** Cảm xúc của linh vật. Idle = bình thường; Sleepy tự đến khi không ai chạm 25 giây; Dizzy = choáng (mắt xoáy, sao quay quanh đầu). */
+/** Cảm xúc của linh vật. Idle = bình thường; Sleepy tự đến khi không ai chạm 75 giây; Dizzy = choáng (mắt xoáy, sao quay quanh đầu). */
 enum class OrbMood { Idle, Happy, Love, Wow, Sad, Sleepy, Think, Cheer, Angry, Wink, Dizzy }
 
 private enum class Eye { Round, Arc, Line, Heart, Star, Wink, Spiral }
@@ -134,7 +137,37 @@ object Mascot {
     /** Đang ở màn đọc và chương đã hiện → mắt lướt theo dòng. */
     var reading by mutableStateOf(false)
 
-    fun say(text: String, mood: OrbMood? = null) { speech = ++n to text; if (mood != null) react(mood) }
+    /** No/đói trong ngày 0..1 = số chương đã đọc hôm nay / 5; đổi thì thân phúng phính và má hồng theo. */
+    var fed by mutableFloatStateOf(0f)
+    private var fedDay: java.time.LocalDate? = null
+    private var said1 = false
+    private var said5 = false
+
+    /** Gọi sau ReadLog.bump (luồng chính); [silent] = chỉ đồng bộ lúc mở app, không nói mốc đã qua. */
+    fun fedChanged(silent: Boolean = false) {
+        val today = java.time.LocalDate.now()
+        if (fedDay != today) { fedDay = today; said1 = false; said5 = false }
+        val c = ReadLog.today()
+        fed = min(c, 5) / 5f
+        if (silent) { said1 = said1 || c >= 1; said5 = said5 || c >= 5; return }
+        if (c >= 1 && !said1) { said1 = true; say("Măm! Chương đầu hôm nay", OrbMood.Happy) }
+        if (c >= 5 && !said5) { said5 = true; say("No căng rồi!", OrbMood.Cheer) }
+    }
+
+    // hàng đợi lời thoại: câu mới chờ câu đang hiện xong (tối đa 3, đầy thì bỏ câu cũ nhất); thời lượng phải khớp bong bóng trong Orb
+    private val queue = ArrayDeque<Pair<String, OrbMood?>>()
+    private var busyUntil = 0L
+    private val main = Handler(Looper.getMainLooper())
+    internal fun speechMs(text: String) = (2400L + text.length * 35L).coerceIn(3200L, 6000L)
+
+    fun say(text: String, mood: OrbMood? = null) {
+        if (Looper.myLooper() != Looper.getMainLooper()) { main.post { say(text, mood) }; return }
+        if (SystemClock.uptimeMillis() < busyUntil) { if (queue.size >= 3) queue.removeFirst(); queue.addLast(text to mood); return }
+        speech = ++n to text; if (mood != null) react(mood)
+        val d = speechMs(text)
+        busyUntil = SystemClock.uptimeMillis() + d
+        main.postDelayed({ busyUntil = 0L; queue.removeFirstOrNull()?.let { say(it.first, it.second) } }, d)
+    }
 
     /** Bậc lấy theo cảnh giới Tu Tiên, chưa tu thì theo chuỗi ngày đọc; lấy bậc cao hơn trong hai. Chỉ tăng, không tụt trong một phiên. */
     fun evolve(realm: Int = 0, ascended: Boolean = false, streak: Int = 0) {
@@ -257,10 +290,12 @@ private class BubblePos(val gap: Int, val margin: Int) : PopupPositionProvider {
 
 /** Cửa sổ popup mặc định nhận chạm trong vùng của nó; đặt cờ NOT_TOUCHABLE để chạm xuyên qua bong bóng. Trả true khi đã xong. */
 private fun letTouchesThrough(v: View): Boolean {
-    val lp = v.layoutParams as? WindowManager.LayoutParams ?: return false
+    // LocalView trong Popup là view con (layoutParams không phải của cửa sổ) → cờ nằm ở view gốc của cửa sổ popup
+    val root = v.rootView
+    val lp = root.layoutParams as? WindowManager.LayoutParams ?: return false
     if (lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0) return true
     lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-    (v.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).updateViewLayout(v, lp)
+    (root.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).updateViewLayout(root, lp)
     return true
 }
 
@@ -314,7 +349,8 @@ fun Orb(
     // đêm và "tắt hoạt ảnh" của hệ thống có thể đổi khi app đang mở → đọc lại mỗi phút
     var night by remember { mutableStateOf(isNight()) }
     var calm by remember { mutableStateOf(animationsOff(context)) }
-    LaunchedEffect(Unit) { while (true) { delay(60_000); night = isNight(); calm = animationsOff(context) } }
+    var late by remember { mutableStateOf(LocalTime.now().hour >= 18) }
+    LaunchedEffect(Unit) { while (true) { delay(60_000); night = isNight(); calm = animationsOff(context); late = LocalTime.now().hour >= 18 } }
 
     val token = remember { Any() }
     DisposableEffect(token) { bubbleOwners.add(token); onDispose { bubbleOwners.remove(token) } }
@@ -352,7 +388,7 @@ fun Orb(
         if (rig.act?.idle == true) rig.act = null
         if (reaction != null) { delay(if (reaction == OrbMood.Dizzy) 3200 else 1900); reaction = null }
     }
-    LaunchedEffect(Unit) { while (true) { delay(1000); asleep = time.floatValue - lastTouch.floatValue > 25f && !Mascot.reading && !Mascot.listening } }
+    LaunchedEffect(Unit) { while (true) { delay(1000); asleep = time.floatValue - lastTouch.floatValue > 75f && !Mascot.reading && !Mascot.listening } }
 
     // được vuốt xong: giữ mặt sướng thêm chút rồi thôi
     LaunchedEffect(bliss) { if (bliss) { while (touch != null) delay(100); delay(1800); bliss = false } }
@@ -378,7 +414,11 @@ fun Orb(
     val fxCheer = animateFloatAsState(if (shown == OrbMood.Cheer) 1f else 0f, tween(400), label = "fxCheer")
     val fxSad = animateFloatAsState(if (shown == OrbMood.Sad) 1f else 0f, tween(400), label = "fxSad")
     val fxAngry = animateFloatAsState(if (shown == OrbMood.Angry) 1f else 0f, tween(300), label = "fxAngry")
-    val fxSleepy = animateFloatAsState(if (shown == OrbMood.Sleepy) 1f else 0f, tween(500), label = "fxSleepy")
+    // z tắt ngay khi hết ngủ (kể cả được vuốt ve ban đêm: shown vẫn Sleepy nhưng mặt đã sướng)
+    val sleepy = shown == OrbMood.Sleepy && !bliss
+    val fxSleepy = animateFloatAsState(if (sleepy) 1f else 0f, if (sleepy) tween(500) else snap(), label = "fxSleepy")
+    val fedA = animateFloatAsState(Mascot.fed, tween(600), label = "fed")
+    val droop = animateFloatAsState(if (Mascot.fed == 0f && late) 1f else 0f, tween(800), label = "droop")
     val fxDizzy = animateFloatAsState(if (shown == OrbMood.Dizzy) 1f else 0f, tween(300), label = "fxDizzy")
     val fxListen = animateFloatAsState(if (listenOn) 1f else 0f, tween(400), label = "fxListen")
     val fxBliss = animateFloatAsState(if (bliss) 1f else 0f, tween(300), label = "fxBliss")
@@ -446,12 +486,15 @@ fun Orb(
     LaunchedEffect(Unit) {
         var last = -1
         var lastEnd = -99f
+        var first = true
         while (true) {
-            delay(if (Mascot.reading) Random.nextLong(26_000, 40_000) else Random.nextLong(6000, 13000))
+            delay(if (Mascot.reading) Random.nextLong(26_000, 40_000) else if (first) Random.nextLong(2500, 5000) else Random.nextLong(6000, 13000))
+            first = false
             val quiet = reaction == null && touch == null && Mascot.gaze == null && moodNow == OrbMood.Idle && !asleep && !night && !calm && !Mascot.listening && !bliss
             if (!quiet || (Mascot.reading && time.floatValue - lastEnd < 25f)) continue
             var i = ACTS.indices.random()
             if (i == last) i = (i + 1 + Random.nextInt(ACTS.size - 1)) % ACTS.size
+            if (Mascot.fed == 0f && late && Random.nextInt(3) == 0) i = 0 // đói: hay há miệng (YAWN đứng đầu ACTS)
             last = i
             val a = ACTS[i]
             play(a)
@@ -468,7 +511,7 @@ fun Orb(
     LaunchedEffect(sp, isOwner) {
         if (!isOwner || sp == null) { bubble = false; return@LaunchedEffect }
         val now = SystemClock.uptimeMillis()
-        if (sp.first != spokenN) { spokenN = sp.first; spokenEnd = now + (2400L + sp.second.length * 35L).coerceIn(3200L, 6000L) }
+        if (sp.first != spokenN) { spokenN = sp.first; spokenEnd = now + Mascot.speechMs(sp.second) }
         val left = spokenEnd - now
         if (left > 0) { bubbleText = sp.second; bubble = true; delay(left) }
         bubble = false
@@ -596,7 +639,7 @@ fun Orb(
             // bóng đổ: nhỏ và nhạt đi khi nhảy lên
             val sh = 1f - hopT.coerceIn(0f, 1.5f) * .45f
             drawOval(Color.Black.copy(alpha = .13f * sh), Offset(cx - r * .8f * sh, cy0 + r * BODY_RY * .98f), Size(r * 1.6f * sh, r * .2f))
-            scale((1f + .10f * s + pose.sx) * breath, (1f - .16f * s + pose.sy) * breath, pivot = Offset(w / 2f, cy0 + r)) {
+            scale((1f + .10f * s + pose.sx + .05f * fedA.value) * breath, (1f - .16f * s + pose.sy + .03f * fedA.value - .04f * droop.value) * breath, pivot = Offset(w / 2f, cy0 + r)) {
                 rotate(lean, pivot = c) {
                     if (tier >= 2) drawTierBack(c, r, te, tier, bodyBot, rimCol)
                     drawFlame(c, r, t, sin(te * 2.2f) * .15f - lx * .4f - s * .4f - hopT * .3f, flameK.value + pose.flame, fxAngry.value, tier, calm)
@@ -605,7 +648,7 @@ fun Orb(
                     drawFace(
                         c, r, lx, ly + lookY.value, t, f.eye,
                         (open.value + pose.open).coerceAtLeast(0f), smile.value + pose.smile, (mouth.value + pose.mouth).coerceAtLeast(0f),
-                        brow.value + pose.brow, blush.value + pose.blush,
+                        brow.value + pose.brow, blush.value + pose.blush + .25f * fedA.value,
                         blink = blinkFactor(t - blinkAt.floatValue), tear = fxSad.value, angry = fxAngry.value, ink = faceCol, yawAdd = pose.yaw,
                     )
                 }

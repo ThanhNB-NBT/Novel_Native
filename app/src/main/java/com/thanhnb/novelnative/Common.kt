@@ -73,6 +73,8 @@ sealed interface Screen {
     data object Queue : Screen
     data object Cultivation : Screen
     data object Guide : Screen
+    data object NotesList : Screen
+    data object Stats : Screen
     data object Changelog : Screen
     data object Lunar : Screen
     data class LaSo(val h: HoSoSinh, val mine: Boolean) : Screen

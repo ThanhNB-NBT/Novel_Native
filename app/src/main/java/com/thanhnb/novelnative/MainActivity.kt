@@ -97,7 +97,9 @@ class MainActivity : ComponentActivity() {
     // chạm thông báo "chương dịch xong" → mở thẳng truyện đó; mở lại từ Gần đây (intent cũ) thì không
     private fun openFromNotification(i: Intent?) {
         val id = i?.getIntExtra(Notify.EXTRA_NOVEL, 0) ?: 0
-        if (id > 0 && i!!.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) Nav.push(Screen.Detail(id))
+        if (id > 0 && i!!.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0)
+            // widget "Đọc tiếp" gửi kèm chỉ số chương → vào thẳng màn đọc
+            Nav.push(if (i.hasExtra(ContinueWidget.EXTRA_INDEX)) Screen.Read(id, i.getStringExtra(ContinueWidget.EXTRA_TITLE).orEmpty(), i.getIntExtra(ContinueWidget.EXTRA_INDEX, 0)) else Screen.Detail(id))
     }
 
     // lắc máy (> ~2,7 g, tối đa 3 giây một lần) → linh vật chóng mặt; chỉ nghe cảm biến khi app đang hiện, máy không có thì bỏ qua
@@ -184,6 +186,8 @@ class MainActivity : ComponentActivity() {
                                         Screen.Queue -> QueueScreen()
                                         Screen.Cultivation -> CultivationScreen()
                                         Screen.Guide -> GuideScreen()
+                                        Screen.NotesList -> NotesScreen()
+                                        Screen.Stats -> StatsScreen()
                                         Screen.Changelog -> ChangelogScreen()
                                         Screen.Lunar -> LunarScreen()
                                         is Screen.LaSo -> LaSoScreen(s.h, s.mine)
@@ -219,6 +223,7 @@ private suspend fun greetOnce() {
     val p = if (Session.user != null) runCatching { prefetch("profile", Session.user?.id) { Api.profile() } }.getOrNull() else null
     val streak = Api.liveStreak(p)
     Mascot.evolve(streak = streak)
+    Mascot.fedChanged(silent = true)
     val hello = when (java.time.LocalTime.now().hour) {
         in 5..10 -> "Chào buổi sáng!"
         in 11..13 -> "Buổi trưa vui nhé!"
@@ -230,6 +235,7 @@ private suspend fun greetOnce() {
     val atRisk = streak > 0 && last != null && java.time.temporal.ChronoUnit.DAYS.between(last, java.time.LocalDate.now()) == 1L
     when {
         atRisk -> Mascot.say("Đọc chút để giữ chuỗi $streak ngày nhé!", OrbMood.Wink)
+        java.time.LocalTime.now().hour >= 18 && ReadLog.today() == 0 -> Mascot.say("Hôm nay chưa đọc chương nào, đói quá!", OrbMood.Sad)
         streak >= 2 -> Mascot.say("$hello Chuỗi $streak ngày rồi đó!", OrbMood.Happy)
         else -> Mascot.say(hello, OrbMood.Happy)
     }
