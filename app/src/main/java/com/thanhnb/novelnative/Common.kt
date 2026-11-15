@@ -260,22 +260,40 @@ fun monoStyle(size: Int = 12, color: Color = MaterialTheme.colorScheme.onSurface
 
 /** Ô nhỏ "tới chương": gõ số rồi bấm Đi trên bàn phím. Dùng ở danh sách chương (trang truyện) và mục lục (màn đọc). */
 @Composable
-fun JumpField(hint: String, modifier: Modifier = Modifier, onJump: (Int) -> Unit) {
+fun JumpField(hint: String, modifier: Modifier = Modifier, onJump: (Int) -> Unit) =
+    NumField(hint, modifier, 6, Char::isDigit, null) { it.toIntOrNull()?.let(onJump) }
+
+/** Ô khoảng chương "100-130" (gõ ngược 130-100 cũng được; một số = một chương); bấm [action] hoặc Đi trên bàn phím. */
+@Composable
+fun RangeField(hint: String, action: String, modifier: Modifier = Modifier, onRange: (IntRange) -> Unit) =
+    NumField(hint, modifier, 13, { it.isDigit() || it == '-' }, action) { s -> parseRange(s)?.let(onRange) }
+
+internal fun parseRange(s: String): IntRange? {
+    val p = s.split('-').mapNotNull(String::toIntOrNull)
+    return if (p.isEmpty()) null else minOf(p.first(), p.last())..maxOf(p.first(), p.last())
+}
+
+@Composable
+private fun NumField(hint: String, modifier: Modifier, max: Int, allow: (Char) -> Boolean, action: String?, onGo: (String) -> Unit) {
     var v by remember { mutableStateOf("") }
     val cs = MaterialTheme.colorScheme
     val focus = LocalFocusManager.current
+    val go = { onGo(v); v = ""; focus.clearFocus() }
     BasicTextField(
-        v, { v = it.filter(Char::isDigit).take(6) }, modifier, singleLine = true,
+        v, { v = it.filter(allow).take(max) }, modifier, singleLine = true,
         textStyle = monoStyle(13, cs.onSurface), cursorBrush = SolidColor(cs.primary),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
-        keyboardActions = KeyboardActions(onGo = { v.toIntOrNull()?.let(onJump); v = ""; focus.clearFocus() }),
+        keyboardActions = KeyboardActions(onGo = { go() }),
         decorationBox = { inner ->
-            Box(
-                Modifier.heightIn(min = 40.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp),
-                contentAlignment = Alignment.CenterStart,
+            Row(
+                Modifier.heightIn(min = 40.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(12.dp)).padding(start = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (v.isEmpty()) Text(hint, style = monoStyle(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                inner()
+                Box(Modifier.weight(1f).padding(end = 12.dp), contentAlignment = Alignment.CenterStart) {
+                    if (v.isEmpty()) Text(hint, style = monoStyle(13), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    inner()
+                }
+                if (action != null) TextButton(go, enabled = v.isNotEmpty()) { Text(action) }
             }
         },
     )

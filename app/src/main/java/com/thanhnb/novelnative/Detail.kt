@@ -55,6 +55,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -62,7 +68,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -236,7 +245,79 @@ fun DetailScreen(id: Int) {
                                 }
                             }
                         }
-                    LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = bottom) {
+                        if (selecting) Row(Modifier.padding(20.dp, 4.dp, 8.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            // thêm (không thay) các chương đã dịch trong khoảng → gõ nhiều khoảng nối nhau được
+                            RangeField("Khoảng, vd 100-130", "Chọn", Modifier.weight(1f)) { r ->
+                                sel = sel + chapters.filter { it.done && it.index in r }.map { it.index }
+                            }
+                            IconButton({ sel = emptySet() }, enabled = sel.isNotEmpty()) { Icon(Icons.Rounded.Close, "Bỏ chọn hết") }
+                        }
+                    // giữ một chương rồi vuốt lên/xuống: chọn liền cả đoạn từ chương giữ tới chương dưới ngón tay; sát mép thì tự cuộn
+                    var dragFrom by remember { mutableStateOf<Int?>(null) }
+                    var dragBase by remember { mutableStateOf(emptySet<Int>()) }
+                    var dragY by remember { mutableFloatStateOf(0f) }
+                    var autoScroll by remember { mutableFloatStateOf(0f) }
+                    // danh sách cao bằng pageH nên lúc đầu trang còn mở, đáy của nó nằm ngoài màn hình → đo phần thấy được
+                    var visH by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+                    fun chapterAt(y: Float) = list.layoutInfo.visibleItemsInfo.firstOrNull { y.toInt() in it.offset until it.offset + it.size }?.key as? Int
+                    fun extend() {
+                        val from = dragFrom ?: return
+                        val to = chapterAt(dragY) ?: return
+                        val r = minOf(from, to)..maxOf(from, to)
+                        sel = dragBase + chapters.filter { it.done && it.index in r }.map { it.index }
+                    }
+                    LaunchedEffect(autoScroll) {
+                        while (autoScroll != 0f) {
+                            // như vuốt tay: xuống thì thu đầu trang trước; danh sách đã về đỉnh thì mở đầu trang ra
+                            var d = autoScroll
+                            if (d > 0) shift(-d).also { d += it; dragY -= it }
+                            val left = d - list.scrollBy(d)
+                            if (left < 0) dragY -= shift(-left)
+                            extend(); delay(16)
+                        }
+                    }
+                    LazyColumn(
+                        Modifier.fillMaxSize().onGloballyPositioned { visH = it.boundsInWindow().bottom - it.positionInWindow().y }.then(
+                            // bắt ở pass Initial (cha thấy trước con): đã giữ thì nuốt sự kiện để danh sách không cuộn, hàng không nhận bấm
+                            if (admin) Modifier.pointerInput(chapters) {
+                                val edge = 64.dp.toPx()
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val c = chapterAt(down.position.y) ?: return@awaitEachGesture
+                                    if (chapters.none { it.index == c && it.done }) return@awaitEachGesture
+                                    // null = hết giờ mà ngón vẫn giữ yên → coi là giữ
+                                    val moved = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                        while (true) {
+                                            val ch = awaitPointerEvent(PointerEventPass.Initial).changes.first()
+                                            if (!ch.pressed || ch.isConsumed || (ch.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+                                        }
+                                        true
+                                    }
+                                    if (moved != null) return@awaitEachGesture
+                                    if (!selecting) { selecting = true; sel = emptySet() }
+                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                    dragFrom = c; dragBase = sel; dragY = down.position.y; extend()
+                                    try {
+                                        while (true) {
+                                            val ch = awaitPointerEvent(PointerEventPass.Initial).changes.first()
+                                            ch.consume()
+                                            if (!ch.pressed) break
+                                            dragY = ch.position.y
+                                            // đáy thấy được trừ thanh "Đọc tiếp" nổi phía dưới
+                                            val bot = minOf(size.height.toFloat(), visH) - 80.dp.toPx()
+                                            autoScroll = when {
+                                                dragY > bot - edge -> (dragY - (bot - edge)) / 4
+                                                dragY < edge -> -(edge - dragY) / 4
+                                                else -> 0f
+                                            }
+                                            extend()
+                                        }
+                                    } finally { dragFrom = null; autoScroll = 0f }
+                                }
+                            } else Modifier,
+                        ),
+                        state = list, contentPadding = bottom,
+                    ) {
                     item {
                         when {
                             // migration 122: chapters chỉ đọc được khi đăng nhập

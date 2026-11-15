@@ -306,6 +306,7 @@ private fun HaloPicker(st: JSONObject, done: () -> Unit) {
 
 /** Lò Luyện Đan: 5 bản dư cùng phẩm → 1 đan dược/linh thạch phẩm kế — cult_craft (141). Server chọn món. */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun CraftDialog(dismiss: () -> Unit, done: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var g by remember { mutableIntStateOf(1) }
@@ -317,7 +318,7 @@ internal fun CraftDialog(dismiss: () -> Unit, done: (String) -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Dồn 5 bản dư cùng phẩm (giữ lại 1 bản mỗi món) thành 1 vật phẩm phẩm kế tiếp. Món ra ngẫu nhiên.")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     GradeNames.take(4).forEachIndexed { i, n -> FilterChip(g == i + 1, { g = i + 1 }, { Text("$n → ${GradeNames[i + 1]}") }) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -347,6 +348,7 @@ internal fun CraftDialog(dismiss: () -> Unit, done: (String) -> Unit) {
 
 /** Luyện hóa MỌI bản dư (giữ 1) của các món phẩm ≤ [gradeMax] — cult_recycle_all (124). */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun RecycleAllDialog(dismiss: () -> Unit, done: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var g by remember { mutableIntStateOf(2) }
@@ -357,7 +359,7 @@ internal fun RecycleAllDialog(dismiss: () -> Unit, done: (String) -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Đốt mọi bản dư (giữ lại 1 bản mỗi món) của vật phẩm từ Hoàng đến phẩm chọn dưới đây, đổi lấy tu vi.")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     GradeNames.forEachIndexed { i, n -> FilterChip(g == i + 1, { g = i + 1 }, { Text(n) }) }
                 }
             }
