@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "NovelNative"
-include(":app")
+include(":app", ":baselineprofile")

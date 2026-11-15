@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -174,7 +175,8 @@ object Session {
         if (force && stale != null && token != stale) return@withLock
         if (!force && System.currentTimeMillis() / 1000 < expiresAt - 60) return@withLock
         try {
-            save(JSONObject(Api.raw("POST", "auth/v1/token?grant_type=refresh_token", JSONObject(mapOf("refresh_token" to rt)), auth = false)))
+            // NonCancellable: server xoay refresh token ngay khi nhận request; bỏ dở lúc chờ trả lời = mất token mới, token cũ bị thu hồi → đăng xuất
+            save(JSONObject(withContext(NonCancellable) { Api.raw("POST", "auth/v1/token?grant_type=refresh_token", JSONObject(mapOf("refresh_token" to rt)), auth = false) }))
         } catch (e: ApiError) {
             // Chỉ refresh token hỏng (400/401/403) mới đăng xuất; 429 = bị giới hạn tần suất → giữ phiên, lát thử lại.
             when (e.code) {
