@@ -66,18 +66,18 @@ import kotlin.random.Random
 // Shader AGSL cần Android 13+; máy cũ hơn rơi về mây/khói vẽ Canvas như bản Flutter khi shader lỗi.
 
 private const val ResultAt = .86f // advanceResultStart
-private val StrikeAt = floatArrayOf(.38f, .56f, .74f) // tribulationHits
+internal val StrikeAt = floatArrayOf(.38f, .56f, .74f) // tribulationHits
 private const val CloudEnd = .18f
 private const val TammaSec = 2.2f
-private const val TAU = (2 * PI).toFloat()
-private const val PIf = PI.toFloat()
+internal const val TAU = (2 * PI).toFloat()
+internal const val PIf = PI.toFloat()
 
 // ---------------- màu / paint / easing ----------------
 
-private const val WHITE = 0xFFFFFFFF.toInt()
-private const val CLEAR = 0x00000000
-private fun Int.a(x: Float): Int = (this and 0xFFFFFF) or ((x.coerceIn(0f, 1f) * 255f).roundToInt() shl 24)
-private fun mix(a: Int, b: Int, t: Float): Int {
+internal const val WHITE = 0xFFFFFFFF.toInt()
+internal const val CLEAR = 0x00000000
+internal fun Int.a(x: Float): Int = (this and 0xFFFFFF) or ((x.coerceIn(0f, 1f) * 255f).roundToInt() shl 24)
+internal fun mix(a: Int, b: Int, t: Float): Int {
     fun ch(s: Int) = (((a shr s) and 255) + ((((b shr s) and 255) - ((a shr s) and 255)) * t)).roundToInt().coerceIn(0, 255) shl s
     return ch(24) or ch(16) or ch(8) or ch(0)
 }
@@ -85,7 +85,7 @@ private fun mix(a: Int, b: Int, t: Float): Int {
 private val AddMode = PorterDuffXfermode(PorterDuff.Mode.ADD)
 
 /** Paint kiểu Flutter: [blur] là sigma MaskFilter.blur (Android nhận bán kính ≈ sigma·√3). */
-private fun pt(
+internal fun pt(
     color: Int = WHITE, shader: Shader? = null, stroke: Float = 0f, add: Boolean = false,
     blur: Float = 0f, round: Boolean = false, roundJoin: Boolean = false,
 ) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -98,18 +98,18 @@ private fun pt(
     if (roundJoin) strokeJoin = Paint.Join.ROUND
 }
 
-private fun radial(cx: Float, cy: Float, r: Float, colors: IntArray, stops: FloatArray? = null) =
+internal fun radial(cx: Float, cy: Float, r: Float, colors: IntArray, stops: FloatArray? = null) =
     RadialGradient(cx, cy, max(r, .01f), colors, stops, Shader.TileMode.CLAMP)
 
-private fun vertical(top: Float, bottom: Float, colors: IntArray, stops: FloatArray? = null) =
+internal fun vertical(top: Float, bottom: Float, colors: IntArray, stops: FloatArray? = null) =
     LinearGradient(0f, top, 0f, max(bottom, top + .01f), colors, stops, Shader.TileMode.CLAMP)
 
 private val EaseInOut = CubicBezierEasing(.42f, 0f, .58f, 1f)
 private val EaseOut = CubicBezierEasing(0f, 0f, .58f, 1f)
-private val EaseIn = CubicBezierEasing(.42f, 0f, 1f, 1f)
-private val EaseOutCubic = CubicBezierEasing(.215f, .61f, .355f, 1f)
-private val EaseOutBack = CubicBezierEasing(.175f, .885f, .32f, 1.275f)
-private fun Easing.at(x: Float) = transform(x.coerceIn(0f, 1f))
+internal val EaseIn = CubicBezierEasing(.42f, 0f, 1f, 1f)
+internal val EaseOutCubic = CubicBezierEasing(.215f, .61f, .355f, 1f)
+internal val EaseOutBack = CubicBezierEasing(.175f, .885f, .32f, 1.275f)
+internal fun Easing.at(x: Float) = transform(x.coerceIn(0f, 1f))
 
 /** Curves.elasticOut (chu kỳ 0,4) của Flutter. */
 private fun elasticOut(x: Float): Float {
@@ -117,12 +117,12 @@ private fun elasticOut(x: Float): Float {
     return (2.0.pow(-10.0 * x) * sin((x - .1) * 2 * PI / .4) + 1).toFloat()
 }
 
-private fun Path.poly(pts: List<Offset>, close: Boolean = false) = apply {
+internal fun Path.poly(pts: List<Offset>, close: Boolean = false) = apply {
     pts.forEachIndexed { i, p -> if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
     if (close) close()
 }
 
-private fun Canvas.oval(cx: Float, cy: Float, w: Float, h: Float, p: Paint) = drawOval(RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), p)
+internal fun Canvas.oval(cx: Float, cy: Float, w: Float, h: Float, p: Paint) = drawOval(RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), p)
 
 /** Vẽ trên Canvas Android theo dp (khớp đơn vị Flutter): [block] nhận (canvas, rộng dp, cao dp). */
 private fun DrawScope.dpCanvas(block: Canvas.(Float, Float) -> Unit) = drawIntoCanvas { c ->
@@ -132,208 +132,6 @@ private fun DrawScope.dpCanvas(block: Canvas.(Float, Float) -> Unit) = drawIntoC
     cv.block(size.width / density, size.height / density)
     cv.restore()
 }
-
-// ---------------- shader AGSL (port từ shaders/*.frag) ----------------
-
-private const val NoiseSksl = """
-float hash(float3 p) {
-  p = fract(p * 0.3183099 + 0.1);
-  p *= 17.0;
-  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-}
-float noise(float3 x) {
-  float3 i = floor(x);
-  float3 f = fract(x);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(hash(i), hash(i + float3(1, 0, 0)), f.x),
-                 mix(hash(i + float3(0, 1, 0)), hash(i + float3(1, 1, 0)), f.x), f.y),
-             mix(mix(hash(i + float3(0, 0, 1)), hash(i + float3(1, 0, 1)), f.x),
-                 mix(hash(i + float3(0, 1, 1)), hash(i + float3(1, 1, 1)), f.x), f.y),
-             f.z);
-}
-"""
-
-/** Trần mây kiếp thể tích (storm.frag): ray-march nhìn ngửa lên, sét là nguồn sáng nằm trong mây. */
-private const val StormSksl = """
-uniform float2 uSize;
-uniform float uTime;
-uniform float uEnv;
-uniform float uFlash;
-uniform float uFlashX;
-uniform float uSheet;
-uniform float2 uSheetAt;
-$NoiseSksl
-float fbm(float3 p) {
-  float a = 0.5; float s = 0.0;
-  for (int i = 0; i < 4; i++) { s += a * noise(p); p = p * 2.02 + float3(3.1, 1.7, 5.3); a *= 0.5; }
-  return s;
-}
-const float BASE = 1.0;
-const float TOP = 2.4;
-float3 ray(float2 px) {
-  float2 uv = (px - float2(uSize.x * 0.5, 0.0)) / uSize.y;
-  return normalize(float3(uv.x * 1.1, 0.42 - uv.y, 1.0));
-}
-float3 lightAt(float2 px) { float3 d = ray(px); return d * ((BASE + 0.35) / max(d.y, 0.08)); }
-float density(float3 p) {
-  float3 q = p * 0.55 + float3(uTime * 0.08, 0.0, uTime * 0.05);
-  float n = fbm(q);
-  float h = (p.y - BASE) / (TOP - BASE);
-  float prof = smoothstep(0.0, 0.25, h) * smoothstep(1.0, 0.55, h);
-  return clamp((n - 0.32) * 3.0, 0.0, 1.0) * prof;
-}
-half4 main(float2 fc) {
-  float3 rd = ray(fc);
-  if (rd.y < 0.06 || uEnv <= 0.0) return half4(0.0);
-  float t0 = BASE / rd.y;
-  float t1 = min(TOP / rd.y, t0 + 5.0);
-  float dt = (t1 - t0) / 14.0;
-  float3 L1 = lightAt(float2(uFlashX, uSize.y * 0.02));
-  float3 L2 = lightAt(uSheetAt);
-  float T = 1.0;
-  float3 col = float3(0.0);
-  float jit = hash(float3(fc, uTime));
-  for (int i = 0; i < 14; i++) {
-    float3 p = rd * (t0 + (float(i) + jit) * dt);
-    float d = density(p);
-    if (d > 0.002) {
-      float l1 = uFlash * 3.2 / (1.0 + dot(p - L1, p - L1) * 1.6);
-      float l2 = uSheet * 2.6 / (1.0 + dot(p - L2, p - L2) * 2.4);
-      float h = (p.y - BASE) / (TOP - BASE);
-      float3 amb = mix(float3(0.20, 0.22, 0.34), float3(0.05, 0.05, 0.10), h);
-      float edge = 1.0 - 0.7 * d;
-      float3 e = amb + (float3(0.62, 0.72, 1.0) * l1 + float3(0.55, 0.6, 1.0) * l2) * edge;
-      float a = d * dt * 1.8;
-      col += T * e * a;
-      T *= exp(-a * 1.6);
-      if (T < 0.03) break;
-    }
-  }
-  float far = smoothstep(0.06, 0.2, rd.y);
-  float alpha = (1.0 - T) * far * uEnv;
-  col = 1.0 - exp(-col * 1.4);
-  return half4(half3(col * far * uEnv), half(alpha));
-}
-"""
-
-/** Godray + bloom phủ cộng sáng lúc lộ kết quả đại cảnh giới (breakthrough.frag). */
-private const val BurstSksl = """
-uniform float2 uSize;
-uniform float uT;
-uniform float3 uColor;
-uniform float2 uCenter;
-float hash1(float n) { return fract(sin(n) * 43758.5453); }
-half4 main(float2 fc) {
-  float2 d = fc - uCenter;
-  float r = length(d);
-  float ang = atan(d.y, d.x);
-  float t = clamp(uT, 0.0, 1.0);
-  float fade = 1.0 - t;
-  float core = exp(-r / (36.0 + 240.0 * t)) * fade * 1.5;
-  float ringR = 24.0 + t * 340.0;
-  float ring = exp(-pow((r - ringR) / (16.0 + 34.0 * t), 2.0)) * fade * 1.1;
-  float seed = floor((ang + 3.14159) / 6.28318 * 32.0);
-  float streak = 0.5 + 0.5 * sin(ang * 32.0 + hash1(seed) * 12.0);
-  streak = pow(streak, 8.0);
-  float rayFall = exp(-r / (140.0 + 300.0 * t)) * smoothstep(0.0, 40.0, r);
-  float glow = core + ring + streak * rayFall * fade * 1.2;
-  float2 uv = fc / uSize;
-  float edge = smoothstep(0.0, 0.14, uv.x) * smoothstep(0.0, 0.14, 1.0 - uv.x)
-             * smoothstep(0.0, 0.14, uv.y) * smoothstep(0.0, 0.14, 1.0 - uv.y);
-  glow *= edge;
-  float3 col = uColor * glow + float3(1.0) * pow(core, 2.2) * 0.7 * edge;
-  return half4(half3(col), half(clamp(glow, 0.0, 1.0)));
-}
-"""
-
-/** Khối ma khí thể tích xoáy quanh mặt quỷ (tamma.frag); 2 lượt: sau ảnh (có lõi) và trước ảnh (khói mỏng). */
-private const val TammaSksl = """
-uniform float2 uCenter;
-uniform float uRadius;
-uniform float uTime;
-uniform float uV;
-uniform float uWin;
-uniform float uFront;
-$NoiseSksl
-float fbm(float3 p) {
-  float a = 0.5; float s = 0.0;
-  for (int i = 0; i < 3; i++) { s += a * noise(p); p = p * 2.03 + float3(1.7, 9.2, 3.1); a *= 0.5; }
-  return s;
-}
-float2 rot(float2 v, float a) { float c = cos(a); float s = sin(a); return float2(c * v.x + s * v.y, -s * v.x + c * v.y); }
-half4 main(float2 fc) {
-  float2 uv = (fc - uCenter) / uRadius;
-  uv.y = -uv.y;
-  float win = uWin;
-  float intro = smoothstep(0.0, 0.25, uV);
-  float settle = smoothstep(0.55, 1.0, uV);
-  float R = mix(0.35, 1.0, intro) * mix(1.0 + 0.2 * settle, 1.0 - 0.4 * settle, win);
-  float dens = mix(1.0 + 0.6 * settle, 1.0 - 0.55 * settle, win);
-  float spin = mix(1.9, 1.0, win);
-  float yaw = 0.45 * sin(uTime * 0.9);
-  float pitch = 0.32 + 0.08 * sin(uTime * 0.7);
-  float3 ro = float3(0.0, 0.0, -3.2);
-  float3 rd = normalize(float3(uv * 0.62, 1.9));
-  ro.yz = rot(ro.yz, pitch); rd.yz = rot(rd.yz, pitch);
-  ro.xz = rot(ro.xz, yaw);   rd.xz = rot(rd.xz, yaw);
-  float bR = 1.35 * max(R, 0.6);
-  float b = dot(ro, rd);
-  float c = dot(ro, ro) - bR * bR;
-  float h = b * b - c;
-  if (h <= 0.0) return half4(0.0);
-  h = sqrt(h);
-  float t0 = -b - h; float t1 = -b + h;
-  float tm = -b;
-  if (uFront > 0.5) t1 = tm; else t0 = tm;
-  float3 smokeCol = mix(float3(0.34, 0.03, 0.05), float3(0.20, 0.06, 0.42), win);
-  float3 coreCol = mix(float3(1.0, 0.28, 0.12), float3(0.72, 0.52, 1.0), win);
-  coreCol = mix(coreCol, float3(1.0, 0.95, 1.0), settle * win);
-  float flick = 0.85 + 0.15 * sin(uTime * 23.0) * sin(uTime * 7.3) * (1.0 - win);
-  float dt = (t1 - t0) / 22.0;
-  float T = 1.0;
-  float3 col = float3(0.0);
-  float frontThin = mix(1.0, 0.45, uFront);
-  for (int i = 0; i < 22; i++) {
-    float3 p = ro + rd * (t0 + (float(i) + 0.5) * dt);
-    float r = length(p);
-    float3 q = p;
-    float rr = length(q.xz);
-    q.xz = rot(q.xz, uTime * spin + 1.6 / (0.4 + rr) + q.y * 1.2);
-    float n = fbm(q * 2.1 + float3(0.0, -uTime * 0.8, 0.0));
-    float shell = 1.0 - r / R;
-    float d = clamp(n * 1.5 - 0.5 + shell * 0.9, 0.0, 1.0) * smoothstep(-0.1, 0.25, shell);
-    float tor = length(float2(rr - 0.95 * R, p.y + 0.15 * sin(atan(p.z, p.x) * 3.0 + uTime * 2.0)));
-    d += smoothstep(0.22 * R, 0.0, tor) * (0.4 + 0.9 * n);
-    d *= dens * frontThin;
-    if (d > 0.001) {
-      float light = exp(-r * 2.6 / max(R, 0.3)) * 3.2 * flick;
-      float vein = n * n * 2.2;
-      float3 e = smokeCol * (0.25 + vein) + coreCol * light * (0.4 + vein);
-      float a = d * dt * 4.5;
-      col += T * e * a;
-      T *= exp(-a * 1.5);
-      if (T < 0.02) break;
-    }
-  }
-  if (uFront < 0.5) {
-    float g = length(uv) / max(R, 0.3);
-    col += coreCol * exp(-g * 5.0) * 1.3 * flick * intro * T;
-  }
-  col = 1.0 - exp(-col * 1.3);
-  return half4(half3(col), half(clamp(1.0 - T, 0.0, 1.0)));
-}
-"""
-
-private class FxShaders(val storm: RuntimeShader, val burst: RuntimeShader, val tamma: RuntimeShader)
-
-/** null = máy < Android 13 hoặc shader biên dịch lỗi → các lớp Canvas tự thay thế. */
-private fun loadShaders(): FxShaders? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
-    return runCatching { compileShaders() }.onFailure { Log.w("CultFx", "AGSL lỗi, dùng Canvas", it) }.getOrNull()
-}
-
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-private fun compileShaders() = FxShaders(RuntimeShader(StormSksl), RuntimeShader(BurstSksl), RuntimeShader(TammaSksl))
 
 // ---------------- nền điện ảnh (MajorBackdropPainter) ----------------
 
@@ -392,7 +190,7 @@ private fun Canvas.tail(pts: List<Offset>, w: Float, col: Int, a: Float) {
     }
 }
 
-private fun deg(rad: Float) = Math.toDegrees(rad.toDouble()).toFloat()
+internal fun deg(rad: Float) = Math.toDegrees(rad.toDouble()).toFloat()
 
 private fun Canvas.arc(cx: Float, cy: Float, r: Float, start: Float, sweep: Float, p: Paint) =
     drawArc(RectF(cx - r, cy - r, cx + r, cy + r), deg(start), deg(sweep), false, p)
@@ -641,479 +439,6 @@ private fun setGodray(sh: RuntimeShader, W: Float, H: Float, t: Float, color: In
     sh.setFloatUniform("uT", t)
     sh.setFloatUniform("uColor", ((color shr 16) and 255) / 255f, ((color shr 8) and 255) / 255f, (color and 255) / 255f)
     sh.setFloatUniform("uCenter", cx, cy)
-}
-
-// ---------------- lôi kiếp thủ tục (LightningStormPainter) ----------------
-
-private const val LCore = WHITE
-private const val LMid = 0xFFBFD9FF.toInt()
-private const val LGlow = 0xFF6E8BFF.toInt()
-
-/** Độ sáng sau cú đánh: 3 cú trên cùng kênh trong ~250ms + tàn sáng dài. */
-private fun intensity(d: Float): Float {
-    if (d < 0f) return 0f
-    var a = 0f
-    listOf(0f to 1f, .012f to .9f, .027f to .75f).forEachIndexed { k, (at, amp) ->
-        if (d >= at) a = max(a, amp * exp(-(d - at) / (.009f + k * .002f)))
-    }
-    return min(1f, a + .35f * exp(-d / .05f))
-}
-
-private fun rootX(i: Int, W: Float, s: Float): Float {
-    val rnd = Random(7919 * (i + 1))
-    return W * floatArrayOf(.30f, .72f, .5f)[i] + (rnd.nextFloat() - .5f) * s * .1f
-}
-
-/** Kênh sét 2D: đi bộ ngẫu nhiên ngang, kéo về hai đầu. */
-private fun bolt(a: Offset, b: Offset, r: Random, segments: Int, rough: Float): List<Offset> {
-    val dir = b - a
-    val len = dir.getDistance()
-    val u = dir / len
-    val nrm = Offset(-u.y, u.x)
-    val pts = mutableListOf(a)
-    var lateral = 0f
-    for (k in 1 until segments) {
-        val t = k.toFloat() / segments
-        lateral += (r.nextFloat() - .5f) * rough
-        lateral *= .8f
-        val pull = min(1f, min(t, 1 - t) * 7)
-        val along = t + (r.nextFloat() - .5f) * .6f / segments
-        pts += a + u * (len * along) + nrm * (lateral * pull * 2.2f)
-    }
-    pts += b
-    return pts
-}
-
-/** Kênh sét 3D chiếu phối cảnh: gốc sâu trong mây, đoạn gần to và vặn mạnh; kèm hệ số gần/xa mỗi điểm. */
-private fun bolt3d(top: Offset, hit: Offset, r: Random, s: Float): Pair<List<Offset>, List<Float>> {
-    val z0 = 2.2f
-    val n = 28
-    val vp = Offset(top.x * .6f + hit.x * .4f, -s * .35f)
-    val w0 = vp + (top - vp) * (1 + z0)
-    val pts = ArrayList<Offset>(n + 1)
-    val ks = ArrayList<Float>(n + 1)
-    var lx = 0f
-    var lz = 0f
-    var zPrev = z0
-    for (k in 0..n) {
-        val t = (k.toFloat() / n).pow(.6f)
-        val pull = min(1f, min(t, 1 - t) * 7)
-        if (k in 1 until n) {
-            lx = (lx + (r.nextFloat() - .5f) * s * .16f) * .8f
-            lz = (lz + (r.nextFloat() - .5f) * .5f) * .8f
-        }
-        val z = min(zPrev, max(0f, z0 * (1 - t).pow(1.6f) + lz * pull))
-        zPrev = z
-        val w = w0 + (hit - w0) * t + Offset(lx * pull * 2.2f, 0f)
-        val kk = 1 / (1 + z)
-        pts += vp + (w - vp) * kk
-        ks += kk
-    }
-    return pts to ks
-}
-
-private fun branches(main: List<Offset>, r: Random, s: Float, depth: Int, count: Int, ks: List<Float>? = null): List<Pair<Int, List<Offset>>> {
-    val out = mutableListOf<Pair<Int, List<Offset>>>()
-    repeat(count) {
-        val k = 3 + r.nextInt(max(1, main.size * 2 / 3))
-        if (k >= main.size - 2) return@repeat
-        val p = main[k]
-        val d = main[k + 1] - main[k - 1]
-        val ang = atan2(d.y, d.x) + (if (r.nextBoolean()) 1 else -1) * (.35f + r.nextFloat() * .6f)
-        val len = s * (.12f + r.nextFloat() * .2f) / depth * (if (ks == null) 1f else .4f + ks[k])
-        val pts = bolt(p, p + Offset(cos(ang), sin(ang)) * len, r, 10, s * .03f)
-        out += k to pts
-        if (depth == 1 && r.nextFloat() < .5f) branches(pts, r, s, 2, 1).forEach { (sk, sp) -> out += (k + sk) to sp }
-    }
-    return out
-}
-
-/** 3 lớp cộng sáng: quầng rộng mờ → thân lam → lõi trắng. */
-private fun Canvas.zap(pts: List<Offset>, w: Float, a: Float, cool: Float = 0f) {
-    if (pts.size < 2 || a <= .005f) return
-    val path = Path().poly(pts)
-    drawPath(path, pt(add = true, stroke = w * 7, roundJoin = true, color = LGlow.a(.28f * a), blur = w * 3))
-    drawPath(path, pt(add = true, stroke = w * 2.2f, roundJoin = true, color = mix(LMid, 0xFF9C8CFF.toInt(), cool).a(.75f * a), blur = w * .8f))
-    drawPath(path, pt(add = true, stroke = w, roundJoin = true, round = true, color = mix(LCore, 0xFFD0C4FF.toInt(), cool).a(a)))
-}
-
-private fun Canvas.zapDepth(pts: List<Offset>, ks: List<Float>, w: Float, a: Float, cool: Float = 0f) {
-    var i = 0
-    while (i < pts.size - 1) {
-        val j = min(i + 5, pts.size - 1)
-        val k = (ks[i] + ks[j]) / 2
-        zap(pts.subList(i, j + 1), w * (.3f + k * 1.1f), a * (.55f + .45f * k), cool)
-        i += 5
-    }
-}
-
-private fun Canvas.lightning(W: Float, H: Float, v: Float, from: Float, to: Float, hit: Offset, cloud: RuntimeShader?, seconds: Float) {
-    if (v < from || v >= to) return
-    val s = min(W, H)
-    val env = ((v - from) / .05f).coerceIn(0f, 1f) * ((to - v) / .03f).coerceIn(0f, 1f)
-
-    var flash = 0f
-    var flashX = W / 2
-    StrikeAt.forEachIndexed { i, h ->
-        val a = intensity(v - h) * (.75f + i * .12f)
-        if (a > flash) { flash = a; flashX = rootX(i, W, s) }
-    }
-    var sheet = 0f
-    var sheetAt = Offset.Zero
-    floatArrayOf(.30f, .47f, .51f, .66f, .80f).forEachIndexed { i, h ->
-        val d = v - h
-        if (d < 0f || d > .03f) return@forEachIndexed
-        val a = exp(-d / .006f) * (.55f + .45f * abs(sin(d * 900)))
-        if (a > sheet) { sheet = a; sheetAt = Offset(W * (.18f + (i * .37f) % .7f), s * (.06f + (i % 3) * .05f)) }
-    }
-    sky(W, H, s, env, flash, sheet, sheetAt, flashX, cloud, seconds, v)
-
-    StrikeAt.forEachIndexed { i, h ->
-        val d = v - h
-        if (d < -.022f || d > .12f) return@forEachIndexed
-        val rnd = Random(7919 * (i + 1))
-        val x0 = rootX(i, W, s)
-        rnd.nextFloat()
-        val (main, ks) = bolt3d(Offset(x0, -s * .05f), hit, rnd, s)
-        val br = branches(main, rnd, s, 1, 4 + i, ks)
-        val width = 2.2f + i * .7f
-        if (d < 0f) {
-            // tia dẫn bò xuống, mờ, đầu tia nhấp nháy
-            val g = 1 + d / .022f
-            val n = ceil(main.size * EaseIn.at(g)).toInt().coerceIn(2, main.size)
-            val a = .28f + .2f * abs(sin(v * 3000))
-            zapDepth(main.subList(0, n), ks, width * .45f, a * env)
-            for ((k, pts) in br) {
-                if (k >= n) continue
-                val bn = ceil((n - k) * 1.3f).toInt().coerceIn(2, pts.size)
-                zap(pts.subList(0, bn), width * .25f, a * .6f * env)
-            }
-            val tip = main[n - 1]
-            drawCircle(tip.x, tip.y, s * .036f, pt(add = true, shader = radial(tip.x, tip.y, s * .036f, intArrayOf(LMid.a(.8f * env), LGlow.a(0f)))))
-            return@forEachIndexed
-        }
-        val inten = intensity(d) * env
-        if (inten < .01f) return@forEachIndexed
-        zapDepth(main, ks, width, inten, (d / .09f).coerceIn(0f, 1f))
-        if (i == 2 && d < .05f) zapDepth(main.mapIndexed { j, p -> p + Offset(s * .012f * ks[j], 0f) }, ks, width * .5f, inten * .6f)
-        for ((_, pts) in br) zap(pts, width * .42f, inten * .7f, (d / .04f).coerceIn(0f, 1f))
-        impact(hit, s, d, inten, i, v)
-    }
-}
-
-private fun Canvas.sky(W: Float, H: Float, s: Float, env: Float, flash: Float, sheet: Float, sheetAt: Offset, flashX: Float, cloud: RuntimeShader?, seconds: Float, v: Float) {
-    if (cloud != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        setStorm(cloud, W, H, seconds, env, flash, flashX, sheet, sheetAt)
-        drawRect(0f, 0f, W, H * .4f, pt(shader = cloud))
-    } else {
-        val base = mix(0xFF0B1020.toInt(), 0xFF3A4A7A.toInt(), max(flash, sheet * .6f))
-        for (i in 0 until 16) {
-            val x = (i + .5f) * W / 16 * 1.1f - W * .05f + sin(v * 9 + i * 1.3f) * s * .03f
-            val y = s * (.02f + (i % 4) * .04f) + cos(v * 7 + i) * s * .01f
-            val r = s * (.13f + (i % 3) * .04f)
-            drawCircle(x, y, r, pt(shader = radial(x, y, r, intArrayOf(base.a(.95f * env), base.a(0f)))))
-        }
-    }
-    if (sheet > .01f) {
-        drawCircle(sheetAt.x, sheetAt.y, s * .3f, pt(add = true, shader = radial(sheetAt.x, sheetAt.y, s * .3f, intArrayOf(LMid.a(.45f * sheet * env), LGlow.a(0f)))))
-        val r = Random((sheetAt.x * 13).toInt())
-        zap(bolt(sheetAt - Offset(s * .18f, 0f), sheetAt + Offset(s * .2f, s * .03f), r, 16, s * .03f), 1.2f, .55f * sheet * env)
-    }
-    if (flash > .01f) {
-        drawRect(0f, 0f, W, H, pt(add = true, shader = vertical(0f, H, intArrayOf(LMid.a((if (cloud == null) .5f else .22f) * flash * env), LGlow.a(.18f * flash * env), LGlow.a(.05f * flash * env)))))
-    }
-    drawRect(0f, 0f, W, H * .55f, pt(shader = vertical(0f, H * .55f, intArrayOf(0xFF000000.toInt().a(.5f * env * (1 - flash * .7f)), CLEAR))))
-}
-
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-private fun setStorm(sh: RuntimeShader, W: Float, H: Float, seconds: Float, env: Float, flash: Float, flashX: Float, sheet: Float, at: Offset) {
-    sh.setFloatUniform("uSize", W, H)
-    sh.setFloatUniform("uTime", seconds)
-    sh.setFloatUniform("uEnv", env)
-    sh.setFloatUniform("uFlash", flash)
-    sh.setFloatUniform("uFlashX", flashX)
-    sh.setFloatUniform("uSheet", sheet)
-    sh.setFloatUniform("uSheetAt", at.x, at.y)
-}
-
-private fun Canvas.impact(p: Offset, s: Float, d: Float, inten: Float, i: Int, v: Float) {
-    val r = s * (.18f + i * .04f) * (.6f + inten * .6f)
-    drawCircle(p.x, p.y, r, pt(add = true, shader = radial(p.x, p.y, r, intArrayOf(WHITE.a(.9f * inten), LMid.a(.5f * inten), LGlow.a(0f)), floatArrayOf(0f, .25f, 1f))))
-    val u = (d / .07f).coerceIn(0f, 1f)
-    if (u < 1f) oval(p.x, p.y + s * .2f, s * (.1f + u * .9f), s * (.03f + u * .22f), pt(add = true, stroke = 3 * (1 - u) + .5f, color = LMid.a(.7f * (1 - u))))
-    // tia lửa điện bắn theo đường đạn
-    val rnd = Random(31 * (i + 3))
-    if (u < 1f) {
-        val spark = pt(add = true, round = true, stroke = 1.6f * (1 - u) + .3f, color = mix(LCore, LMid, u).a(1 - u))
-        repeat(16) {
-            val ang = -PIf * (.1f + rnd.nextFloat() * .8f)
-            val sp = s * (.25f + rnd.nextFloat() * .35f)
-            fun at(q: Float) = Offset(p.x + cos(ang) * sp * q, p.y + sin(ang) * sp * q + s * .5f * q * q)
-            val a0 = at(max(0f, u - .08f))
-            val a1 = at(u)
-            drawLine(a0.x, a0.y, a1.x, a1.y, spark)
-        }
-    }
-    // hồ quang bò quanh người, đổi hình ~40ms
-    val crawl = (d / .1f).coerceIn(0f, 1f)
-    if (crawl < 1f) {
-        val r2 = Random((v * 200).toInt() * 17 + i)
-        repeat(3) {
-            val a0 = r2.nextFloat() * TAU
-            val a1 = a0 + .8f + r2.nextFloat() * 1.2f
-            val rr = s * (.1f + r2.nextFloat() * .12f)
-            val pa = p + Offset(cos(a0) * rr, sin(a0) * rr * 1.4f + s * .05f)
-            val pb = p + Offset(cos(a1) * rr, sin(a1) * rr * 1.4f + s * .05f)
-            zap(bolt(pa, pb, r2, 10, s * .02f), .9f, (1 - crawl) * .9f)
-        }
-    }
-}
-
-// ---------------- linh khí quanh người (painters_qi.dart) ----------------
-
-private val Tilts = floatArrayOf(-.34f, .27f, -.12f, .42f, -.5f)
-private val Heights = floatArrayOf(-24f, 8f, -6f, 24f, -40f)
-
-private fun Canvas.bloomDot(x: Float, y: Float, r: Float, col: Int, a: Float, add: Boolean = true) {
-    drawCircle(x, y, r * 4, pt(add = add, shader = radial(x, y, r * 4, intArrayOf(col.a(.5f * a), col.a(0f)))))
-    drawCircle(x, y, r, pt(add = add, color = WHITE.a(.95f * a)))
-}
-
-/**
- * Dải linh khí quấn quanh thân — tách lớp: đoạn ở nửa sau vẽ dưới nhân vật, nửa trước vẽ đè lên. Mỗi dải có trục nghiêng,
- * cao độ, chiều và tốc độ riêng → không dải nào chạy trùng nhịp. [time] đơn vị vòng 4 giây, tích luỹ liên tục.
- * [additive] chỉ dùng trên nền tối (hộp thoại); màn Tu Tiên nền sáng vẽ thường.
- */
-internal fun Canvas.qiRibbons(cx: Float, cy: Float, colors: List<Int>, time: Float, front: Boolean, scale: Float, intro: Float, width: Float, additive: Boolean = true) {
-    val e = EaseOutCubic.at(intro)
-    if (e <= .001f) return
-    val samples = 32
-    val span = 2.4f
-    colors.forEachIndexed { i, col ->
-        val tilt = Tilts[i % 5]
-        val rx = (60 + (i % 3) * 9) * scale * (.3f + .7f * e)
-        val ry = (14 + (i % 2) * 6) * scale
-        val dy = 62 * scale + (Heights[i % 5] * scale - 62 * scale) * e
-        val dir = if (i % 2 == 0) 1f else -1f
-        val head = time * TAU * (.55f + .1f * (i % 3)) * dir + i * TAU / colors.size
-        val ct = cos(tilt)
-        val st = sin(tilt)
-        val pts = ArrayList<Offset>(samples + 1)
-        val depth = FloatArray(samples + 1)
-        val wid = FloatArray(samples + 1)
-        for (k in 0..samples) {
-            val u = k.toFloat() / samples
-            val a = head - dir * span * u
-            val x = cos(a) * rx
-            val y = sin(a) * ry
-            pts += Offset(cx + x * ct - y * st, cy + x * st + y * ct + dy)
-            depth[k] = sin(a)
-            wid[k] = width * scale * (1 - u).pow(.65f) * (.7f + .3f * depth[k]) + .4f
-        }
-        val len = (pts[0] - pts[samples]).getDistance()
-        var k0 = 0
-        while (k0 < samples) {
-            if ((depth[k0] > 0) != front) { k0++; continue }
-            var k1 = k0
-            while (k1 < samples && (depth[k1 + 1] > 0) == front) k1++
-            val end = min(k1 + 1, samples)
-            if (end > k0) ribbonRun(pts, wid, k0, end, col, e, pts[0], len, additive)
-            k0 = end
-        }
-        if ((depth[0] > 0) == front) bloomDot(pts[0].x, pts[0].y, 2.2f * scale, col, e, additive)
-    }
-}
-
-private fun Canvas.ribbonRun(pts: List<Offset>, wid: FloatArray, a: Int, b: Int, col: Int, alpha: Float, head: Offset, len: Float, add: Boolean) {
-    fun poly(wk: Float): Path {
-        val left = ArrayList<Offset>()
-        val right = ArrayList<Offset>()
-        for (k in a..b) {
-            var t = pts[min(k + 1, pts.size - 1)] - pts[max(k - 1, 0)]
-            val l = t.getDistance()
-            t = if (l > 0) t / l else Offset(1f, 0f)
-            val nrm = Offset(-t.y, t.x) * (wid[k] * wk / 2)
-            left += pts[k] + nrm
-            right += pts[k] - nrm
-        }
-        return Path().poly(left + right.reversed(), close = true)
-    }
-    fun fade(c0: Int, a0: Float) = radial(head.x, head.y, max(len, 1f), intArrayOf(c0.a(a0), c0.a(a0 * .5f), c0.a(0f)), floatArrayOf(0f, .55f, 1f))
-    drawPath(poly(2.6f), pt(add = add, shader = fade(col, (if (add) .45f else .32f) * alpha), blur = 4f))
-    drawPath(poly(1f), pt(add = add, shader = fade(col, (if (add) .55f else .8f) * alpha)))
-    drawPath(poly(.32f), pt(add = add, shader = fade(mix(col, WHITE, if (add) .4f else .75f), (if (add) .6f else .95f) * alpha)))
-}
-
-// ---------------- đồ bay quanh người (weaponOrbit / phapbaoOrbit bên Flutter) ----------------
-// Toạ độ trong khung nhân vật 150×145, tâm c. t: vòng 4 giây.
-
-/** Khung nhân vật Flutter 150×145 đặt lên sân khấu Native: ảnh cao 240dp, tâm cách đỉnh sân khấu 144dp. */
-internal val FigC = Offset(75f, 72.5f)
-internal const val FigK = 240f / 145f
-internal const val FigTop = 144f
-
-/** Vẽ trong hệ toạ độ khung 150×145 của Flutter, căn vào tâm nhân vật trên sân khấu. */
-internal fun DrawScope.figureSpace(block: Canvas.() -> Unit) = drawIntoCanvas { c ->
-    val cv = c.nativeCanvas
-    cv.save()
-    cv.translate(size.width / 2, FigTop * density)
-    cv.scale(FigK * density, FigK * density)
-    cv.translate(-FigC.x, -FigC.y)
-    cv.block()
-    cv.restore()
-}
-
-/** Vũ khí: vòng ngang quanh eo, bán kính + cao độ dao động theo sin tần số lệch nhau (Lissajous) → quỹ tích bất quy tắc. */
-internal fun weaponOrbit(t: Float, c: Offset): Pair<Offset, Boolean> {
-    val a = t * TAU
-    val r = 44 + 10 * sin(a * 3 + 1.3f)
-    return Offset(c.x + cos(a) * r, c.y - 6 + sin(a) * r * .40f + sin(a * 2 + .7f) * 6) to (sin(a) > 0)
-}
-
-/** Pháp bảo: trục khác hẳn vũ khí — elip dựng đứng nghiêng chéo ~29°, nâng ngang ngực, quay ngược chiều, thở theo tần số khác. */
-internal fun phapbaoOrbit(t: Float, c: Offset): Pair<Offset, Boolean> {
-    val a = -t * TAU + 2.6f
-    val r = 34 + 8 * sin(a * 2 + .5f)
-    val rx = cos(a) * r * .55f
-    val ry = sin(a) * r * .72f
-    val ct = .8776f
-    val st = .4794f
-    return Offset(c.x + rx * ct - ry * st, c.y - 10 + rx * st + ry * ct) to (ry > 0)
-}
-
-/** Vệt kiếm quang: chuỗi đốm nhỏ mờ dần theo các pha ngay trước, chỉ vẽ khi món đang ở đúng lớp [front]. */
-internal fun Canvas.orbitTail(orbit: (Float, Offset) -> Pair<Offset, Boolean>, t: Float, c: Offset, color: Int, scale: Float, front: Boolean) {
-    if (orbit(t, c).second != front) return
-    for (k in 6 downTo 1) {
-        val q = orbit(t - k * .013f, c).first
-        drawCircle(q.x, q.y, (2.4f - k * .28f) * scale, pt(color = color.a(.30f * (1 - k / 7f))))
-    }
-}
-
-/** Pháp trận nằm dưới chân: vòng kép + bát giác tinh + 8 quẻ + vạch khắc, xoay ngược chiều nhau. */
-private fun Canvas.runeCircle(cx: Float, cy: Float, radius: Float, color: Int, time: Float, intro: Float) {
-    val e = EaseOutBack.at(intro)
-    if (e <= .001f) return
-    val a = intro.coerceIn(0f, 1f)
-    val r = radius * e
-    val hot = mix(color, WHITE, .45f)
-    save()
-    translate(cx, cy)
-    scale(1f, .34f)
-    drawCircle(0f, 0f, r * 1.2f, pt(add = true, shader = radial(0f, 0f, r * 1.2f, intArrayOf(color.a(.4f * a), color.a(.12f * a), color.a(0f)), floatArrayOf(0f, .7f, 1f))))
-    val haze = { w: Float -> pt(add = true, stroke = w * 3, color = color.a(.35f * a), blur = 3f) }
-    val sharp = { w: Float -> pt(add = true, stroke = w, round = true, color = hot.a(.9f * a)) }
-    fun ring(rr: Float, w: Float) { drawCircle(0f, 0f, rr, haze(w)); drawCircle(0f, 0f, rr, sharp(w)) }
-    ring(r, 1.8f); ring(r * .84f, 1f); ring(r * .46f, 1f)
-    save()
-    rotate(deg(time * TAU * .12f))
-    for (off in floatArrayOf(0f, PIf / 4)) {
-        val sq = Path().poly(List(4) { k -> val ang = off + k * PIf / 2; Offset(cos(ang) * r * .82f, sin(ang) * r * .82f) }, close = true)
-        drawPath(sq, haze(.9f)); drawPath(sq, sharp(.9f))
-    }
-    restore()
-    save()
-    rotate(deg(-time * TAU * .08f))
-    val tick = pt(add = true, stroke = 1f, color = hot.a(.6f * a))
-    for (k in 0 until 32) {
-        val ang = k * PIf / 16
-        val o = if (k % 2 == 0) .95f else .91f
-        drawLine(cos(ang) * r * .86f, sin(ang) * r * .86f, cos(ang) * r * o, sin(ang) * r * o, tick)
-    }
-    val yao = pt(add = true, stroke = 1.6f, round = true, color = hot.a(.95f * a))
-    val sc = radius / 70
-    for (i in 0 until 8) {
-        save()
-        rotate(deg(i * PIf / 4 + PIf / 8))
-        translate(r * .65f, 0f)
-        rotate(90f)
-        val bits = 7 - i
-        for (j in 0 until 3) {
-            val y = (j - 1) * 3.2f * sc
-            if ((bits shr j) and 1 == 1) drawLine(-4.5f * sc, y, 4.5f * sc, y, yao)
-            else { drawLine(-4.5f * sc, y, -1.2f * sc, y, yao); drawLine(1.2f * sc, y, 4.5f * sc, y, yao) }
-        }
-        restore()
-    }
-    restore()
-    restore()
-}
-
-private fun Canvas.risingMotes(cx: Float, cy: Float, color: Int, time: Float, front: Boolean, scale: Float, count: Int, intro: Float) {
-    val a0 = intro.coerceIn(0f, 1f)
-    if (a0 <= .001f) return
-    for (i in 0 until count) {
-        fun phase(tt: Float) = ((tt * .45f + i.toFloat() / count) % 1f + 1f) % 1f
-        fun at(tt: Float): Offset {
-            val ph = phase(tt)
-            val ang = ph * TAU * 1.5f + i * 2.1f
-            return Offset(cx + cos(ang) * (48 - ph * 16) * scale, cy + (56 - ph * 130) * scale)
-        }
-        val ph = phase(time)
-        if ((sin(ph * TAU * 1.5f + i * 2.1f) > 0) != front) continue
-        val a = sin(ph * PIf) * a0
-        val trail = pt(add = true, round = true)
-        var prev = at(time)
-        for (k in 1..5) {
-            val q = at(time - k * .02f)
-            if ((q - prev).getDistance() > 20 * scale) break
-            val f = 1 - k / 6f
-            trail.strokeWidth = 2.2f * f * scale + .3f
-            trail.color = color.a(.6f * a * f)
-            drawLine(prev.x, prev.y, q.x, q.y, trail)
-            prev = q
-        }
-        at(time).let { bloomDot(it.x, it.y, 1.3f * scale, color, a) }
-    }
-}
-
-/** QiVortexPainter: vẽ trên khung nhân vật 150×145 (đã scale theo khung thật). */
-private fun Canvas.qiVortex(time: Float, intro: Float, color: Int, front: Boolean, major: Boolean) {
-    val w = 150f
-    val h = 145f
-    val cx = w / 2
-    val cy = h * .56f
-    val s = if (major) .95f else 1.1f
-    if (!front) runeCircle(cx, h - 10, 74 * s, color, time, intro)
-    val cols = buildList {
-        add(color); add(mix(color, WHITE, .45f)); add(mix(color, 0xFFFFD25A.toInt(), .55f))
-        if (major) { add(mix(color, 0xFF74C0FC.toInt(), .4f)); add(mix(color, WHITE, .2f)) }
-    }
-    qiRibbons(cx, cy, cols, time, front, s, intro, 6f)
-    risingMotes(cx, cy, mix(color, WHITE, .3f), time, front, s, if (major) 18 else 12, intro)
-}
-
-/** Fallback Tâm Ma khi không có shader: quầng + 6 sợi ma khí cuộn quanh. */
-private fun Canvas.tammaSmoke(W: Float, H: Float, t: Float, subdued: Boolean) {
-    val cx = W / 2
-    val cy = H * .43f
-    val s = min(W, H)
-    val color = if (subdued) 0xFF8B5CF6.toInt() else 0xFFE03131.toInt()
-    val pulse = .5f + .5f * sin(t * PIf * 4)
-    drawCircle(cx, cy, s * (.18f + pulse * .025f), pt(shader = radial(cx, cy, s * .23f, intArrayOf(color.a(.19f), CLEAR))))
-    for (i in 0 until 6) {
-        val a = i * TAU / 6 + t * (if (subdued) 1.1f else 2f)
-        val sx = cx + cos(a) * s * .26f
-        val sy = cy + sin(a) * .45f * s * .26f
-        val ex = cx + cos(a + 1.7f) * s * .10f
-        val ey = cy + sin(a + 1.7f) * .52f * s * .10f
-        drawPath(Path().apply {
-            moveTo(sx, sy)
-            cubicTo(sx - sin(a) * s * .16f, sy + cos(a) * s * .12f, ex + cos(a) * s * .13f, ey - sin(a) * s * .10f, ex, ey)
-        }, pt(stroke = 1.4f + (i % 2), round = true, blur = 3f, color = color.a(.22f + pulse * .18f)))
-    }
-}
-
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
-private fun Canvas.tammaVolume(sh: RuntimeShader, cx: Float, cy: Float, radius: Float, time: Float, v: Float, win: Boolean, front: Boolean) {
-    sh.setFloatUniform("uCenter", cx, cy)
-    sh.setFloatUniform("uRadius", radius)
-    sh.setFloatUniform("uTime", time)
-    sh.setFloatUniform("uV", v)
-    sh.setFloatUniform("uWin", if (win) 1f else 0f)
-    sh.setFloatUniform("uFront", if (front) 1f else 0f)
-    val b = radius * 1.5f
-    drawRect(cx - b, cy - b, cx + b, cy + b, pt(shader = sh))
 }
 
 // ---------------- rung ----------------

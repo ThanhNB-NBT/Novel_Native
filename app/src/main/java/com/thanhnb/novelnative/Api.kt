@@ -229,7 +229,10 @@ object Api {
                 .apply { prefer?.let { header("Prefer", it) } }
                 .cacheControl(if (cached != null) okhttp3.CacheControl.FORCE_CACHE else okhttp3.CacheControl.FORCE_NETWORK)
                 .build()
-            http.newCall(req).execute().use { resp ->
+            val call = http.newCall(req)
+            // execute() chặn luồng, không biết coroutine đã huỷ: rời màn/lướt chương thì cắt request luôn, khỏi giữ kết nối tới hết timeout
+            val stop = coroutineContext[kotlinx.coroutines.Job]?.invokeOnCompletion { if (it != null) call.cancel() }
+            try { call.execute().use { resp ->
                 val code = resp.code
                 if (cached != null && code == 504) { cached.miss = true; throw IOException("chưa có bản lưu") } // 504 = OkHttp báo không có trong cache
                 if (code == 401 && auth && retry && Session.token != null) {
@@ -240,7 +243,10 @@ object Api {
                 if (code !in 200..299) throw ApiError(code, text)
                 headerOut?.put("range", resp.header("Content-Range").orEmpty())
                 text
-            }
+            } } catch (e: IOException) {
+                // bị cắt vì huỷ → báo đúng là huỷ, nơi gọi (load/prefetch) bỏ qua thay vì hiện "Canceled" thành lỗi mạng
+                if (call.isCanceled()) throw kotlinx.coroutines.CancellationException("đã huỷ").apply { initCause(e) } else throw e
+            } finally { stop?.dispose() }
         }
 
     internal suspend fun get(path: String) = JSONArray(raw("GET", "rest/v1/$path"))

@@ -98,7 +98,10 @@ object Nav {
 class Loader<T>(val res: Result<T>?, val reload: () -> Unit)
 
 /** Kết quả gần nhất theo key, để quay lại màn cũ thấy ngay dữ liệu (rồi mới tải lại nền). */
-private val memo = HashMap<List<Any?>, Any?>()
+// LRU: phiên dài lướt hàng trăm truyện (mục lục vài trăm chương mỗi truyện) không phình bộ nhớ mãi
+private val memo = object : LinkedHashMap<List<Any?>, Any?>(64, .75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<List<Any?>, Any?>) = size > 300
+}
 
 /**
  * Gọi API theo key: hiện ngay bản đã nhớ (nếu có) rồi tải lại nền — stale-while-revalidate.
@@ -116,7 +119,8 @@ fun <T> load(vararg keys: Any?, block: suspend () -> T): Loader<T> {
             val c = CacheOnly()
             runCatching { kotlinx.coroutines.withContext(c) { block() } }.onSuccess { if (!c.miss) res = Result.success(it) }
         }
-        val r = runCatching { block() }
+        // không nuốt CancellationException: rời màn / tải lại dồn dập không được ghi "đã huỷ" thành lỗi hiện ra
+        val r = runCatching { block() }.onFailure { if (it is CancellationException) throw it }
         r.onSuccess { memo[key] = it }
         if (r.isSuccess || res?.isSuccess != true) res = r
     }

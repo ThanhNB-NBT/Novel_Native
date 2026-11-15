@@ -55,6 +55,18 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.graphicsLayer
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -96,19 +108,46 @@ fun DetailScreen(id: Int) {
             fun read(i: Int) = if (uid == null) Nav.push(Screen.Login) else Nav.push(Screen.Read(n.id, n.title, i))
             val amb = rememberAmbient(n.cover)
             val dark = cs.background.luminance() < .5f
-            Column(
-                Modifier.fillMaxSize().background(
+            val tail = amb?.copy(alpha = (if (dark) .16f else .2f) * .65f)?.compositeOver(cs.background) ?: cs.background
+            // đầu trang thu lên theo cuộn (chừa thanh trạng thái): cửa sổ thấp (chia đôi, cửa sổ nổi, xoay ngang) vẫn còn chỗ cho tab + danh sách
+            val density = LocalDensity.current
+            val top = WindowInsets.statusBars.getTop(density)
+            var headH by remember { mutableIntStateOf(0) }
+            var tabsH by remember { mutableIntStateOf(0) }
+            var off by remember { mutableFloatStateOf(0f) }
+            val maxOff by rememberUpdatedState((headH - top).coerceAtLeast(0).toFloat())
+            fun shift(dy: Float): Float { val o = off; off = (off - dy).coerceIn(0f, maxOff); return o - off } // trả về phần đã dùng
+            val conn = remember {
+                object : NestedScrollConnection {
+                    // vuốt lên: thu đầu trang trước rồi mới cuộn danh sách · vuốt xuống: danh sách về đỉnh rồi mới kéo đầu trang ra
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource) = if (available.y < 0) Offset(0f, shift(available.y)) else Offset.Zero
+                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = if (available.y > 0) Offset(0f, shift(available.y)) else Offset.Zero
+                }
+            }
+            BoxWithConstraints(
+                Modifier.fillMaxSize().clipToBounds().nestedScroll(conn).background(
                     Brush.verticalGradient(listOf((amb ?: Color.Transparent).copy(alpha = if (dark) .16f else .2f), Color.Transparent), endY = 2200f),
                 ),
             ) {
-                Header(n, amb?.copy(alpha = (if (dark) .16f else .2f) * .65f)?.compositeOver(cs.background) ?: cs.background)
+            val pageH = with(density) { (constraints.maxHeight - top - tabsH).coerceAtLeast(0).toDp() }
+            // thu gần hết: dải còn sót dưới thanh trạng thái phủ dần màu giấy, icon thanh trạng thái đổi theo nền
+            val collapsed by remember { derivedStateOf { maxOff > 0f && off >= maxOff * .9f } }
+            LaunchedEffect(collapsed) { WindowCompat.getInsetsController((view.context as Activity).window, view).isAppearanceLightStatusBars = collapsed && appLight }
+            Column(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).offset { IntOffset(0, -off.coerceAtMost(maxOff).roundToInt()) }) {
+                // kéo ngay trên đầu trang cũng thu/mở được (khi cửa sổ thấp đến mức đầu trang chiếm gần hết)
+                Box(Modifier.onSizeChanged { headH = it.height }.scrollable(rememberScrollableState { shift(it) }, Orientation.Vertical)) {
+                    Header(n, tail)
+                }
                 // nội dung hai tab là pager: vuốt ngang theo tay, chạm tab thì lò xo trượt; gạch chân chạy theo currentPage
                 val pager = rememberPagerState(tab) { 2 }
                 LaunchedEffect(tab) { if (pager.targetPage != tab) pager.animateScrollToPage(tab, animationSpec = spring(dampingRatio = .9f, stiffness = 300f)) }
                 LaunchedEffect(pager) { snapshotFlow { pager.targetPage }.collect { tab = it } }
-                SegTabs(listOf("Giới thiệu", "Danh sách chương"), pager.currentPage + pager.currentPageOffsetFraction) { tab = it }
+                // kéo trên thanh tab cũng mở lại đầu trang, khỏi cuộn danh sách chương ngược về đầu
+                Box(Modifier.onSizeChanged { tabsH = it.height }.scrollable(rememberScrollableState { shift(it) }, Orientation.Vertical)) {
+                    SegTabs(listOf("Giới thiệu", "Danh sách chương"), pager.currentPage + pager.currentPageOffsetFraction) { tab = it }
+                }
                 val bottom = PaddingValues(bottom = 96.dp)
-                HorizontalPager(pager, Modifier.weight(1f), key = { it }) { page ->
+                HorizontalPager(pager, Modifier.height(pageH), key = { it }) { page ->
                 if (page == 0) LazyColumn(Modifier.fillMaxSize(), contentPadding = bottom) {
                     item {
                         if (n.genres.isNotEmpty()) FlowRow(Modifier.padding(20.dp, 16.dp, 20.dp, 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,6 +277,8 @@ fun DetailScreen(id: Int) {
                     }
                 }
                 }
+            }
+            if (maxOff > 0f) Box(Modifier.fillMaxWidth().height(with(density) { top.toDp() }).graphicsLayer { alpha = ((off / maxOff - .7f) / .3f).coerceIn(0f, 1f) }.background(tail))
             }
             // nền mờ dần sau hai nút nổi: chữ danh sách trôi xuống dưới không còn chọc qua khe giữa hai nút
             // gần đặc ngay từ mép trên nút (≈40% chiều cao) để dòng chữ không lộ quanh nút; alpha 0 của chính màu nền, không phải đen trong suốt
