@@ -1,6 +1,7 @@
 ﻿# Sinh lại app/src/main/baseline-prof.txt trên máy ảo/máy thật API 33+ đang cắm (adb devices).
 # Hành trình ở baselineprofile/.../Journey.kt — CHỈ ĐỌC trên server prod, không mở chương.
 # App được cài đè (giữ dữ liệu, không gỡ). Chạy ~7 phút. Dùng: .\tools\gen_baseline_profile.ps1
+# Sau khi chạy, máy ảo hay kẹt hiệu ứng mở app (mọi app mở ra màn đen, cửa sổ mShownAlpha=0): adb reboot là hết.
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot)
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
