@@ -423,7 +423,6 @@ fun LunarScreen(tab: Boolean = false) {
 
 private val GOLD = Color(0xFFC49A3A)
 private val CREAM = Color(0xFFFBF3E4)
-private val MONTH_HAN = listOf("正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "冬", "臘")
 
 /** Ngày âm theo cách ghi trên lịch Hán: 初一…初十, 十一…十九, 二十, 廿一…廿九, 三十. */
 private fun hanDay(n: Int): String {
@@ -473,13 +472,13 @@ private fun DayHero(d: LocalDate) {
                         AnimatedContent(l.day, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }, label = "lunarDay") { n ->
                             Text("$n", style = MaterialTheme.typography.headlineLarge.copy(fontSize = 88.sp, lineHeight = 92.sp), fontWeight = FontWeight.ExtraBold, color = Color.White)
                         }
-                        // ấn triện: tháng âm
+                        // ấn triện: tháng âm bằng số, đứng sát số ngày để đọc liền "15 tháng 8"
                         Column(
-                            Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(5.dp)).background(seal).padding(horizontal = 9.dp, vertical = 5.dp),
+                            Modifier.padding(start = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(6.dp)).background(seal).padding(horizontal = 12.dp, vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("𣎃", fontFamily = Nom, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp) // chữ Nôm "tháng"
-                            Text((if (l.leap) "閏" else "") + MONTH_HAN[(l.month - 1).coerceIn(0, 11)], style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = onSeal, lineHeight = 20.sp)
+                            Text(if (l.leap) "THÁNG NHUẬN" else "THÁNG", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = onSeal, letterSpacing = 1.sp)
+                            Text("${l.month}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = onSeal, lineHeight = 32.sp)
                         }
                     }
                     Text("${hanDay(l.day)} · ${moonName(l.day)}", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(.7f))
