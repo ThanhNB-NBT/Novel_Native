@@ -30,6 +30,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -265,7 +266,12 @@ private fun PosterRail(s: Section, items: List<Novel>) = Column {
 /** "Xem tất cả" một mục — cuộn tới cuối thì tải thêm 30. */
 @Composable
 fun MoreScreen(s: Section) {
-    val items = remember { mutableStateListOf<Novel>() }
+    // Danh sách đã tải sống ngoài composition: mở Chi tiết rồi quay lại thì vị trí cuộn (đã lưu) còn đủ hàng để khôi phục
+    val memoKey = listOf<Any?>("more", s)
+    @Suppress("UNCHECKED_CAST")
+    val items = remember { memo.getOrPut(memoKey) { mutableStateListOf<Novel>() } as SnapshotStateList<Novel> }
+    // Rời hẳn màn (pop) thì bỏ danh sách — lần mở sau tải mới; còn nằm dưới ngăn xếp thì giữ
+    DisposableEffect(Unit) { onDispose { if (Screen.More(s) !in Nav.stack) memo.remove(memoKey) } }
     var done by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf<Throwable?>(null) }
     val list = rememberLazyListState()

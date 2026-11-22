@@ -99,7 +99,7 @@ class Loader<T>(val res: Result<T>?, val reload: () -> Unit)
 
 /** Kết quả gần nhất theo key, để quay lại màn cũ thấy ngay dữ liệu (rồi mới tải lại nền). */
 // LRU: phiên dài lướt hàng trăm truyện (mục lục vài trăm chương mỗi truyện) không phình bộ nhớ mãi
-private val memo = object : LinkedHashMap<List<Any?>, Any?>(64, .75f, true) {
+internal val memo = object : LinkedHashMap<List<Any?>, Any?>(64, .75f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<List<Any?>, Any?>) = size > 300
 }
 
