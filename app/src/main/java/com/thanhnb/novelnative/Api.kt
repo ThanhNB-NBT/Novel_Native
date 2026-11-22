@@ -92,6 +92,13 @@ object Prefs {
     var notifSeenAt by mutableStateOf("")
     var accent by mutableIntStateOf(0) // chỉ số trong accents (Theme.kt)
     var paper by mutableIntStateOf(0)
+    // màu tự chọn (ARGB) cho dị tượng dị căn và trận pháp dưới chân: màu 1 (0 = mặc định), màu 2 (0 = không trôi màu)
+    var auraColor by mutableIntStateOf(0)
+    var aura2 by mutableIntStateOf(0)
+    var formColor by mutableIntStateOf(0)
+    var form2 by mutableIntStateOf(0)
+    var auraGrad by mutableIntStateOf(0) // dải màu chạy dựng sẵn (AuraGradients, chỉ số + 1), 0 = không; đè lên 2 màu trên
+    var formGrad by mutableIntStateOf(0)
 
     fun init(c: Context) {
         sp = c.getSharedPreferences("app", Context.MODE_PRIVATE)
@@ -99,12 +106,22 @@ object Prefs {
         themeMode = sp.getInt("theme_mode", 0)
         accent = sp.getInt("accent", 0)
         paper = sp.getInt("paper", 0)
+        auraColor = sp.getInt("aura_color", 0)
+        aura2 = sp.getInt("aura_color2", 0)
+        formColor = sp.getInt("form_color", 0)
+        form2 = sp.getInt("form_color2", 0)
+        auraGrad = sp.getInt("aura_grad", 0)
+        formGrad = sp.getInt("form_grad", 0)
         notifSeenAt = sp.getString("notify_seen_at", null) ?: Instant.now().toString().also { setSeen(it) }
     }
 
     fun setTheme(m: Int) { themeMode = m; sp.edit().putInt("theme_mode", m).apply() }
     fun pickAccent(i: Int) { accent = i; sp.edit().putInt("accent", i).apply() }
     fun pickPaper(i: Int) { paper = i; sp.edit().putInt("paper", i).apply() }
+    fun pickFx(key: String, c: Int) {
+        when (key) { "aura_color" -> auraColor = c; "aura_color2" -> aura2 = c; "form_color" -> formColor = c; "form_color2" -> form2 = c; "aura_grad" -> auraGrad = c; "form_grad" -> formGrad = c }
+        sp.edit().putInt(key, c).apply()
+    }
     fun setSeen(at: String) { notifSeenAt = at; sp.edit().putString("notify_seen_at", at).apply() }
 
     // Cùng khoá với app Flutter (rp_<novel>_<chương>) cho dễ đối chiếu.

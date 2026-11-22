@@ -7,6 +7,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Favorite
@@ -101,6 +104,12 @@ private val ElementNames = mapOf("kim" to "Kim", "moc" to "Mộc", "thuy" to "Th
 internal val Variants = mapOf(
     "thien" to "Thiên Linh Căn", "hon" to "Hỗn Độn Linh Căn", "kiem" to "Kiếm Linh Căn", "loi" to "Lôi Linh Căn",
     "bang" to "Băng Linh Căn", "phong" to "Phong Linh Căn", "am" to "Huyễn Linh Căn",
+)
+/** Hiệu ứng riêng của dị căn — mirror cult_stats/cult_base_rate/cult_advance (mig 159). */
+internal val VariantFx = mapOf(
+    "kiem" to "Kiếm ý sắc bén — công kích ×1.2", "bang" to "Băng cơ ngọc cốt — khí huyết ×1.2",
+    "am" to "Huyễn tâm thông minh — thần thức ×1.2", "phong" to "Phong hành tự tại — tốc độ tu ×1.15",
+    "loi" to "Lôi kiếp hộ thể — +10% tỷ lệ đột phá đại cảnh giới", "hon" to "Dung hợp vạn pháp — hợp mọi công pháp",
 )
 private val SlotTypes = linkedMapOf(
     "congphap" to "Công pháp", "vukhi" to "Vũ khí", "phapbao" to "Pháp bảo", "phapchu" to "Pháp chú", "yphuc" to "Y phục", "giay" to "Giày",
@@ -387,7 +396,11 @@ fun CultivationScreen(tab: Boolean = false) {
             confirmButton = {
                 if (!worn) TextButton({
                     picked = null
-                    act { if (type in Consumable) { CultApi.use(id); "Đã dùng ${it.optString("name")}" } else { CultApi.equip(id); "Đã trang bị ${it.optString("name")}" } }
+                    act { if (type in Consumable) {
+                        val before = st.res?.getOrNull()?.strOrNull("variant")
+                        val v = CultApi.use(id).strOrNull("variant")
+                        if (before == null && v != null) "Linh căn dị biến — trời định ${Variants[v]}! ${VariantFx[v].orEmpty()}" else "Đã dùng ${it.optString("name")}"
+                    } else { CultApi.equip(id); "Đã trang bị ${it.optString("name")}" } }
                 }) { Text(if (type in Consumable) "Dùng" else "Trang bị") }
             },
             dismissButton = {
@@ -409,8 +422,12 @@ fun CultivationScreen(tab: Boolean = false) {
  * Trận pháp dưới chân: vòng nét đứt chạy quanh, vạch khắc xoay, vòng trong chạy ngược, chín nút = chín tầng (đã qua thì sáng, tầng hiện tại đập nhẹ).
  * Mọi chu kỳ là bội nguyên của vòng 8 giây [t] nên lặp liền mạch; ellipse dẹt 0,24 để ra phối cảnh nhìn từ trên xuống.
  */
-private fun DrawScope.drawFormation(c: Offset, rx: Float, col: Color, t: Float, lit: Int) {
+private fun DrawScope.drawFormation(c: Offset, rx: Float, cols: List<Color>, t: Float, lit: Int) {
     val tau = 2f * PI.toFloat()
+    val col = cols[0]
+    fun k(ph: Float) = flowColor(cols, t, ph)
+    // dải màu quấn quanh vòng: lấy mẫu flowColor theo góc nên màu chạy vòng cùng nhịp với nút và vạch khắc
+    val sweep = if (cols.size == 1) null else Brush.sweepGradient(List(13) { k(it / 12f) }, c)
     val d = density
     val ry = rx * .24f
     fun pt(a: Float, k: Float) = Offset(c.x + rx * k * cos(a), c.y + ry * k * sin(a))
@@ -418,7 +435,7 @@ private fun DrawScope.drawFormation(c: Offset, rx: Float, col: Color, t: Float, 
         drawCircle(Brush.radialGradient(listOf(col.copy(.34f), col.copy(.1f), Color.Transparent), c, rx * 1.25f), rx * 1.25f, c)
     }
     fun ring(k: Float, alpha: Float, w: Float, dash: Float = 0f, dir: Float = 1f) = drawOval(
-        col.copy(alpha), Offset(c.x - rx * k, c.y - ry * k), Size(rx * k * 2, ry * k * 2),
+        sweep ?: SolidColor(col), Offset(c.x - rx * k, c.y - ry * k), Size(rx * k * 2, ry * k * 2), alpha,
         style = Stroke(w * d, pathEffect = if (dash > 0f) PathEffect.dashPathEffect(floatArrayOf(dash * d, dash * .7f * d), dir * t * dash * 1.7f * 6f * d) else null),
     )
     ring(1f, .8f, 1.5f, 9f)
@@ -427,12 +444,13 @@ private fun DrawScope.drawFormation(c: Offset, rx: Float, col: Color, t: Float, 
     for (i in 0 until 16) {
         val a = i * tau / 16 + t * tau
         val long = i % 4 == 0
-        drawLine(col.copy(.45f + .4f * (.5f + .5f * sin(a))), pt(a, .83f), pt(a, if (long) .97f else .91f), strokeWidth = (if (long) 1.8f else 1f) * d, cap = StrokeCap.Round)
+        drawLine(k(i / 16f).copy(.45f + .4f * (.5f + .5f * sin(a))), pt(a, .83f), pt(a, if (long) .97f else .91f), strokeWidth = (if (long) 1.8f else 1f) * d, cap = StrokeCap.Round)
     }
     for (i in 0 until 9) {
         val a = PI.toFloat() + i * tau / 9
         val p = pt(a, 1f)
         val depth = 1f + .3f * sin(a)
+        val col = k(i / 9f)
         if (i < lit) {
             val pulse = if (i == lit - 1) 1f + .35f * sin(t * tau * 2f) else 1f
             drawCircle(col.copy(.3f), 8f * d * depth * pulse, p)
@@ -522,7 +540,8 @@ private fun HeroStage(s: JSONObject, realmCol: Color, header: @Composable () -> 
                     val ground = size.height * .92f
                     val ac = Offset(cx, size.height * .55f)
                     drawCircle(Brush.radialGradient(listOf(aura.copy(.34f), Color.Transparent), ac, size.height * .45f), size.height * .45f, ac)
-                    drawFormation(Offset(cx, size.height * .86f), size.height * .38f, aura, t, if (ascended) 9 else s.optInt("stage", 1))
+                    drawFormation(Offset(cx, size.height * .86f), size.height * .38f, fxColors(Prefs.formColor, Prefs.form2, Prefs.formGrad, aura) ?: listOf(aura), t, if (ascended) 9 else s.optInt("stage", 1))
+                    s.strOrNull("variant")?.let { drawVariantAura(it, Offset(cx, size.height * .52f), size.height * .42f, t, fxColors(Prefs.auraColor, Prefs.aura2, Prefs.auraGrad, VariantColor[it] ?: aura)) }
                     // bóng đổ mềm dưới chân, co lại khi nhân vật nhún lên
                     val rx = size.height * .2f * (1f - .08f * sin(t * 4f * PI.toFloat()))
                     drawOval(Brush.radialGradient(listOf(Color.Black.copy(.35f), Color.Transparent), Offset(cx, ground), rx), Offset(cx - rx, ground - rx * .2f), Size(rx * 2, rx * .4f))
@@ -694,6 +713,75 @@ private fun RealmBadges(s: JSONObject, realmCol: Color) {
             }
         }
     }
+    val variant = s.strOrNull("variant")
+    var fxPick by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 2.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        variant?.let { VariantFx[it] }?.let { Text(it, fontSize = 12.sp, color = cs.onSurfaceVariant, textAlign = TextAlign.Center) }
+        IconButton({ fxPick = true }, Modifier.size(36.dp)) {
+            Icon(Icons.Rounded.Palette, "Chỉnh màu dị tượng và trận pháp", Modifier.size(18.dp), tint = Prefs.auraColor.fxColor() ?: Prefs.formColor.fxColor() ?: variant?.let { VariantColor[it] } ?: cs.primary)
+        }
+    }
+    if (fxPick) FxColorDialog(variant, realmCol) { fxPick = false }
+}
+
+private fun Int.fxColor() = takeIf { it != 0 }?.let(::Color)
+
+/** Chọn màu cho dị tượng (chỉ khi có dị căn) và trận pháp: màu chính + màu phụ để dải màu trôi qua lại. */
+@Composable
+private fun FxColorDialog(variant: String?, realmCol: Color, onDone: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var tab by remember { mutableIntStateOf(if (variant != null) 0 else 1) }
+    val aura = tab == 0
+    val def = if (aura) variant?.let { VariantColor[it] } ?: cs.primary else realmCol
+    val gKey = if (aura) "aura_grad" else "form_grad"
+    val grad = if (aura) Prefs.auraGrad else Prefs.formGrad
+    @Composable fun swatches(key: String, cur: Int, first: String, firstCol: Color) =
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            (listOf(0) + AuraSwatches.map { it.toArgb() }).forEach { c ->
+                val on = grad == 0 && cur == c
+                Box(
+                    Modifier.size(32.dp).clip(CircleShape).background(if (c == 0) firstCol else Color(c))
+                        .border(if (on) 3.dp else 1.dp, if (on) cs.onSurface else cs.onSurface.copy(.15f), CircleShape)
+                        .clickable { Prefs.pickFx(key, c); Prefs.pickFx(gKey, 0) },
+                    Alignment.Center,
+                ) { if (c == 0) Text(first, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.Black.copy(.6f)) }
+            }
+        }
+    AlertDialog(
+        onDone, containerColor = cs.card,
+        title = { Text("Màu hào quang") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (variant != null) Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(aura, { tab = 0 }, { Text("Dị tượng") })
+                    FilterChip(!aura, { tab = 1 }, { Text("Trận pháp") })
+                }
+                val k1 = if (aura) "aura_color" else "form_color"
+                val k2 = if (aura) "aura_color2" else "form_color2"
+                Text("Dải màu chạy", fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AuraGradients.forEachIndexed { i, (name, cols) ->
+                        val on = grad == i + 1
+                        Column(
+                            Modifier.clip(RoundedCornerShape(10.dp)).clickable { Prefs.pickFx(gKey, if (on) 0 else i + 1) },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Box(
+                                Modifier.size(64.dp, 22.dp).clip(CircleShape).background(Brush.horizontalGradient(cols))
+                                    .border(if (on) 3.dp else 1.dp, if (on) cs.onSurface else cs.onSurface.copy(.15f), CircleShape),
+                            )
+                            Text(name, fontSize = 10.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+                Text("Hoặc tự phối — màu chính", fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+                swatches(k1, if (aura) Prefs.auraColor else Prefs.formColor, "Gốc", def)
+                Text("Màu phụ — chạy màu cùng màu chính", fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+                swatches(k2, if (aura) Prefs.aura2 else Prefs.form2, "Không", cs.onSurface.copy(.08f))
+            }
+        },
+        confirmButton = { TextButton(onDone) { Text("Xong") } },
+    )
 }
 
 @Composable

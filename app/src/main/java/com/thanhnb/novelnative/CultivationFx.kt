@@ -139,6 +139,7 @@ internal fun SpeedDialog(s: JSONObject, dismiss: () -> Unit) {
         else add(Triple("Chưa học công pháp", "×1", false))
         add(Triple("Hợp linh căn" + if (match) "" else " (không hợp)", if (match) "×1,3" else "×1", match))
         add(Triple("Linh căn (${rootName(s)})", "×" + num(linhCanMult(els.size, variant, lc)), variant != null))
+        if (variant == "phong") add(Triple("Phong Linh Căn", "×1,15", true))
         if (lc > 1) add(Triple("Luyện căn", "${lc - 1} điểm (đã gộp vào bậc)", true))
         if (s.optString("race") == "ma") add(Triple("Tà tốc Ma tộc", "×1,1", true))
         if (s.strOrNull("ascended_at") != null && tier > 0) add(Triple("Tiên uy (${TienTierNames.getOrElse(tier) { "" }})", "×" + num(Math.pow(1.6, tier.toDouble())), true))
