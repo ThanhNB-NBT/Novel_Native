@@ -52,7 +52,7 @@ class Term(
 )
 /** Job vá chương cũ gần nhất: [status] pending/running/done/failed, [result] "N/M chương". */
 class PatchJob(val status: String, val result: String?)
-data class ChapterRef(val index: Int, val title: String, val done: Boolean)
+data class ChapterRef(val index: Int, val title: String, val done: Boolean, val queued: Boolean = false)
 /** Vị trí trong mục lục (xếp tăng dần) của chương [n]; không có thì lấy chương kế sau, quá cuối thì chương cuối. */
 fun chapterPos(chapters: List<ChapterRef>, n: Int) =
     chapters.indexOfFirst { it.index >= n }.let { if (it < 0) chapters.lastIndex else it }.coerceAtLeast(0)
@@ -430,7 +430,7 @@ object Api {
             ).objs()
             page.mapTo(all) {
                 val i = it.getInt("chapter_index")
-                ChapterRef(i, it.str("title_vi") ?: it.str("title_zh") ?: "Chương $i", it.optString("translation_status") == "done")
+                ChapterRef(i, it.str("title_vi") ?: it.str("title_zh") ?: "Chương $i", it.optString("translation_status") == "done", it.optString("translation_status") == "queued")
             }
             if (page.size < 1000) return all
         }

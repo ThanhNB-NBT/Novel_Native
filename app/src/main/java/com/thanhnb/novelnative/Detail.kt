@@ -91,6 +91,7 @@ fun DetailScreen(id: Int) {
     var sel by remember { mutableStateOf(emptySet<Int>()) }
     var askTr by remember { mutableStateOf(false) }
     var askRe by remember { mutableStateOf(false) }
+    var askCancelRe by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var tab by remember { mutableIntStateOf(0) }
     var desc by remember { mutableStateOf(false) }
@@ -245,9 +246,14 @@ fun DetailScreen(id: Int) {
                                 }
                             }
                         }
+                        // lỡ bấm dịch lại: chương đang chờ (chưa vào máy dịch) huỷ được, giữ nguyên bản cũ, khỏi tốn lượt gọi LLM
+                        if (admin && !selecting && chapters.any { it.queued }) Row(Modifier.padding(20.dp, 0.dp, 8.dp, 0.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("${chapters.count { it.queued }} chương đang chờ dịch", Modifier.weight(1f), style = monoStyle(12, cs.onSurfaceVariant))
+                            TextButton({ askCancelRe = true }) { Text("Huỷ dịch lại", color = cs.error) }
+                        }
                         if (selecting) Row(Modifier.padding(20.dp, 4.dp, 8.dp, 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             // thêm (không thay) các chương đã dịch trong khoảng → gõ nhiều khoảng nối nhau được
-                            RangeField("Khoảng, vd 100-130", "Chọn", Modifier.weight(1f)) { r ->
+                            RangeField("Chọn", Modifier.weight(1f)) { r ->
                                 sel = sel + chapters.filter { it.done && it.index in r }.map { it.index }
                             }
                             IconButton({ sel = emptySet() }, enabled = sel.isNotEmpty()) { Icon(Icons.Rounded.Close, "Bỏ chọn hết") }
@@ -429,6 +435,23 @@ fun DetailScreen(id: Int) {
                 dismissButton = { TextButton({ askRe = false }) { Text("Huỷ") } },
                 title = { Text("Dịch lại ${sel.size} chương?") },
                 text = { Text("Bản cũ vẫn đọc được cho tới khi bản mới thay thế.") },
+            )
+            if (askCancelRe) AlertDialog(
+                { askCancelRe = false },
+                confirmButton = {
+                    TextButton({
+                        askCancelRe = false
+                        scope.launch {
+                            runCatching { AdminApi.cancelRetranslate(n.id) }
+                                .onSuccess { msg = if (it == 0) "Không còn chương nào chờ dịch lại (có thể đã vào máy dịch)" else "Đã huỷ dịch lại $it chương, giữ bản cũ" }
+                                .onFailure { msg = friendly(it) }
+                            toc.reload()
+                        }
+                    }) { Text("Huỷ dịch lại", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = { TextButton({ askCancelRe = false }) { Text("Thôi") } },
+                title = { Text("Huỷ các chương đang chờ dịch lại?") },
+                text = { Text("Chương đã có bản dịch mà đang chờ dịch lại sẽ được rút khỏi hàng đợi và giữ bản cũ. Chương đang dịch dở hoặc chương mới yêu cầu dịch lần đầu không bị đụng tới.") },
             )
         }
         msg?.let { m ->

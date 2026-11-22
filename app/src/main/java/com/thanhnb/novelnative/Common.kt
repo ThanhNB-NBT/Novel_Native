@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -263,10 +264,20 @@ fun monoStyle(size: Int = 12, color: Color = MaterialTheme.colorScheme.onSurface
 fun JumpField(hint: String, modifier: Modifier = Modifier, onJump: (Int) -> Unit) =
     NumField(hint, modifier, 6, Char::isDigit, null) { it.toIntOrNull()?.let(onJump) }
 
-/** Ô khoảng chương "100-130" (gõ ngược 130-100 cũng được; một số = một chương); bấm [action] hoặc Đi trên bàn phím. */
+/** Hai ô "Từ"/"Đến" chương (bàn phím số nhiều máy không có dấu "-"); để trống một ô = một chương, gõ ngược cũng được. */
 @Composable
-fun RangeField(hint: String, action: String, modifier: Modifier = Modifier, onRange: (IntRange) -> Unit) =
-    NumField(hint, modifier, 13, { it.isDigit() || it == '-' }, action) { s -> parseRange(s)?.let(onRange) }
+fun RangeField(action: String, modifier: Modifier = Modifier, onRange: (IntRange) -> Unit) {
+    var a by remember { mutableStateOf("") }
+    var b by remember { mutableStateOf("") }
+    val focus = LocalFocusManager.current
+    val go = { parseRange("$a-$b")?.let(onRange); a = ""; b = ""; focus.clearFocus() }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        DigitBox(a, { a = it }, "Từ chương", Modifier.weight(1f), 6, Char::isDigit, null, ImeAction.Next) { focus.moveFocus(FocusDirection.Next) }
+        Text("–", Modifier.padding(horizontal = 6.dp), style = monoStyle(13))
+        DigitBox(b, { b = it }, "Đến chương", Modifier.weight(1f), 6, Char::isDigit, null, ImeAction.Go, go)
+        TextButton(go, enabled = a.isNotEmpty() || b.isNotEmpty()) { Text(action) }
+    }
+}
 
 internal fun parseRange(s: String): IntRange? {
     val p = s.split('-').mapNotNull(String::toIntOrNull)
@@ -276,14 +287,19 @@ internal fun parseRange(s: String): IntRange? {
 @Composable
 private fun NumField(hint: String, modifier: Modifier, max: Int, allow: (Char) -> Boolean, action: String?, onGo: (String) -> Unit) {
     var v by remember { mutableStateOf("") }
-    val cs = MaterialTheme.colorScheme
     val focus = LocalFocusManager.current
     val go = { onGo(v); v = ""; focus.clearFocus() }
+    DigitBox(v, { v = it }, hint, modifier, max, allow, action, ImeAction.Go, go)
+}
+
+@Composable
+private fun DigitBox(v: String, set: (String) -> Unit, hint: String, modifier: Modifier, max: Int, allow: (Char) -> Boolean, action: String?, ime: ImeAction, go: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
     BasicTextField(
-        v, { v = it.filter(allow).take(max) }, modifier, singleLine = true,
+        v, { set(it.filter(allow).take(max)) }, modifier, singleLine = true,
         textStyle = monoStyle(13, cs.onSurface), cursorBrush = SolidColor(cs.primary),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
-        keyboardActions = KeyboardActions(onGo = { go() }),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ime),
+        keyboardActions = KeyboardActions(onAny = { go() }),
         decorationBox = { inner ->
             Row(
                 Modifier.heightIn(min = 40.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(12.dp)).padding(start = 12.dp),

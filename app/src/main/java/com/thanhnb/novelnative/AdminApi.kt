@@ -72,6 +72,23 @@ object AdminApi {
             patch("chapters?id=eq.$chapterId&translation_status=neq.done", JSONObject().put("translation_status", "none"))
     }
 
+    /**
+     * Huỷ dịch lại: chương đang chờ mà ĐÃ có bản dịch (queued + content_vi) → xoá job pending, trả về 'done' (giữ bản cũ).
+     * Job đã chạy (running) không động vào — chương đó không còn 'queued'. Yêu cầu dịch chương mới (chưa có bản) để yên.
+     */
+    suspend fun cancelRetranslate(novelId: Int): Int {
+        val ids = get("chapters?select=id&novel_id=eq.$novelId&translation_status=eq.queued&content_vi=not.is.null&limit=5000").map { it.getInt("id") }
+        var n = 0
+        ids.chunked(200).forEach { part ->
+            val gone = JSONArray(Api.raw("DELETE", "rest/v1/translation_jobs?chapter_id=in.(${part.joinToString(",")})&status=eq.pending&select=chapter_id", prefer = "return=representation"))
+                .rows().map { it.getInt("chapter_id") }.distinct()
+            if (gone.isEmpty()) return@forEach
+            patch("chapters?id=in.(${gone.joinToString(",")})&translation_status=eq.queued", JSONObject().put("translation_status", "done"))
+            n += gone.size
+        }
+        return n
+    }
+
     /** Huỷ toàn bộ chương ĐANG CHỜ của 1 truyện. */
     suspend fun cancelNovelQueue(novelId: Int) {
         Api.delete("translation_jobs?novel_id=eq.$novelId&status=eq.pending")
