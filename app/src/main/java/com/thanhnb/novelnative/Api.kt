@@ -573,7 +573,7 @@ object Api {
             val n = novel(it.getJSONObject("novels")); byId[n.id] = n to it.optString("added_at")
         }
         prog.await().objs().forEach {
-            val n = novel(it.getJSONObject("novels")).copy(curChapter = it.getInt("chapter_index"))
+            val n = novel(it.getJSONObject("novels")).let { n -> n.copy(curChapter = fresher(n.id, it.getInt("chapter_index"), it.str("updated_at"))) }
             byId[n.id] = n to it.optString("updated_at")
         }
         byId.values.sortedByDescending { it.second }.map { it.first }
@@ -604,7 +604,7 @@ object Api {
     /** Xoá khỏi tủ = bỏ theo dõi + xoá tiến độ (cả vị trí cuộn lưu máy). */
     suspend fun removeReading(novelId: Int) {
         Prefs.sp.edit().apply { Prefs.sp.all.keys.filter { it.startsWith("rp_${novelId}_") }.forEach(::remove) }
-            .remove("last_$novelId").remove("dirty_$novelId").apply()
+            .remove("last_$novelId").remove("last_at_$novelId").remove("dirty_$novelId").apply()
         val u = uid() ?: return
         delete("reading_progress?user_id=eq.$u&novel_id=eq.$novelId")
         delete("library?user_id=eq.$u&novel_id=eq.$novelId")
@@ -722,8 +722,8 @@ object Api {
             flushProgress(u)
             // còn dấu = chưa đẩy được lên server → chương trên máy mới là chương đang đọc
             if (Prefs.sp.contains("dirty_$novelId")) return Prefs.sp.getInt("last_$novelId", 0).takeIf { it > 0 }
-            get("reading_progress?select=chapter_index&novel_id=eq.$novelId&user_id=eq.$u&limit=1").objs().firstOrNull()?.getInt("chapter_index")
-                ?.also { Prefs.sp.edit().putInt("last_$novelId", it).apply() }
+            val row = get("reading_progress?select=chapter_index,updated_at&novel_id=eq.$novelId&user_id=eq.$u&limit=1").objs().firstOrNull()
+            row?.let { fresher(novelId, it.getInt("chapter_index"), it.str("updated_at")) }
         } catch (e: IOException) {
             Prefs.sp.getInt("last_$novelId", 0).takeIf { it > 0 } ?: throw e // đọc offline vẫn nhớ chương đang đọc
         }
@@ -733,7 +733,7 @@ object Api {
         val u = uid() ?: return
         val at = Instant.now().toString()
         // dirty_ = "chưa lên server": ghi trước khi gửi, gửi hụt (mất mạng) thì flushProgress đẩy bù
-        Prefs.sp.edit().putInt("last_$novelId", index).putString("dirty_$novelId", at).apply()
+        Prefs.sp.edit().putInt("last_$novelId", index).putString("last_at_$novelId", at).putString("dirty_$novelId", at).apply()
         ReadLog.bump(novelId, index) // shortcut: chỉ ghi trên máy từ bản này, server không lưu từng ngày; cần lịch sử đa thiết bị thì thêm bảng server
         insert(
             "reading_progress",
@@ -742,6 +742,19 @@ object Api {
         )
         clearDirty(novelId, at)
         runCatching { rpc("touch_reading_streak") } // chuỗi ngày đọc — không chặn đọc
+    }
+
+    /**
+     * Chương đang đọc = bản ghi MỚI HƠN giữa server và máy này. Lúc mở app, [load] hiện bản lưu đĩa của lần tải trước
+     * (số chương cũ); thiếu bước này "Đọc tiếp" mở chương cũ rồi màn đọc ghi đè nó lên server. Máy khác đọc sau → server thắng.
+     */
+    internal fun fresher(novelId: Int, server: Int, serverAt: String?): Int {
+        val local = Prefs.sp.getInt("last_$novelId", 0)
+        val localAt = Prefs.sp.getString("last_at_$novelId", null)?.let { runCatching { Instant.parse(it) }.getOrNull() }
+        val sAt = serverAt?.let { runCatching { java.time.OffsetDateTime.parse(it).toInstant() }.getOrNull() }
+        if (local > 0 && localAt != null && (sAt == null || localAt.isAfter(sAt))) return local
+        Prefs.sp.edit().putInt("last_$novelId", server).putString("last_at_$novelId", (sAt ?: Instant.now()).toString()).apply()
+        return server
     }
 
     // chỉ xoá dấu của chính lần ghi này — lần lưu sau đó (chương mới hơn) có dấu riêng
