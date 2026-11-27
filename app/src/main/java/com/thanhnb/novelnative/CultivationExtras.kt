@@ -317,9 +317,10 @@ internal fun CraftDialog(dismiss: () -> Unit, done: (String) -> Unit) {
         title = { Text("Lò Luyện Đan") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Dồn 5 bản dư cùng phẩm (giữ lại 1 bản mỗi món) thành 1 vật phẩm phẩm kế tiếp. Món ra ngẫu nhiên.")
+                Text("Dồn 5 bản dư cùng phẩm (giữ lại 1 bản mỗi món) thành 1 vật phẩm phẩm kế tiếp; Tiên phẩm chỉ cần 2 bản dư, ra đan/linh thạch Tiên. Món ra ngẫu nhiên.")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GradeNames.take(4).forEachIndexed { i, n -> FilterChip(g == i + 1, { g = i + 1 }, { Text("$n → ${GradeNames[i + 1]}") }) }
+                    // Tiên (5) là phẩm cao nhất: luyện ra cùng phẩm Tiên — cult_craft (160)
+                    GradeNames.forEachIndexed { i, n -> FilterChip(g == i + 1, { g = i + 1 }, { Text("$n → ${GradeNames[minOf(i + 1, 4)]}") }) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(kind == "danduoc", { kind = "danduoc" }, { Text("Đan dược") })
