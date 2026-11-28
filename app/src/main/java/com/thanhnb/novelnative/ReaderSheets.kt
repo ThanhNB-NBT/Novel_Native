@@ -279,8 +279,11 @@ internal fun SliderRow(
 ) = Row(Modifier.height(44.dp), verticalAlignment = Alignment.CenterVertically) {
     val cs = MaterialTheme.colorScheme
     Text(label, Modifier.width(78.dp), style = MaterialTheme.typography.labelMedium)
+    // material3 1.5 bỏ bản Slider(value, …, thumb, track) → giữ SliderState, cập nhật value mỗi lần như thư viện tự làm
+    val state = remember(range) { SliderState(v, trackRange = range) }
+    state.value = v
     Slider(
-        v, set, Modifier.weight(1f), valueRange = range,
+        state, set, Modifier.weight(1f),
         thumb = { Box(Modifier.size(20.dp).shadow(2.dp, CircleShape).background(cs.primary, CircleShape).border(3.dp, cs.card, CircleShape)) },
         track = { SliderDefaults.Track(it, Modifier.height(4.dp), drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
     )

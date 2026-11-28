@@ -24,12 +24,71 @@
         android:theme="@style/Theme.NovelNative">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true" />
+        <!-- biểu tượng app đổi được (AppIcon.kt): mỗi kiểu một alias mở MainActivity, bật đúng một cái; khớp iconStyles -->
+        <activity-alias android:name=".LogoHolo" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true"
+            android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias android:name=".LogoClassic" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_classic" android:roundIcon="@mipmap/ic_launcher_classic">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LogoPearl" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_pearl" android:roundIcon="@mipmap/ic_launcher_pearl">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LogoPaper" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_paper" android:roundIcon="@mipmap/ic_launcher_paper">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LogoBand" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_band" android:roundIcon="@mipmap/ic_launcher_band">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LogoSon" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_son" android:roundIcon="@mipmap/ic_launcher_son">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LogoNgoc" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_ngoc" android:roundIcon="@mipmap/ic_launcher_ngoc">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LogoCham" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_cham" android:roundIcon="@mipmap/ic_launcher_cham">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".LogoHoang" android:targetActivity=".MainActivity" android:exported="true" android:enabled="false"
+            android:icon="@mipmap/ic_launcher_hoang" android:roundIcon="@mipmap/ic_launcher_hoang">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <!-- APK bản mới tải vào cacheDir/updates, chia cho trình cài hệ thống -->
         <service android:name=".TtsService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <service android:name=".NotifyJob" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />

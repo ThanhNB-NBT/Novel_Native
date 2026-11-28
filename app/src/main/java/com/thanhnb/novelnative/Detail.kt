@@ -39,6 +39,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.blur.BlurRadiusSpec
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -499,14 +500,16 @@ private val SheetEdge = 20.dp
 private fun Header(n: Novel, tail: Color) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.clipToBounds()) {
-        AsyncImage(Api.thumb(n.cover, 400), null, Modifier.matchParentSize().blur(24.dp), contentScale = ContentScale.Crop)
+        // mờ lũy tiến: đỉnh còn nhận ra bìa, đáy (chỗ chữ trắng) mờ hẳn; Android 12 không có mờ theo vùng → mờ đều như cũ
+        val bgBlur = if (android.os.Build.VERSION.SDK_INT >= 33) Modifier.blur { blurRadiusSpec = BlurRadiusSpec.verticalGradient(6.dp, 36.dp) } else Modifier.blur(24.dp)
+        AsyncImage(Api.thumb(n.cover, 400), null, Modifier.matchParentSize().then(bgBlur), contentScale = ContentScale.Crop)
         // lớp phủ đậm dần xuống dưới theo màu nhấn: chữ trắng (kể cả hàng "Đã dịch" ở đáy) luôn nằm trên nền tối
         val deep = lerp(Color.Black, cs.primary, .4f)
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to Color.Black.copy(.4f), .5f to deep.copy(.62f), 1f to deep.copy(.82f))))
         Column(Modifier.statusBarsPadding()) {
             IconButton(Nav::pop) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", tint = Color.White) }
             Row(Modifier.padding(20.dp, 8.dp, 20.dp, 0.dp), verticalAlignment = Alignment.Bottom) {
-                Cover(n.cover, 124.dp, 174.dp, label = n.title)
+                Cover(n.cover, 124.dp, 174.dp, Modifier.holo(), label = n.title)
                 Column(Modifier.weight(1f).padding(start = 16.dp)) {
                     Text(n.title, style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.ExtraBold, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(6.dp))

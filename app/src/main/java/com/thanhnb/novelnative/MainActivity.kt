@@ -303,9 +303,9 @@ private fun Dock(unread: Int, glass: HazeState, pos: () -> Float, modifier: Modi
     val dark = cs.background.luminance() < .5f
     val shape = RoundedCornerShape(DockH / 2)
     // đủ đục để nhãn tab đạt tương phản cả khi bìa truyện tối/sặc sỡ trượt qua phía sau
-    val tint = cs.background.copy(alpha = if (dark) .58f else .6f)
-    // nhoè mạnh hơn mặc định: bìa truyện và chữ phía sau không tranh với nhãn tab
-    val style = remember(tint) { GlassStyle { shape(shape); tint(tint); optics { copy(blurRadius = OpticalSizeValue.Fixed(16.dp)) } } }
+    val tint = cs.background.copy(alpha = if (dark) .7f else .72f)
+    // nhoè mạnh: chữ dày đặc phía sau (mục lục, danh sách) phải tan thành mảng màu, không còn đọc ra nét
+    val style = remember(tint) { GlassStyle { shape(shape); tint(tint); optics { copy(blurRadius = OpticalSizeValue.Fixed(32.dp)) } } }
     val lens = cs.primary.copy(alpha = if (dark) .26f else .14f)
     // viền sáng trên, mờ dưới: ánh đèn hắt vào mép kính
     val rim = remember(dark) { Brush.verticalGradient(listOf(Color.White.copy(if (dark) .28f else .9f), Color.White.copy(if (dark) .04f else .2f))) }

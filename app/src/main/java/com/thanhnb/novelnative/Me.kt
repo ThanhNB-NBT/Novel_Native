@@ -328,6 +328,7 @@ private fun ColorSheet(dismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     ModalBottomSheet(dismiss) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            IconPicker()
             accentGroups.forEach { (group, names) ->
                 Text(group, style = MaterialTheme.typography.titleMedium)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -372,6 +373,36 @@ private fun ColorSheet(dismiss: () -> Unit) {
             Text("Màu nền", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 papers.forEachIndexed { i, p -> Dot(p.bg, Prefs.paper == i, cs.primary, ring = p.ink.copy(.25f)) { Prefs.pickPaper(i) } }
+            }
+        }
+    }
+}
+
+/** Chọn biểu tượng ngoài màn hình chính (AppIcon.kt). */
+@Composable
+private fun IconPicker() {
+    val cs = MaterialTheme.colorScheme
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val px = with(androidx.compose.ui.platform.LocalDensity.current) { 56.dp.roundToPx() }
+    val previews = remember { iconStyles.map { AppIcon.preview(ctx, it, px) } }
+    var cur by remember { mutableIntStateOf(AppIcon.current(ctx)) }
+    Text("Biểu tượng app", style = MaterialTheme.typography.titleMedium)
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        iconStyles.forEachIndexed { i, s ->
+            val on = cur == i
+            Column(
+                Modifier.width(84.dp).clip(RoundedCornerShape(16.dp)).background(if (on) cs.surface else cs.onSurface.copy(.04f))
+                    .border(if (on) 2.dp else 1.dp, if (on) cs.primary else cs.outlineVariant, RoundedCornerShape(16.dp))
+                    .bounceClick {
+                        if (on) return@bounceClick
+                        AppIcon.set(ctx, i); cur = i
+                        toast(ctx, "Màn hình chính sẽ đổi biểu tượng sau vài giây")
+                    }.padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                androidx.compose.foundation.Image(previews[i], s.name, Modifier.size(56.dp))
+                Text(s.name, fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 2, lineHeight = 15.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 4.dp))
             }
         }
     }
